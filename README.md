@@ -2,12 +2,14 @@
 
 Application Android de surveillance connectée à un broker MQTT. Elle reçoit des messages et génère des notifications en temps réel.
 
-## Fonctionnalités (V1)
+## Fonctionnalités
 
 - Connexion persistante à un broker MQTT (Mosquitto) via un **foreground service**
 - Abonnement au topic `vigie/#`
 - Réception de messages au format **JSON**
 - Affichage de **notifications Android** en fonction des messages reçus
+- **Écran de configuration** : adresse IP du broker, port, login et mot de passe
+- **Statut de connexion en temps réel** (connexion en cours, connecté, erreur, déconnecté)
 - Fonctionne en arrière-plan (la connexion reste active même si l'app est fermée)
 
 ## Stack technique
@@ -26,14 +28,17 @@ Application Android de surveillance connectée à un broker MQTT. Elle reçoit d
 ```
 app/
 ├── src/main/java/com/alixpat/vigie/
-│   ├── MainActivity.java            # Écran principal
+│   ├── MainActivity.java            # Écran principal (start/stop, statut)
 │   ├── MqttService.java             # Foreground service MQTT
 │   ├── NotificationHelper.java      # Gestion des notifications
+│   ├── SettingsActivity.java        # Écran de configuration broker
+│   ├── BrokerConfig.java            # Stockage des paramètres (SharedPreferences)
 │   └── model/
 │       └── VigieMessage.java        # Modèle de message JSON
 ├── src/main/res/
 │   └── layout/
-│       └── activity_main.xml
+│       ├── activity_main.xml
+│       └── activity_settings.xml
 └── src/main/AndroidManifest.xml
 ```
 
@@ -57,16 +62,44 @@ Les messages reçus sur `vigie/#` sont au format JSON :
 | `message` | string | Corps du message |
 | `priority` | string | Priorité : `high`, `normal`, `low` |
 
-## Configuration (V1)
+## Configuration
 
-Pour la V1, l'adresse du broker est codée en dur dans `MqttService.java` :
+L'adresse du broker, le port et les identifiants (optionnels) se configurent directement dans l'app via le bouton **Configuration** sur l'écran principal.
 
-```java
-private static final String BROKER_URI = "tcp://192.168.1.100:1883";
-private static final String TOPIC = "vigie/#";
+Les paramètres sont sauvegardés localement (SharedPreferences). Le topic par défaut est `vigie/#`.
+
+## Tester avec Mosquitto
+
+### Installer Mosquitto (si besoin)
+
+```bash
+# Debian / Ubuntu
+sudo apt install mosquitto mosquitto-clients
+
+# macOS
+brew install mosquitto
 ```
 
-> La configuration dynamique (écran de settings) est prévue pour une version ultérieure.
+### Envoyer une notification de test
+
+```bash
+# Alerte haute priorité
+mosquitto_pub -h 192.168.1.100 -p 1883 -t "vigie/test" -m '{"type":"alert","title":"Alerte drone","message":"Drone détecté dans la zone A","priority":"high"}'
+
+# Information normale
+mosquitto_pub -h 192.168.1.100 -p 1883 -t "vigie/info" -m '{"type":"info","title":"Système","message":"Tous les capteurs sont opérationnels","priority":"normal"}'
+
+# Warning
+mosquitto_pub -h 192.168.1.100 -p 1883 -t "vigie/warning" -m '{"type":"warning","title":"Batterie faible","message":"Capteur B2 à 15%","priority":"normal"}'
+```
+
+### Avec authentification
+
+```bash
+mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/test" -m '{"type":"alert","title":"Test auth","message":"Message avec login","priority":"high"}'
+```
+
+> Remplacer `192.168.1.100` par l'IP de votre broker.
 
 ## Dépendances principales
 
@@ -91,12 +124,11 @@ dependencies {
    git clone https://github.com/Alixpat/vigie.git
    ```
 2. Ouvrir le projet dans Android Studio
-3. Modifier l'adresse du broker dans `MqttService.java`
-4. Build & Run sur un appareil/émulateur
+3. Build & Run sur un appareil/émulateur
+4. Configurer l'adresse du broker via le bouton **Configuration** dans l'app
 
 ## Évolutions prévues
 
-- [ ] Configuration du broker dans l'app (écran settings)
 - [ ] Topics MQTT configurables
 - [ ] Actions personnalisées (sons, vibrations, lancement d'apps)
 - [ ] Historique des messages reçus
