@@ -66,6 +66,10 @@ public class MainActivity extends AppCompatActivity {
                 startMqttService();
             }
         });
+
+        Button settingsButton = findViewById(R.id.settingsButton);
+        settingsButton.setOnClickListener(v ->
+                startActivity(new Intent(this, SettingsActivity.class)));
     }
 
     private void startMqttService() {

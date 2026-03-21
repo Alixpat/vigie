@@ -20,18 +20,18 @@ public class MqttService extends Service {
     private static final String TAG = "MqttService";
     private static final int SERVICE_NOTIFICATION_ID = 1;
 
-    // ---- Configuration MQTT (V1 : en dur) ----
-    private static final String BROKER_URI = "tcp://192.168.1.100:1883";
     private static final String TOPIC = "vigie/#";
     private static final String CLIENT_ID = "vigie-android";
 
     private MqttClient mqttClient;
     private NotificationHelper notificationHelper;
+    private BrokerConfig brokerConfig;
 
     @Override
     public void onCreate() {
         super.onCreate();
         notificationHelper = new NotificationHelper(this);
+        brokerConfig = new BrokerConfig(this);
     }
 
     @Override
@@ -47,13 +47,19 @@ public class MqttService extends Service {
 
     private void connectMqtt() {
         try {
-            mqttClient = new MqttClient(BROKER_URI, CLIENT_ID, new MemoryPersistence());
+            String brokerUri = brokerConfig.getBrokerUri();
+            mqttClient = new MqttClient(brokerUri, CLIENT_ID, new MemoryPersistence());
 
             MqttConnectOptions options = new MqttConnectOptions();
             options.setCleanSession(true);
             options.setAutomaticReconnect(true);
             options.setConnectionTimeout(10);
             options.setKeepAliveInterval(60);
+
+            if (brokerConfig.hasCredentials()) {
+                options.setUserName(brokerConfig.getUsername());
+                options.setPassword(brokerConfig.getPassword().toCharArray());
+            }
 
             mqttClient.setCallback(new MqttCallback() {
                 @Override
@@ -85,7 +91,7 @@ public class MqttService extends Service {
 
             mqttClient.connect(options);
             mqttClient.subscribe(TOPIC, 1);
-            Log.i(TAG, "Connecté au broker MQTT et abonné à " + TOPIC);
+            Log.i(TAG, "Connecté à " + brokerUri + " et abonné à " + TOPIC);
 
         } catch (MqttException e) {
             Log.e(TAG, "Erreur connexion MQTT", e);

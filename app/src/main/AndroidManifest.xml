@@ -32,6 +32,10 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".SettingsActivity"
+            android:exported="false" />
+
         <!-- Service MQTT foreground -->
         <service
             android:name=".MqttService"
