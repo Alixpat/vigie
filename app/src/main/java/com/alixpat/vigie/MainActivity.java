@@ -40,6 +40,43 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String status = intent.getStringExtra(MqttService.EXTRA_STATUS);
+            if (status == null) return;
+
+            switch (status) {
+                case MqttService.STATUS_CONNECTING:
+                    statusText.setText("Statut : Connexion en cours...");
+                    toggleButton.setEnabled(false);
+                    break;
+                case MqttService.STATUS_CONNECTED:
+                    serviceRunning = true;
+                    statusText.setText("Statut : Connecté");
+                    toggleButton.setText("Arrêter la surveillance");
+                    toggleButton.setEnabled(true);
+                    break;
+                case MqttService.STATUS_DISCONNECTED:
+                    serviceRunning = false;
+                    String dcMsg = intent.getStringExtra(MqttService.EXTRA_ERROR_MSG);
+                    statusText.setText("Statut : Déconnecté" +
+                            (dcMsg != null ? " (" + dcMsg + ")" : ""));
+                    toggleButton.setText("Démarrer la surveillance");
+                    toggleButton.setEnabled(true);
+                    break;
+                case MqttService.STATUS_ERROR:
+                    serviceRunning = false;
+                    String errMsg = intent.getStringExtra(MqttService.EXTRA_ERROR_MSG);
+                    statusText.setText("Statut : Erreur" +
+                            (errMsg != null ? " — " + errMsg : ""));
+                    toggleButton.setText("Réessayer");
+                    toggleButton.setEnabled(true);
+                    break;
+            }
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -75,9 +112,6 @@ public class MainActivity extends AppCompatActivity {
     private void startMqttService() {
         Intent serviceIntent = new Intent(this, MqttService.class);
         ContextCompat.startForegroundService(this, serviceIntent);
-        serviceRunning = true;
-        statusText.setText("Statut : Connecté");
-        toggleButton.setText("Arrêter la surveillance");
     }
 
     private void stopMqttService() {
@@ -91,11 +125,14 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        IntentFilter filter = new IntentFilter("com.alixpat.vigie.MESSAGE_RECEIVED");
+        IntentFilter messageFilter = new IntentFilter("com.alixpat.vigie.MESSAGE_RECEIVED");
+        IntentFilter statusFilter = new IntentFilter(MqttService.ACTION_STATUS);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(messageReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(messageReceiver, messageFilter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(statusReceiver, statusFilter, Context.RECEIVER_NOT_EXPORTED);
         } else {
-            registerReceiver(messageReceiver, filter);
+            registerReceiver(messageReceiver, messageFilter);
+            registerReceiver(statusReceiver, statusFilter);
         }
     }
 
@@ -103,6 +140,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         unregisterReceiver(messageReceiver);
+        unregisterReceiver(statusReceiver);
     }
 
     @Override

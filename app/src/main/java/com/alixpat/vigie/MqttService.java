@@ -20,6 +20,14 @@ public class MqttService extends Service {
     private static final String TAG = "MqttService";
     private static final int SERVICE_NOTIFICATION_ID = 1;
 
+    public static final String ACTION_STATUS = "com.alixpat.vigie.CONNECTION_STATUS";
+    public static final String EXTRA_STATUS = "status";
+    public static final String STATUS_CONNECTING = "connecting";
+    public static final String STATUS_CONNECTED = "connected";
+    public static final String STATUS_DISCONNECTED = "disconnected";
+    public static final String STATUS_ERROR = "error";
+    public static final String EXTRA_ERROR_MSG = "error_msg";
+
     private static final String TOPIC = "vigie/#";
     private static final String CLIENT_ID = "vigie-android";
 
@@ -40,6 +48,7 @@ public class MqttService extends Service {
         startForeground(SERVICE_NOTIFICATION_ID, notificationHelper.buildServiceNotification());
 
         // Connexion MQTT dans un thread séparé
+        broadcastStatus(STATUS_CONNECTING, null);
         new Thread(this::connectMqtt).start();
 
         return START_STICKY;
@@ -65,6 +74,8 @@ public class MqttService extends Service {
                 @Override
                 public void connectionLost(Throwable cause) {
                     Log.w(TAG, "Connexion MQTT perdue", cause);
+                    String msg = cause != null ? cause.getMessage() : "Connexion perdue";
+                    broadcastStatus(STATUS_DISCONNECTED, msg);
                 }
 
                 @Override
@@ -92,9 +103,11 @@ public class MqttService extends Service {
             mqttClient.connect(options);
             mqttClient.subscribe(TOPIC, 1);
             Log.i(TAG, "Connecté à " + brokerUri + " et abonné à " + TOPIC);
+            broadcastStatus(STATUS_CONNECTED, null);
 
         } catch (MqttException e) {
             Log.e(TAG, "Erreur connexion MQTT", e);
+            broadcastStatus(STATUS_ERROR, e.getMessage());
         }
     }
 
@@ -108,6 +121,16 @@ public class MqttService extends Service {
                 Log.e(TAG, "Erreur déconnexion MQTT", e);
             }
         }
+    }
+
+    private void broadcastStatus(String status, String errorMsg) {
+        Intent intent = new Intent(ACTION_STATUS);
+        intent.putExtra(EXTRA_STATUS, status);
+        if (errorMsg != null) {
+            intent.putExtra(EXTRA_ERROR_MSG, errorMsg);
+        }
+        intent.setPackage(getPackageName());
+        sendBroadcast(intent);
     }
 
     @Override
