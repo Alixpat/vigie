@@ -13,6 +13,8 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
+import com.alixpat.vigie.fragment.LanFragment;
+import com.alixpat.vigie.model.LanHost;
 import com.alixpat.vigie.model.VigieMessage;
 
 public class MqttService extends Service {
@@ -83,10 +85,19 @@ public class MqttService extends Service {
                     String payload = new String(message.getPayload());
                     Log.d(TAG, "Message reçu sur " + topic + " : " + payload);
 
+                    // Vérifier si c'est un message LAN
+                    LanHost lanHost = LanHost.fromJson(payload);
+                    if (lanHost != null) {
+                        Intent broadcast = new Intent(LanFragment.ACTION_LAN_STATUS);
+                        broadcast.putExtra("payload", payload);
+                        broadcast.setPackage(getPackageName());
+                        sendBroadcast(broadcast);
+                        return;
+                    }
+
                     VigieMessage vigieMsg = VigieMessage.fromJson(payload);
                     if (vigieMsg != null) {
                         notificationHelper.showMessageNotification(vigieMsg);
-                        // Broadcast pour mettre à jour l'UI
                         Intent broadcast = new Intent("com.alixpat.vigie.MESSAGE_RECEIVED");
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
