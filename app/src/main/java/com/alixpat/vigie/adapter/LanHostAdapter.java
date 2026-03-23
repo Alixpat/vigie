@@ -7,6 +7,10 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -46,7 +50,9 @@ public class LanHostAdapter extends RecyclerView.Adapter<LanHostAdapter.ViewHold
 
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 host.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
-        holder.lastUpdateText.setText(timeAgo);
+        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        String exactTime = sdf.format(new Date(host.getLastUpdate()));
+        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
     }
 
     @Override
