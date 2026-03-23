@@ -39,6 +39,18 @@ public class MqttService extends Service {
 
     private static final String TOPIC = "vigie/#";
 
+    // Statut courant accessible depuis les fragments (pour synchronisation à l'ouverture)
+    private static volatile String currentStatus = STATUS_DISCONNECTED;
+    private static volatile String currentErrorMsg = null;
+
+    public static String getCurrentStatus() {
+        return currentStatus;
+    }
+
+    public static String getCurrentErrorMsg() {
+        return currentErrorMsg;
+    }
+
     private MqttClient mqttClient;
     private MqttConnectOptions connectOptions;
     private NotificationHelper notificationHelper;
@@ -253,6 +265,9 @@ public class MqttService extends Service {
     }
 
     private void broadcastStatus(String status, String errorMsg) {
+        currentStatus = status;
+        currentErrorMsg = errorMsg;
+
         Intent intent = new Intent(ACTION_STATUS);
         intent.putExtra(EXTRA_STATUS, status);
         if (errorMsg != null) {

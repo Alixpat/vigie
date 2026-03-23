@@ -38,7 +38,12 @@ public class VigieMessage {
      */
     public static VigieMessage fromJson(String json) {
         try {
-            return gson.fromJson(json, VigieMessage.class);
+            VigieMessage msg = gson.fromJson(json, VigieMessage.class);
+            // Valider que le message contient au moins un titre ou un message
+            if (msg != null && (msg.title != null || msg.message != null)) {
+                return msg;
+            }
+            return null;
         } catch (JsonSyntaxException e) {
             return null;
         }
