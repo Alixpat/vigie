@@ -1,5 +1,6 @@
 package com.alixpat.vigie.fragment;
 
+import android.app.ActivityManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -50,8 +51,12 @@ public class MessagesFragment extends Fragment {
 
             switch (status) {
                 case MqttService.STATUS_CONNECTING:
-                    statusText.setText("Statut : Connexion en cours...");
-                    toggleButton.setEnabled(false);
+                    serviceRunning = true;
+                    String connMsg = intent.getStringExtra(MqttService.EXTRA_ERROR_MSG);
+                    statusText.setText("Statut : Connexion en cours..." +
+                            (connMsg != null ? " (" + connMsg + ")" : ""));
+                    toggleButton.setText("Arrêter la surveillance");
+                    toggleButton.setEnabled(true);
                     break;
                 case MqttService.STATUS_CONNECTED:
                     serviceRunning = true;
@@ -68,11 +73,12 @@ public class MessagesFragment extends Fragment {
                     toggleButton.setEnabled(true);
                     break;
                 case MqttService.STATUS_ERROR:
-                    serviceRunning = false;
+                    serviceRunning = true; // Le service tourne encore et va réessayer
                     String errMsg = intent.getStringExtra(MqttService.EXTRA_ERROR_MSG);
                     statusText.setText("Statut : Erreur" +
-                            (errMsg != null ? " — " + errMsg : ""));
-                    toggleButton.setText("Réessayer");
+                            (errMsg != null ? " — " + errMsg : "") +
+                            " (nouvelle tentative...)");
+                    toggleButton.setText("Arrêter la surveillance");
                     toggleButton.setEnabled(true);
                     break;
             }
@@ -113,11 +119,13 @@ public class MessagesFragment extends Fragment {
     }
 
     private void stopMqttService() {
+        // stopService fonctionne quel que soit l'état du service
         Intent serviceIntent = new Intent(requireContext(), MqttService.class);
         requireContext().stopService(serviceIntent);
         serviceRunning = false;
         statusText.setText("Statut : Déconnecté");
         toggleButton.setText("Démarrer la surveillance");
+        toggleButton.setEnabled(true);
     }
 
     @Override
@@ -132,6 +140,15 @@ public class MessagesFragment extends Fragment {
             requireContext().registerReceiver(messageReceiver, messageFilter);
             requireContext().registerReceiver(statusReceiver, statusFilter);
         }
+
+        // Synchroniser l'état de l'UI avec le service réel
+        serviceRunning = isServiceRunning();
+        if (serviceRunning) {
+            toggleButton.setText("Arrêter la surveillance");
+        } else {
+            statusText.setText("Statut : Déconnecté");
+            toggleButton.setText("Démarrer la surveillance");
+        }
     }
 
     @Override
@@ -139,5 +156,15 @@ public class MessagesFragment extends Fragment {
         super.onPause();
         requireContext().unregisterReceiver(messageReceiver);
         requireContext().unregisterReceiver(statusReceiver);
+    }
+
+    private boolean isServiceRunning() {
+        ActivityManager am = (ActivityManager) requireContext().getSystemService(Context.ACTIVITY_SERVICE);
+        for (ActivityManager.RunningServiceInfo service : am.getRunningServices(Integer.MAX_VALUE)) {
+            if (MqttService.class.getName().equals(service.service.getClassName())) {
+                return true;
+            }
+        }
+        return false;
     }
 }
