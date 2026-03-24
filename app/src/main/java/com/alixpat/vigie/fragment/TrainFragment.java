@@ -38,9 +38,9 @@ public class TrainFragment extends Fragment {
 
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
     // Ligne N Transilien
-    private static final String LINE_REF = "STIF:Line::C01740:";
+    private static final String LINE_REF = "STIF:Line::C01736:";
     private static final String API_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/disruptions_bulk/disruptions/v2"
+            "https://prim.iledefrance-mobilites.fr/marketplace/general-message"
                     + "?LineRef=" + LINE_REF;
 
     private RecyclerView recyclerView;
@@ -151,7 +151,7 @@ public class TrainFragment extends Fragment {
                 }
                 reader.close();
 
-                return parseDisruptions(response.toString());
+                return parseResponse(response.toString());
             }
         } catch (Exception e) {
             e.printStackTrace();
@@ -163,65 +163,19 @@ public class TrainFragment extends Fragment {
         return null;
     }
 
-    private List<TrainIncident> parseDisruptions(String jsonStr) {
+    private List<TrainIncident> parseResponse(String jsonStr) {
         List<TrainIncident> incidents = new ArrayList<>();
         try {
-            // PRIM v2 returns a JSON array of disruptions
-            JSONArray disruptions;
-            // Handle both array and object with array field
-            if (jsonStr.trim().startsWith("[")) {
-                disruptions = new JSONArray(jsonStr);
-            } else {
-                JSONObject root = new JSONObject(jsonStr);
-                if (root.has("disruptions")) {
-                    disruptions = root.getJSONArray("disruptions");
-                } else if (root.has("Siri")) {
-                    return parseSiri(root);
-                } else {
-                    disruptions = new JSONArray();
-                }
-            }
-
-            for (int i = 0; i < disruptions.length(); i++) {
-                JSONObject disruption = disruptions.getJSONObject(i);
-
-                String title = optString(disruption, "Title");
-                String message = optString(disruption, "Message");
-                String severity = optString(disruption, "Severity");
-                String cause = optString(disruption, "Cause");
-                String startTime = formatDateTime(optString(disruption, "StartTime"));
-                String endTime = formatDateTime(optString(disruption, "EndTime"));
-
-                // Fallback field names (API may vary)
-                if (title.isEmpty()) title = optString(disruption, "title");
-                if (message.isEmpty()) message = optString(disruption, "message");
-                if (severity.isEmpty()) severity = optString(disruption, "severity");
-
-                if (title.isEmpty() && message.isEmpty()) continue;
-
-                incidents.add(new TrainIncident(
-                        title.isEmpty() ? "Perturbation Ligne N" : title,
-                        message,
-                        severity,
-                        cause,
-                        startTime,
-                        endTime
-                ));
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return incidents;
-    }
-
-    private List<TrainIncident> parseSiri(JSONObject root) {
-        List<TrainIncident> incidents = new ArrayList<>();
-        try {
+            JSONObject root = new JSONObject(jsonStr);
             JSONObject delivery = root
                     .getJSONObject("Siri")
                     .getJSONObject("ServiceDelivery")
                     .getJSONArray("GeneralMessageDelivery")
                     .getJSONObject(0);
+
+            if (!delivery.has("InfoMessage")) {
+                return incidents;
+            }
 
             JSONArray messages = delivery.getJSONArray("InfoMessage");
             for (int i = 0; i < messages.length(); i++) {
@@ -229,23 +183,43 @@ public class TrainFragment extends Fragment {
                 JSONObject content = msg.optJSONObject("Content");
                 if (content == null) continue;
 
-                JSONArray msgTexts = content.optJSONArray("Message");
+                // Extract message text
                 String text = "";
-                if (msgTexts != null && msgTexts.length() > 0) {
-                    JSONObject firstMsg = msgTexts.getJSONObject(0);
-                    JSONObject msgText = firstMsg.optJSONObject("MessageText");
-                    if (msgText != null) {
-                        text = msgText.optString("value", "");
+                JSONArray msgTexts = content.optJSONArray("Message");
+                if (msgTexts != null) {
+                    for (int j = 0; j < msgTexts.length(); j++) {
+                        JSONObject msgObj = msgTexts.getJSONObject(j);
+                        JSONObject msgText = msgObj.optJSONObject("MessageText");
+                        if (msgText != null) {
+                            String value = msgText.optString("value", "");
+                            if (!value.isEmpty()) {
+                                text = value;
+                                break;
+                            }
+                        }
                     }
                 }
 
-                String severity = "";
-                String infoChannelRef = msg.optString("InfoChannelRef", "");
-                if (infoChannelRef.contains("Perturbation")) {
-                    severity = "blocking";
-                } else if (infoChannelRef.contains("Information")) {
-                    severity = "information";
+                // Extract severity from InfoChannelRef (object with "value" field)
+                String severity = "information";
+                JSONObject channelRef = msg.optJSONObject("InfoChannelRef");
+                if (channelRef != null) {
+                    String channel = channelRef.optString("value", "");
+                    if (channel.contains("Perturbation")) {
+                        severity = "blocking";
+                    } else if (channel.contains("Information")) {
+                        severity = "information";
+                    }
+                } else {
+                    String channel = msg.optString("InfoChannelRef", "");
+                    if (channel.contains("Perturbation")) {
+                        severity = "blocking";
+                    }
                 }
+
+                // Extract timestamps
+                String recordedAt = formatDateTime(msg.optString("RecordedAtTime", ""));
+                String validUntil = formatDateTime(msg.optString("ValidUntilTime", ""));
 
                 if (!text.isEmpty()) {
                     incidents.add(new TrainIncident(
@@ -253,8 +227,8 @@ public class TrainFragment extends Fragment {
                             text,
                             severity,
                             "",
-                            "",
-                            ""
+                            recordedAt,
+                            validUntil
                     ));
                 }
             }
@@ -264,17 +238,9 @@ public class TrainFragment extends Fragment {
         return incidents;
     }
 
-    private static String optString(JSONObject obj, String key) {
-        if (obj.has(key) && !obj.isNull(key)) {
-            return obj.optString(key, "");
-        }
-        return "";
-    }
-
     private static String formatDateTime(String isoDateTime) {
         if (isoDateTime == null || isoDateTime.isEmpty()) return "";
         try {
-            // Handle ISO 8601 format like 2024-01-15T08:30:00+01:00
             String clean = isoDateTime;
             if (clean.length() > 16) {
                 clean = clean.substring(0, 16);
