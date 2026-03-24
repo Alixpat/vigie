@@ -5,16 +5,19 @@ public class TrainSchedule {
     private final String destination;
     private final String aimedDepartureTime;
     private final String expectedDepartureTime;
+    private final String arrivalTime;
     private final String departureStatus;
     private final String platformName;
     private final int delayMinutes;
 
     public TrainSchedule(String destination, String aimedDepartureTime,
-                         String expectedDepartureTime, String departureStatus,
-                         String platformName, int delayMinutes) {
+                         String expectedDepartureTime, String arrivalTime,
+                         String departureStatus, String platformName,
+                         int delayMinutes) {
         this.destination = destination;
         this.aimedDepartureTime = aimedDepartureTime;
         this.expectedDepartureTime = expectedDepartureTime;
+        this.arrivalTime = arrivalTime != null ? arrivalTime : "";
         this.departureStatus = departureStatus;
         this.platformName = platformName;
         this.delayMinutes = delayMinutes;
@@ -23,6 +26,7 @@ public class TrainSchedule {
     public String getDestination() { return destination; }
     public String getAimedDepartureTime() { return aimedDepartureTime; }
     public String getExpectedDepartureTime() { return expectedDepartureTime; }
+    public String getArrivalTime() { return arrivalTime; }
     public String getDepartureStatus() { return departureStatus; }
     public String getPlatformName() { return platformName; }
     public int getDelayMinutes() { return delayMinutes; }
