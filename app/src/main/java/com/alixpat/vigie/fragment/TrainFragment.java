@@ -28,6 +28,7 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -78,11 +79,17 @@ public class TrainFragment extends Fragment {
     private TextView scheduleLastUpdateRetour;
     private TrainScheduleAdapter scheduleAdapterRetour;
 
-    // Incidents
+    // Incidents - Aller: Clamart → Villepreux
     private RecyclerView recyclerView;
     private TextView emptyText;
     private TextView lastUpdateText;
     private TrainIncidentAdapter adapter;
+
+    // Incidents - Retour: Villepreux → Clamart
+    private RecyclerView recyclerViewRetour;
+    private TextView emptyTextRetour;
+    private TextView lastUpdateTextRetour;
+    private TrainIncidentAdapter adapterRetour;
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -122,13 +129,21 @@ public class TrainFragment extends Fragment {
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
 
-        // Incidents
+        // Incidents - Aller
         recyclerView = view.findViewById(R.id.trainRecyclerView);
         emptyText = view.findViewById(R.id.trainEmptyText);
         lastUpdateText = view.findViewById(R.id.trainLastUpdate);
         adapter = new TrainIncidentAdapter();
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerView.setAdapter(adapter);
+
+        // Incidents - Retour
+        recyclerViewRetour = view.findViewById(R.id.trainRecyclerViewRetour);
+        emptyTextRetour = view.findViewById(R.id.trainEmptyTextRetour);
+        lastUpdateTextRetour = view.findViewById(R.id.trainLastUpdateRetour);
+        adapterRetour = new TrainIncidentAdapter();
+        recyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
+        recyclerViewRetour.setAdapter(adapterRetour);
     }
 
     @Override
@@ -209,8 +224,8 @@ public class TrainFragment extends Fragment {
         HttpURLConnection connection = null;
         try {
             String apiUrl = STOP_MONITORING_URL
-                    + "?MonitoringRef=" + stopRef
-                    + "&LineRef=" + LINE_REF;
+                    + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
+                    + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
 
             URL url = new URL(apiUrl);
             connection = (HttpURLConnection) url.openConnection();
@@ -233,9 +248,11 @@ public class TrainFragment extends Fragment {
 
                 return parseStopMonitoring(response.toString(),
                         startHour, startMin, endHour, endMin);
+            } else {
+                android.util.Log.e("TrainFragment", "Stop monitoring API error: HTTP " + responseCode + " for stop " + stopRef);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            android.util.Log.e("TrainFragment", "Stop monitoring exception for stop " + stopRef, e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -374,6 +391,7 @@ public class TrainFragment extends Fragment {
         BrokerConfig config = new BrokerConfig(requireContext());
         if (!config.hasIdfmToken()) {
             showMessage(emptyText, recyclerView, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
+            showMessage(emptyTextRetour, recyclerViewRetour, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
             return;
         }
 
@@ -388,15 +406,22 @@ public class TrainFragment extends Fragment {
                     SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
                     String updateTime = "MAJ " + sdf.format(new Date());
                     lastUpdateText.setText(updateTime);
+                    lastUpdateTextRetour.setText(updateTime);
 
                     if (incidents == null) {
                         showMessage(emptyText, recyclerView, "Erreur de chargement.\nVérifiez votre token IDFM.");
+                        showMessage(emptyTextRetour, recyclerViewRetour, "Erreur de chargement.\nVérifiez votre token IDFM.");
                     } else if (incidents.isEmpty()) {
                         showMessage(emptyText, recyclerView, "Aucune perturbation en cours\nsur la Ligne N");
+                        showMessage(emptyTextRetour, recyclerViewRetour, "Aucune perturbation en cours\nsur la Ligne N");
                     } else {
                         emptyText.setVisibility(View.GONE);
                         recyclerView.setVisibility(View.VISIBLE);
                         adapter.updateIncidents(incidents);
+
+                        emptyTextRetour.setVisibility(View.GONE);
+                        recyclerViewRetour.setVisibility(View.VISIBLE);
+                        adapterRetour.updateIncidents(incidents);
                     }
                 });
             }
