@@ -32,7 +32,7 @@ import com.google.android.material.tabs.TabLayoutMediator;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1001;
-    private static final String[] TAB_TITLES = {"Messages", "LAN"};
+    private static final String[] TAB_TITLES = {"Messages", "LAN", "Météo"};
     private static final String PREFS_NAME = "vigie_prefs";
     private static final String PREF_LAST_TAB = "last_tab_position";
 
