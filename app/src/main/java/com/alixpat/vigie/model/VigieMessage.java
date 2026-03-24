@@ -9,8 +9,7 @@ public class VigieMessage {
     private String title;
     private String message;
     private String priority;
-
-    private static final Gson gson = new Gson();
+    private transient long receivedAt;
 
     public String getType() {
         return type;
@@ -28,9 +27,15 @@ public class VigieMessage {
         return priority;
     }
 
+    public long getReceivedAt() {
+        return receivedAt;
+    }
+
     public boolean isHighPriority() {
         return "high".equalsIgnoreCase(priority);
     }
+
+    private static final Gson gson = new Gson();
 
     /**
      * Parse un payload JSON en VigieMessage.
@@ -41,6 +46,7 @@ public class VigieMessage {
             VigieMessage msg = gson.fromJson(json, VigieMessage.class);
             // Valider que le message contient au moins un titre ou un message
             if (msg != null && (msg.title != null || msg.message != null)) {
+                msg.receivedAt = System.currentTimeMillis();
                 return msg;
             }
             return null;

@@ -24,6 +24,10 @@ import com.alixpat.vigie.fragment.LanFragment;
 import com.alixpat.vigie.model.LanHost;
 import com.alixpat.vigie.model.VigieMessage;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
 public class MqttService extends Service {
 
     private static final String TAG = "MqttService";
@@ -43,12 +47,22 @@ public class MqttService extends Service {
     private static volatile String currentStatus = STATUS_DISCONNECTED;
     private static volatile String currentErrorMsg = null;
 
+    // Historique complet des messages (jamais supprimés)
+    private static final List<VigieMessage> messageHistory =
+            Collections.synchronizedList(new ArrayList<>());
+
     public static String getCurrentStatus() {
         return currentStatus;
     }
 
     public static String getCurrentErrorMsg() {
         return currentErrorMsg;
+    }
+
+    public static List<VigieMessage> getMessageHistory() {
+        synchronized (messageHistory) {
+            return new ArrayList<>(messageHistory);
+        }
     }
 
     private MqttClient mqttClient;
@@ -152,6 +166,7 @@ public class MqttService extends Service {
 
                     VigieMessage vigieMsg = VigieMessage.fromJson(payload);
                     if (vigieMsg != null) {
+                        messageHistory.add(vigieMsg);
                         notificationHelper.showMessageNotification(vigieMsg);
                         Intent broadcast = new Intent("com.alixpat.vigie.MESSAGE_RECEIVED");
                         broadcast.putExtra("payload", payload);
