@@ -18,7 +18,7 @@
         android:padding="12dp"
         android:gravity="center_vertical">
 
-        <!-- Horaires départ + arrivée -->
+        <!-- Horaires depart + arrivee -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -36,15 +36,16 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textSize="18sp"
-                    android:textStyle="bold" />
+                    android:textStyle="bold"
+                    android:textColor="@color/text_primary" />
 
                 <TextView
                     android:id="@+id/scheduleArrivalArrow"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text=" → "
+                    android:text=" \u2192 "
                     android:textSize="14sp"
-                    android:textColor="#999999"
+                    android:textColor="@color/text_hint"
                     android:visibility="gone" />
 
                 <TextView
@@ -53,7 +54,7 @@
                     android:layout_height="wrap_content"
                     android:textSize="18sp"
                     android:textStyle="bold"
-                    android:textColor="#1565C0"
+                    android:textColor="@color/primary_dark"
                     android:visibility="gone" />
             </LinearLayout>
 
@@ -78,14 +79,15 @@
                 android:id="@+id/scheduleDestination"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp" />
+                android:textSize="14sp"
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/schedulePlatform"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="12sp"
-                android:textColor="#999999"
+                android:textColor="@color/text_hint"
                 android:visibility="gone" />
         </LinearLayout>
 

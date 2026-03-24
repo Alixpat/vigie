@@ -4,8 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="6dp"
-    app:cardElevation="2dp"
+    android:layout_margin="4dp"
+    app:cardElevation="1dp"
     app:cardCornerRadius="8dp">
 
     <LinearLayout
@@ -17,8 +17,8 @@
 
         <View
             android:id="@+id/statusIndicator"
-            android:layout_width="16dp"
-            android:layout_height="16dp"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
             android:background="@drawable/circle_indicator" />
 
         <LinearLayout
@@ -32,22 +32,23 @@
                 android:id="@+id/hostnameText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textSize="15sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/ipText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="13sp"
-                android:textColor="#666666" />
+                android:textColor="@color/text_secondary" />
 
             <TextView
                 android:id="@+id/lastUpdateText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
-                android:textColor="#999999" />
+                android:textColor="@color/text_hint" />
 
         </LinearLayout>
 

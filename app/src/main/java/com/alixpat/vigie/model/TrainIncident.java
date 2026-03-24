@@ -77,8 +77,8 @@ public class TrainIncident {
     }
 
     public int getSeverityColor() {
-        if (isTravaux()) return 0xFF9C27B0; // Purple for planned works
-        if (isInformation()) return 0xFF2196F3; // Blue
+        if (isTravaux()) return 0xFF9C27B0;
+        if (isInformation()) return 0xFF2196F3;
         if (severity == null) return 0xFFFF9800;
         switch (severity.toLowerCase()) {
             case "blocking": return 0xFFF44336;

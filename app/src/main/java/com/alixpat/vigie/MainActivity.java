@@ -74,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        // Demander la permission de notification sur Android 13+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS)
                     != PackageManager.PERMISSION_GRANTED) {
@@ -94,7 +93,6 @@ public class MainActivity extends AppCompatActivity {
                 (tab, position) -> tab.setText(TAB_TITLES[position])
         ).attach();
 
-        // Restaurer le dernier onglet sélectionné
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
         int lastTab = prefs.getInt(PREF_LAST_TAB, 0);
         if (lastTab >= 0 && lastTab < TAB_TITLES.length) {
@@ -127,7 +125,6 @@ public class MainActivity extends AppCompatActivity {
             registerReceiver(statusReceiver, statusFilter);
         }
 
-        // Synchroniser l'etat avec le service
         serviceRunning = isServiceRunning();
         if (serviceRunning) {
             String currentStatus = MqttService.getCurrentStatus();
@@ -143,7 +140,6 @@ public class MainActivity extends AppCompatActivity {
         super.onPause();
         unregisterReceiver(statusReceiver);
 
-        // Sauvegarder l'onglet actuel
         getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
                 .edit()
                 .putInt(PREF_LAST_TAB, viewPager.getCurrentItem())
@@ -151,36 +147,36 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateStatusUI(String status, String errorMsg) {
-        int dotColor;
+        int dotColorRes;
         String label;
 
         switch (status) {
             case MqttService.STATUS_CONNECTED:
                 serviceRunning = true;
-                dotColor = 0xFF4CAF50; // vert
+                dotColorRes = R.color.status_ok;
                 label = "Connecté";
                 break;
             case MqttService.STATUS_CONNECTING:
                 serviceRunning = true;
-                dotColor = 0xFFFF9800; // orange
+                dotColorRes = R.color.status_warning;
                 label = "Connexion...";
                 if (errorMsg != null) label += " (" + errorMsg + ")";
                 break;
             case MqttService.STATUS_ERROR:
                 serviceRunning = true;
-                dotColor = 0xFFF44336; // rouge
+                dotColorRes = R.color.status_error;
                 label = "Erreur";
                 if (errorMsg != null) label += " — " + errorMsg;
                 break;
-            default: // DISCONNECTED
+            default:
                 serviceRunning = false;
-                dotColor = 0xFF999999; // gris
+                dotColorRes = R.color.status_inactive;
                 label = "Déconnecté";
                 break;
         }
 
         GradientDrawable dot = (GradientDrawable) statusDot.getBackground();
-        dot.setColor(dotColor);
+        dot.setColor(ContextCompat.getColor(this, dotColorRes));
         statusText.setText(label);
     }
 

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary palette -->
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#1565C0</color>
+    <color name="on_primary">#FFFFFF</color>
+
+    <!-- Secondary palette -->
+    <color name="secondary">#FF6F00</color>
+    <color name="secondary_dark">#E65100</color>
+    <color name="on_secondary">#FFFFFF</color>
+
+    <!-- Status colors -->
+    <color name="status_ok">#4CAF50</color>
+    <color name="status_warning">#FF9800</color>
+    <color name="status_error">#F44336</color>
+    <color name="status_info">#2196F3</color>
+    <color name="status_inactive">#9E9E9E</color>
+    <color name="status_travaux">#9C27B0</color>
+
+    <!-- Banner backgrounds (subtle tints) -->
+    <color name="banner_bg_ok">#F1F8E9</color>
+    <color name="banner_bg_warning">#FFF3E0</color>
+    <color name="banner_bg_error">#FFEBEE</color>
+    <color name="banner_bg_info">#E3F2FD</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+
+    <!-- Backgrounds -->
+    <color name="background_card">#FFFFFF</color>
+    <color name="background_item">#FAFAFA</color>
+    <color name="divider">#E0E0E0</color>
+</resources>
