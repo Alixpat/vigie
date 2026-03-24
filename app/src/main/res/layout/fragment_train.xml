@@ -11,6 +11,90 @@
         android:orientation="vertical"
         android:padding="16dp">
 
+        <!-- ===== LIGNE N - Bandeau d'état ===== -->
+        <LinearLayout
+            android:id="@+id/lineStatusBanner"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/status_banner_bg"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/lineStatusEmoji"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:id="@+id/lineStatusTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="Ligne N"
+                    android:textSize="16sp"
+                    android:textStyle="bold"
+                    android:textColor="#FFFFFF" />
+
+                <TextView
+                    android:id="@+id/lineStatusUpdate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="10sp"
+                    android:textColor="#CCFFFFFF" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/lineStatusSummary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:layout_marginStart="28dp"
+                android:textSize="13sp"
+                android:textColor="#EEFFFFFF"
+                android:text="Chargement..." />
+        </LinearLayout>
+
+        <!-- ===== Perturbations (visibles uniquement si perturbations en cours) ===== -->
+        <LinearLayout
+            android:id="@+id/perturbationsSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/trainRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+        </LinearLayout>
+
+        <!-- ===== Infos planifiées / Travaux (visibles uniquement si présents) ===== -->
+        <LinearLayout
+            android:id="@+id/travauxSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/travauxRecyclerView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:nestedScrollingEnabled="false" />
+        </LinearLayout>
+
         <!-- ===== Aller: Clamart → Villepreux - Horaires ===== -->
         <LinearLayout
             android:layout_width="match_parent"
@@ -100,56 +184,6 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/scheduleRecyclerViewRetour"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:visibility="gone" />
-
-        <!-- Separator -->
-        <View
-            android:layout_width="match_parent"
-            android:layout_height="1dp"
-            android:background="#E0E0E0"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="16dp" />
-
-        <!-- ===== Perturbations Ligne N ===== -->
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:layout_marginBottom="8dp">
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Perturbations Ligne N"
-                android:textSize="16sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/trainLastUpdate"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textColor="#999999" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/trainEmptyText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:text="Chargement des perturbations..."
-            android:textSize="16sp"
-            android:textColor="#999999"
-            android:paddingTop="32dp"
-            android:paddingBottom="32dp" />
-
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/trainRecyclerView"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:nestedScrollingEnabled="false"

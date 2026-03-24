@@ -39,7 +39,19 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
         holder.emoji.setText(incident.getSeverityEmoji());
         holder.severity.setText(incident.getSeverityLabel());
         holder.severity.setTextColor(incident.getSeverityColor());
-        holder.title.setText(incident.getTitle());
+        holder.stripe.setBackgroundColor(incident.getSeverityColor());
+
+        // Title: hide if same as severity label or generic
+        String title = incident.getTitle();
+        if (title != null && !title.isEmpty()
+                && !title.equals("Perturbation Ligne N")
+                && !title.equals(incident.getSeverityLabel())) {
+            holder.title.setText(title);
+            holder.title.setVisibility(View.VISIBLE);
+        } else {
+            holder.title.setVisibility(View.GONE);
+        }
+
         holder.message.setText(incident.getMessage());
 
         if (incident.getCause() != null && !incident.getCause().isEmpty()) {
@@ -54,7 +66,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
             period = "Depuis " + incident.getStartTime();
         }
         if (incident.getEndTime() != null && !incident.getEndTime().isEmpty()) {
-            period += " — Fin prévue " + incident.getEndTime();
+            period += " \u2014 Fin pr\u00e9vue " + incident.getEndTime();
         }
         if (!period.isEmpty()) {
             holder.period.setText(period);
@@ -70,6 +82,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
+        final View stripe;
         final TextView emoji;
         final TextView severity;
         final TextView cause;
@@ -79,6 +92,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
+            stripe = itemView.findViewById(R.id.incidentStripe);
             emoji = itemView.findViewById(R.id.incidentEmoji);
             severity = itemView.findViewById(R.id.incidentSeverity);
             cause = itemView.findViewById(R.id.incidentCause);
