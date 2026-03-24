@@ -26,7 +26,9 @@ import com.alixpat.vigie.model.VigieMessage;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class MqttService extends Service {
 
@@ -51,6 +53,10 @@ public class MqttService extends Service {
     private static final List<VigieMessage> messageHistory =
             Collections.synchronizedList(new ArrayList<>());
 
+    // Cache des hôtes LAN (persisté entre passages en arrière-plan)
+    private static final Map<String, LanHost> lanHostsCache =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
     public static String getCurrentStatus() {
         return currentStatus;
     }
@@ -62,6 +68,12 @@ public class MqttService extends Service {
     public static List<VigieMessage> getMessageHistory() {
         synchronized (messageHistory) {
             return new ArrayList<>(messageHistory);
+        }
+    }
+
+    public static Map<String, LanHost> getLanHostsCache() {
+        synchronized (lanHostsCache) {
+            return new LinkedHashMap<>(lanHostsCache);
         }
     }
 
@@ -157,6 +169,7 @@ public class MqttService extends Service {
 
                     LanHost lanHost = LanHost.fromJson(payload);
                     if (lanHost != null) {
+                        lanHostsCache.put(lanHost.getIp(), lanHost);
                         Intent broadcast = new Intent(LanFragment.ACTION_LAN_STATUS);
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
