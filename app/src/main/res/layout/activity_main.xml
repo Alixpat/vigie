@@ -15,13 +15,19 @@
         app:title="VIGIE">
 
         <LinearLayout
+            android:id="@+id/statusToggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:layout_gravity="end"
             android:paddingEnd="8dp"
-            android:paddingStart="0dp">
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
 
             <View
                 android:id="@+id/statusDot"
@@ -41,31 +47,6 @@
         </LinearLayout>
 
     </androidx.appcompat.widget.Toolbar>
-
-    <LinearLayout
-        android:id="@+id/connectionBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center"
-        android:paddingTop="6dp"
-        android:paddingBottom="6dp"
-        android:paddingStart="16dp"
-        android:paddingEnd="16dp"
-        android:background="#F5F5F5">
-
-        <Button
-            android:id="@+id/toggleButton"
-            android:layout_width="wrap_content"
-            android:layout_height="36dp"
-            android:text="Démarrer la surveillance"
-            android:textSize="12sp"
-            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-            android:minHeight="0dp"
-            android:paddingTop="0dp"
-            android:paddingBottom="0dp" />
-
-    </LinearLayout>
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabLayout"
