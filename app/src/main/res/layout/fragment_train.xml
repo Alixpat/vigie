@@ -1,47 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="8dp">
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Aller: Clamart → Villepreux -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Ligne N - Clamart \u2192 Villepreux"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/trainLastUpdate"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#999999" />
+        </LinearLayout>
 
         <TextView
-            android:layout_width="0dp"
+            android:id="@+id/trainEmptyText"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Ligne N - Clamart \u2192 Villepreux"
+            android:gravity="center"
+            android:text="Chargement des perturbations..."
             android:textSize="16sp"
-            android:textStyle="bold" />
+            android:textColor="#999999"
+            android:paddingTop="32dp"
+            android:paddingBottom="32dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/trainRecyclerView"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:visibility="gone" />
+
+        <!-- Separator -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="#E0E0E0"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Retour: Villepreux → Clamart -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginBottom="8dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Ligne N - Villepreux \u2192 Clamart"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/trainLastUpdateRetour"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="11sp"
+                android:textColor="#999999" />
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/trainLastUpdate"
-            android:layout_width="wrap_content"
+            android:id="@+id/trainEmptyTextRetour"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="11sp"
-            android:textColor="#999999" />
+            android:gravity="center"
+            android:text="Chargement des perturbations..."
+            android:textSize="16sp"
+            android:textColor="#999999"
+            android:paddingTop="32dp"
+            android:paddingBottom="32dp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/trainRecyclerViewRetour"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:nestedScrollingEnabled="false"
+            android:visibility="gone" />
+
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/trainEmptyText"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:gravity="center"
-        android:text="Chargement des perturbations..."
-        android:textSize="16sp"
-        android:textColor="#999999" />
-
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/trainRecyclerView"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone" />
-
-</LinearLayout>
+</ScrollView>

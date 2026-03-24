@@ -43,10 +43,18 @@ public class TrainFragment extends Fragment {
             "https://prim.iledefrance-mobilites.fr/marketplace/general-message"
                     + "?LineRef=" + LINE_REF;
 
+    // Aller: Clamart → Villepreux
     private RecyclerView recyclerView;
     private TextView emptyText;
     private TextView lastUpdateText;
     private TrainIncidentAdapter adapter;
+
+    // Retour: Villepreux → Clamart
+    private RecyclerView recyclerViewRetour;
+    private TextView emptyTextRetour;
+    private TextView lastUpdateTextRetour;
+    private TrainIncidentAdapter adapterRetour;
+
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -69,6 +77,7 @@ public class TrainFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
+        // Aller
         recyclerView = view.findViewById(R.id.trainRecyclerView);
         emptyText = view.findViewById(R.id.trainEmptyText);
         lastUpdateText = view.findViewById(R.id.trainLastUpdate);
@@ -76,6 +85,15 @@ public class TrainFragment extends Fragment {
         adapter = new TrainIncidentAdapter();
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerView.setAdapter(adapter);
+
+        // Retour
+        recyclerViewRetour = view.findViewById(R.id.trainRecyclerViewRetour);
+        emptyTextRetour = view.findViewById(R.id.trainEmptyTextRetour);
+        lastUpdateTextRetour = view.findViewById(R.id.trainLastUpdateRetour);
+
+        adapterRetour = new TrainIncidentAdapter();
+        recyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
+        recyclerViewRetour.setAdapter(adapterRetour);
     }
 
     @Override
@@ -94,7 +112,8 @@ public class TrainFragment extends Fragment {
     private void fetchIncidents() {
         BrokerConfig config = new BrokerConfig(requireContext());
         if (!config.hasIdfmToken()) {
-            showMessage("Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
+            showMessage(emptyText, recyclerView, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
+            showMessage(emptyTextRetour, recyclerViewRetour, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
             return;
         }
 
@@ -107,26 +126,34 @@ public class TrainFragment extends Fragment {
                     if (!isAdded()) return;
 
                     SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-                    lastUpdateText.setText("MAJ " + sdf.format(new Date()));
+                    String updateTime = "MAJ " + sdf.format(new Date());
+                    lastUpdateText.setText(updateTime);
+                    lastUpdateTextRetour.setText(updateTime);
 
                     if (incidents == null) {
-                        showMessage("Erreur de chargement.\nVérifiez votre token IDFM.");
+                        showMessage(emptyText, recyclerView, "Erreur de chargement.\nVérifiez votre token IDFM.");
+                        showMessage(emptyTextRetour, recyclerViewRetour, "Erreur de chargement.\nVérifiez votre token IDFM.");
                     } else if (incidents.isEmpty()) {
-                        showMessage("Aucune perturbation en cours\nsur la Ligne N");
+                        showMessage(emptyText, recyclerView, "Aucune perturbation en cours\nsur la Ligne N");
+                        showMessage(emptyTextRetour, recyclerViewRetour, "Aucune perturbation en cours\nsur la Ligne N");
                     } else {
                         emptyText.setVisibility(View.GONE);
                         recyclerView.setVisibility(View.VISIBLE);
                         adapter.updateIncidents(incidents);
+
+                        emptyTextRetour.setVisibility(View.GONE);
+                        recyclerViewRetour.setVisibility(View.VISIBLE);
+                        adapterRetour.updateIncidents(incidents);
                     }
                 });
             }
         });
     }
 
-    private void showMessage(String message) {
-        emptyText.setText(message);
-        emptyText.setVisibility(View.VISIBLE);
-        recyclerView.setVisibility(View.GONE);
+    private void showMessage(TextView emptyView, RecyclerView recycler, String message) {
+        emptyView.setText(message);
+        emptyView.setVisibility(View.VISIBLE);
+        recycler.setVisibility(View.GONE);
     }
 
     private List<TrainIncident> fetchFromApi(String token) {
