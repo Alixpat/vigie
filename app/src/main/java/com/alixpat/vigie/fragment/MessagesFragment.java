@@ -145,6 +145,26 @@ public class MessagesFragment extends Fragment {
         serviceRunning = isServiceRunning();
         if (serviceRunning) {
             toggleButton.setText("Arrêter la surveillance");
+            // Récupérer le statut courant du service pour mettre à jour l'affichage
+            String currentStatus = MqttService.getCurrentStatus();
+            String currentError = MqttService.getCurrentErrorMsg();
+            switch (currentStatus) {
+                case MqttService.STATUS_CONNECTED:
+                    statusText.setText("Statut : Connecté");
+                    break;
+                case MqttService.STATUS_CONNECTING:
+                    statusText.setText("Statut : Connexion en cours..." +
+                            (currentError != null ? " (" + currentError + ")" : ""));
+                    break;
+                case MqttService.STATUS_ERROR:
+                    statusText.setText("Statut : Erreur" +
+                            (currentError != null ? " — " + currentError : "") +
+                            " (nouvelle tentative...)");
+                    break;
+                default:
+                    statusText.setText("Statut : Connexion en cours...");
+                    break;
+            }
         } else {
             statusText.setText("Statut : Déconnecté");
             toggleButton.setText("Démarrer la surveillance");
