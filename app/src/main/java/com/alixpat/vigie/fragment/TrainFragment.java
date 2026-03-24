@@ -54,10 +54,10 @@ public class TrainFragment extends Fragment {
     // Stop monitoring API for schedules
     private static final String STOP_MONITORING_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
-    // Clamart station MonitoringRef (Ligne N)
-    private static final String CLAMART_STOP_REF = "STIF:StopPoint:Q:41109:";
-    // Villepreux-Fontenay station MonitoringRef (Ligne N)
-    private static final String VILLEPREUX_STOP_REF = "STIF:StopPoint:Q:41326:";
+    // Clamart station MonitoringRef (Ligne N) — StopArea format required since March 2025
+    private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
+    // Villepreux-Les Clayes station MonitoringRef (Ligne N) — StopArea format required since March 2025
+    private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
     // Schedules - Aller: Clamart → Villepreux
     private RecyclerView scheduleRecyclerViewAller;
@@ -266,7 +266,19 @@ public class TrainFragment extends Fragment {
 
                 return parseStopMonitoring(response.toString(), windowStart, windowEnd, directionLabel);
             } else {
-                Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: ERREUR HTTP " + responseCode + " pour stop " + stopRef);
+                String errorBody = "";
+                try {
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(connection.getErrorStream()));
+                    StringBuilder errResponse = new StringBuilder();
+                    String errLine;
+                    while ((errLine = errReader.readLine()) != null) {
+                        errResponse.append(errLine);
+                    }
+                    errReader.close();
+                    errorBody = errResponse.toString();
+                } catch (Exception ignored) {}
+                Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: ERREUR HTTP " + responseCode + " pour stop " + stopRef + " body=" + errorBody);
             }
         } catch (Exception e) {
             Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: exception pour stop " + stopRef, e);
