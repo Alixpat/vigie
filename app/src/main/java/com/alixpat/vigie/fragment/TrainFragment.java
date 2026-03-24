@@ -29,9 +29,10 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import android.util.Log;
+
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
@@ -41,7 +42,9 @@ import java.util.concurrent.Executors;
 
 public class TrainFragment extends Fragment {
 
+    private static final String TAG = "TrainFragment";
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+    private static final long SCHEDULE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours window
     // Ligne N Transilien
     private static final String LINE_REF = "STIF:Line::C01736:";
     private static final String GENERAL_MESSAGE_URL =
@@ -55,17 +58,6 @@ public class TrainFragment extends Fragment {
     private static final String CLAMART_STOP_REF = "STIF:StopPoint:Q:41109:";
     // Villepreux-Fontenay station MonitoringRef (Ligne N)
     private static final String VILLEPREUX_STOP_REF = "STIF:StopPoint:Q:41326:";
-
-    // Time filters (hours and minutes)
-    private static final int ALLER_START_HOUR = 6;
-    private static final int ALLER_START_MIN = 30;
-    private static final int ALLER_END_HOUR = 8;
-    private static final int ALLER_END_MIN = 0;
-
-    private static final int RETOUR_START_HOUR = 7;
-    private static final int RETOUR_START_MIN = 0;
-    private static final int RETOUR_END_HOUR = 8;
-    private static final int RETOUR_END_MIN = 30;
 
     // Schedules - Aller: Clamart → Villepreux
     private RecyclerView scheduleRecyclerViewAller;
@@ -169,6 +161,7 @@ public class TrainFragment extends Fragment {
     private void fetchSchedules() {
         BrokerConfig config = new BrokerConfig(requireContext());
         if (!config.hasIdfmToken()) {
+            Log.w(TAG, "fetchSchedules: Token IDFM non configuré");
             showMessage(scheduleEmptyAller, scheduleRecyclerViewAller,
                     "Token IDFM non configuré.");
             showMessage(scheduleEmptyRetour, scheduleRecyclerViewRetour,
@@ -177,14 +170,22 @@ public class TrainFragment extends Fragment {
         }
 
         String token = config.getIdfmToken();
-        executor.execute(() -> {
-            List<TrainSchedule> allerSchedules = fetchStopMonitoring(
-                    token, CLAMART_STOP_REF,
-                    ALLER_START_HOUR, ALLER_START_MIN, ALLER_END_HOUR, ALLER_END_MIN);
+        Date now = new Date();
+        Date windowEnd = new Date(now.getTime() + SCHEDULE_WINDOW_MS);
+        SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
 
+        executor.execute(() -> {
+            Log.d(TAG, "fetchSchedules: requête Aller (Clamart → Villepreux), stop=" + CLAMART_STOP_REF);
+            List<TrainSchedule> allerSchedules = fetchStopMonitoring(
+                    token, CLAMART_STOP_REF, now, windowEnd, "Aller");
+
+            Log.d(TAG, "fetchSchedules: requête Retour (Villepreux → Clamart), stop=" + VILLEPREUX_STOP_REF);
             List<TrainSchedule> retourSchedules = fetchStopMonitoring(
-                    token, VILLEPREUX_STOP_REF,
-                    RETOUR_START_HOUR, RETOUR_START_MIN, RETOUR_END_HOUR, RETOUR_END_MIN);
+                    token, VILLEPREUX_STOP_REF, now, windowEnd, "Retour");
+
+            Log.i(TAG, "fetchSchedules: résultats Aller=" + (allerSchedules != null ? allerSchedules.size() : "null")
+                    + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null"));
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -196,9 +197,9 @@ public class TrainFragment extends Fragment {
                     scheduleLastUpdateRetour.setText(updateTime);
 
                     updateScheduleUI(allerSchedules, scheduleEmptyAller,
-                            scheduleRecyclerViewAller, scheduleAdapterAller, "Clamart \u2192 Villepreux");
+                            scheduleRecyclerViewAller, scheduleAdapterAller, "Clamart → Villepreux");
                     updateScheduleUI(retourSchedules, scheduleEmptyRetour,
-                            scheduleRecyclerViewRetour, scheduleAdapterRetour, "Villepreux \u2192 Clamart");
+                            scheduleRecyclerViewRetour, scheduleAdapterRetour, "Villepreux → Clamart");
                 });
             }
         });
@@ -208,10 +209,21 @@ public class TrainFragment extends Fragment {
                                   RecyclerView recycler, TrainScheduleAdapter scheduleAdapter,
                                   String direction) {
         if (schedules == null) {
+            Log.w(TAG, "updateScheduleUI [" + direction + "]: schedules est null → erreur de chargement");
             showMessage(emptyView, recycler, "Erreur de chargement des horaires.");
         } else if (schedules.isEmpty()) {
-            showMessage(emptyView, recycler, "Aucun train prévu\ndans ce créneau horaire.");
+            Log.w(TAG, "updateScheduleUI [" + direction + "]: liste vide → aucun train dans la fenêtre");
+            showMessage(emptyView, recycler, "Aucun train prévu\ndans les 2 prochaines heures.");
         } else {
+            Log.i(TAG, "updateScheduleUI [" + direction + "]: affichage de " + schedules.size() + " trains");
+            for (int i = 0; i < schedules.size(); i++) {
+                TrainSchedule s = schedules.get(i);
+                Log.d(TAG, "  train #" + i + ": " + s.getAimedDepartureTime()
+                        + " → " + s.getDestination()
+                        + " | status=" + s.getDepartureStatus()
+                        + " | retard=" + s.getDelayMinutes() + "min"
+                        + " | voie=" + s.getPlatformName());
+            }
             emptyView.setVisibility(View.GONE);
             recycler.setVisibility(View.VISIBLE);
             scheduleAdapter.updateSchedules(schedules);
@@ -219,13 +231,15 @@ public class TrainFragment extends Fragment {
     }
 
     private List<TrainSchedule> fetchStopMonitoring(String token, String stopRef,
-                                                     int startHour, int startMin,
-                                                     int endHour, int endMin) {
+                                                     Date windowStart, Date windowEnd,
+                                                     String directionLabel) {
         HttpURLConnection connection = null;
         try {
             String apiUrl = STOP_MONITORING_URL
                     + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
                     + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
+
+            Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: URL=" + apiUrl);
 
             URL url = new URL(apiUrl);
             connection = (HttpURLConnection) url.openConnection();
@@ -236,6 +250,8 @@ public class TrainFragment extends Fragment {
             connection.setReadTimeout(15000);
 
             int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: HTTP " + responseCode);
+
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 BufferedReader reader = new BufferedReader(
                         new InputStreamReader(connection.getInputStream()));
@@ -246,13 +262,14 @@ public class TrainFragment extends Fragment {
                 }
                 reader.close();
 
-                return parseStopMonitoring(response.toString(),
-                        startHour, startMin, endHour, endMin);
+                Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: réponse reçue, taille=" + response.length() + " chars");
+
+                return parseStopMonitoring(response.toString(), windowStart, windowEnd, directionLabel);
             } else {
-                android.util.Log.e("TrainFragment", "Stop monitoring API error: HTTP " + responseCode + " for stop " + stopRef);
+                Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: ERREUR HTTP " + responseCode + " pour stop " + stopRef);
             }
         } catch (Exception e) {
-            android.util.Log.e("TrainFragment", "Stop monitoring exception for stop " + stopRef, e);
+            Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: exception pour stop " + stopRef, e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -262,9 +279,10 @@ public class TrainFragment extends Fragment {
     }
 
     private List<TrainSchedule> parseStopMonitoring(String jsonStr,
-                                                     int startHour, int startMin,
-                                                     int endHour, int endMin) {
+                                                     Date windowStart, Date windowEnd,
+                                                     String directionLabel) {
         List<TrainSchedule> schedules = new ArrayList<>();
+        SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         try {
             JSONObject root = new JSONObject(jsonStr);
             JSONObject delivery = root
@@ -274,13 +292,21 @@ public class TrainFragment extends Fragment {
                     .getJSONObject(0);
 
             if (!delivery.has("MonitoredStopVisit")) {
+                Log.w(TAG, "parseStopMonitoring [" + directionLabel + "]: pas de MonitoredStopVisit dans la réponse");
                 return schedules;
             }
 
             JSONArray visits = delivery.getJSONArray("MonitoredStopVisit");
-            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-            isoFormat.setTimeZone(TimeZone.getDefault());
+            Log.i(TAG, "parseStopMonitoring [" + directionLabel + "]: " + visits.length() + " visites dans la réponse API");
+
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
+            SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            isoFormatNoTz.setTimeZone(TimeZone.getDefault());
             SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
+
+            int filteredOut = 0;
+            int noAimedTime = 0;
+            int parseErrors = 0;
 
             for (int i = 0; i < visits.length(); i++) {
                 JSONObject visit = visits.getJSONObject(i);
@@ -291,23 +317,26 @@ public class TrainFragment extends Fragment {
                 String aimedStr = call.optString("AimedDepartureTime", "");
                 String expectedStr = call.optString("ExpectedDepartureTime", "");
 
-                if (aimedStr.isEmpty()) continue;
+                if (aimedStr.isEmpty()) {
+                    noAimedTime++;
+                    Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i + " ignorée (pas de AimedDepartureTime)");
+                    continue;
+                }
 
-                // Parse aimed time
-                String aimedClean = cleanIsoTime(aimedStr);
-                Date aimedDate = isoFormat.parse(aimedClean);
-                if (aimedDate == null) continue;
+                // Parse aimed time (with timezone support)
+                Date aimedDate = parseIsoDateTime(aimedStr, isoFormat, isoFormatNoTz);
+                if (aimedDate == null) {
+                    parseErrors++;
+                    Log.e(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i + " impossible de parser aimedStr=" + aimedStr);
+                    continue;
+                }
 
-                // Filter by time range
-                Calendar cal = Calendar.getInstance();
-                cal.setTime(aimedDate);
-                int hour = cal.get(Calendar.HOUR_OF_DAY);
-                int minute = cal.get(Calendar.MINUTE);
-                int timeInMinutes = hour * 60 + minute;
-                int startInMinutes = startHour * 60 + startMin;
-                int endInMinutes = endHour * 60 + endMin;
-
-                if (timeInMinutes < startInMinutes || timeInMinutes > endInMinutes) {
+                // Filter: keep only trains between now and now+2h
+                if (aimedDate.before(windowStart) || aimedDate.after(windowEnd)) {
+                    filteredOut++;
+                    Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
+                            + " hors fenêtre: aimed=" + logFmt.format(aimedDate)
+                            + " fenêtre=[" + logFmt.format(windowStart) + " - " + logFmt.format(windowEnd) + "]");
                     continue;
                 }
 
@@ -315,13 +344,15 @@ public class TrainFragment extends Fragment {
                 int delayMinutes = 0;
                 String expectedTimeStr = "";
                 if (!expectedStr.isEmpty()) {
-                    String expectedClean = cleanIsoTime(expectedStr);
-                    Date expectedDate = isoFormat.parse(expectedClean);
+                    Date expectedDate = parseIsoDateTime(expectedStr, isoFormat, isoFormatNoTz);
                     if (expectedDate != null) {
                         long diffMs = expectedDate.getTime() - aimedDate.getTime();
                         delayMinutes = (int) (diffMs / 60000);
                         if (delayMinutes < 0) delayMinutes = 0;
                         expectedTimeStr = timeFormat.format(expectedDate);
+                    } else {
+                        Log.w(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
+                                + " impossible de parser expectedStr=" + expectedStr);
                     }
                 }
 
@@ -354,6 +385,13 @@ public class TrainFragment extends Fragment {
 
                 String aimedTimeStr = timeFormat.format(aimedDate);
 
+                Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: GARDÉ visite #" + i
+                        + " aimed=" + aimedTimeStr
+                        + " dest=" + destination
+                        + " status=" + departureStatus
+                        + " delay=" + delayMinutes + "min"
+                        + " voie=" + platform);
+
                 schedules.add(new TrainSchedule(
                         destination,
                         aimedTimeStr,
@@ -363,26 +401,65 @@ public class TrainFragment extends Fragment {
                         delayMinutes
                 ));
             }
+
+            Log.i(TAG, "parseStopMonitoring [" + directionLabel + "]: RÉSUMÉ"
+                    + " total=" + visits.length()
+                    + " gardés=" + schedules.size()
+                    + " filtrés(hors fenêtre)=" + filteredOut
+                    + " sansAimed=" + noAimedTime
+                    + " erreursParse=" + parseErrors);
+
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "parseStopMonitoring [" + directionLabel + "]: exception parsing JSON", e);
         }
         return schedules;
     }
 
-    private static String cleanIsoTime(String isoDateTime) {
-        if (isoDateTime == null) return "";
-        // Remove timezone offset for parsing (e.g., +01:00 or Z)
-        String clean = isoDateTime;
-        if (clean.contains("+")) {
-            clean = clean.substring(0, clean.indexOf('+'));
-        } else if (clean.endsWith("Z")) {
-            clean = clean.substring(0, clean.length() - 1);
+    /**
+     * Parse an ISO 8601 datetime string, trying first with timezone then without.
+     */
+    private static Date parseIsoDateTime(String isoStr, SimpleDateFormat withTz, SimpleDateFormat withoutTz) {
+        if (isoStr == null || isoStr.isEmpty()) return null;
+
+        // Try parsing with timezone info first
+        try {
+            // Handle fractional seconds by removing them before parsing
+            String cleaned = isoStr;
+            int dotIdx = cleaned.indexOf('.');
+            if (dotIdx > 0) {
+                // Find end of fractional part (before + or Z)
+                int tzStart = cleaned.indexOf('+', dotIdx);
+                if (tzStart < 0) tzStart = cleaned.indexOf('Z', dotIdx);
+                if (tzStart < 0) tzStart = cleaned.indexOf('-', dotIdx + 1);
+                if (tzStart > 0) {
+                    cleaned = cleaned.substring(0, dotIdx) + cleaned.substring(tzStart);
+                } else {
+                    cleaned = cleaned.substring(0, dotIdx);
+                }
+            }
+
+            // Try with timezone
+            if (cleaned.contains("+") || cleaned.contains("Z") || cleaned.matches(".*-\\d{2}:\\d{2}$")) {
+                Date d = withTz.parse(cleaned);
+                if (d != null) return d;
+            }
+
+            // Fallback: strip timezone and parse as local
+            String noTz = cleaned;
+            if (noTz.contains("+")) {
+                noTz = noTz.substring(0, noTz.lastIndexOf('+'));
+            } else if (noTz.endsWith("Z")) {
+                noTz = noTz.substring(0, noTz.length() - 1);
+            }
+            // Remove trailing timezone like -01:00
+            if (noTz.matches(".*-\\d{2}:\\d{2}$")) {
+                noTz = noTz.substring(0, noTz.length() - 6);
+            }
+            return withoutTz.parse(noTz);
+        } catch (Exception e) {
+            Log.e("TrainFragment", "parseIsoDateTime: impossible de parser '" + isoStr + "'", e);
+            return null;
         }
-        // Truncate to seconds
-        if (clean.contains(".")) {
-            clean = clean.substring(0, clean.indexOf('.'));
-        }
-        return clean;
     }
 
     // ==================== INCIDENTS ====================
