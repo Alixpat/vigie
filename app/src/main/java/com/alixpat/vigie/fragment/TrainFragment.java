@@ -59,16 +59,29 @@ public class TrainFragment extends Fragment {
     // Villepreux-Les Clayes station MonitoringRef (Ligne N) — StopArea format required since March 2025
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
+    // Known destinations towards Villepreux direction (away from Paris)
+    // Trains from Clamart with these destinations pass through Villepreux-Les Clayes
+    private static final String[] DESTINATIONS_VERS_VILLEPREUX = {
+            "villepreux", "plaisir", "rambouillet", "dreux", "mantes"
+    };
+    // Trains from Villepreux towards Clamart/Paris
+    private static final String[] DESTINATIONS_VERS_PARIS = {
+            "paris", "montparnasse", "clamart", "meudon", "chaville",
+            "viroflay", "versailles", "sèvres", "sevres"
+    };
+
     // Schedules - Aller: Clamart → Villepreux
     private RecyclerView scheduleRecyclerViewAller;
     private TextView scheduleEmptyAller;
     private TextView scheduleLastUpdateAller;
+    private TextView scheduleTitleAller;
     private TrainScheduleAdapter scheduleAdapterAller;
 
     // Schedules - Retour: Villepreux → Clamart
     private RecyclerView scheduleRecyclerViewRetour;
     private TextView scheduleEmptyRetour;
     private TextView scheduleLastUpdateRetour;
+    private TextView scheduleTitleRetour;
     private TrainScheduleAdapter scheduleAdapterRetour;
 
     // Incidents - Aller: Clamart → Villepreux
@@ -109,6 +122,7 @@ public class TrainFragment extends Fragment {
         scheduleRecyclerViewAller = view.findViewById(R.id.scheduleRecyclerViewAller);
         scheduleEmptyAller = view.findViewById(R.id.scheduleEmptyAller);
         scheduleLastUpdateAller = view.findViewById(R.id.scheduleLastUpdateAller);
+        scheduleTitleAller = view.findViewById(R.id.scheduleTitleAller);
         scheduleAdapterAller = new TrainScheduleAdapter();
         scheduleRecyclerViewAller.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewAller.setAdapter(scheduleAdapterAller);
@@ -117,6 +131,7 @@ public class TrainFragment extends Fragment {
         scheduleRecyclerViewRetour = view.findViewById(R.id.scheduleRecyclerViewRetour);
         scheduleEmptyRetour = view.findViewById(R.id.scheduleEmptyRetour);
         scheduleLastUpdateRetour = view.findViewById(R.id.scheduleLastUpdateRetour);
+        scheduleTitleRetour = view.findViewById(R.id.scheduleTitleRetour);
         scheduleAdapterRetour = new TrainScheduleAdapter();
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
@@ -173,16 +188,29 @@ public class TrainFragment extends Fragment {
         Date now = new Date();
         Date windowEnd = new Date(now.getTime() + SCHEDULE_WINDOW_MS);
         SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat titleFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        String windowStr = titleFmt.format(now) + " - " + titleFmt.format(windowEnd);
         Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
+
+        // Update titles with dynamic time window on UI thread
+        if (getActivity() != null) {
+            getActivity().runOnUiThread(() -> {
+                if (!isAdded()) return;
+                scheduleTitleAller.setText("Clamart → Villepreux (" + windowStr + ")");
+                scheduleTitleRetour.setText("Villepreux → Clamart (" + windowStr + ")");
+            });
+        }
 
         executor.execute(() -> {
             Log.d(TAG, "fetchSchedules: requête Aller (Clamart → Villepreux), stop=" + CLAMART_STOP_REF);
             List<TrainSchedule> allerSchedules = fetchStopMonitoring(
-                    token, CLAMART_STOP_REF, now, windowEnd, "Aller");
+                    token, CLAMART_STOP_REF, now, windowEnd, "Aller",
+                    DESTINATIONS_VERS_VILLEPREUX);
 
             Log.d(TAG, "fetchSchedules: requête Retour (Villepreux → Clamart), stop=" + VILLEPREUX_STOP_REF);
             List<TrainSchedule> retourSchedules = fetchStopMonitoring(
-                    token, VILLEPREUX_STOP_REF, now, windowEnd, "Retour");
+                    token, VILLEPREUX_STOP_REF, now, windowEnd, "Retour",
+                    DESTINATIONS_VERS_PARIS);
 
             Log.i(TAG, "fetchSchedules: résultats Aller=" + (allerSchedules != null ? allerSchedules.size() : "null")
                     + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null"));
@@ -232,7 +260,8 @@ public class TrainFragment extends Fragment {
 
     private List<TrainSchedule> fetchStopMonitoring(String token, String stopRef,
                                                      Date windowStart, Date windowEnd,
-                                                     String directionLabel) {
+                                                     String directionLabel,
+                                                     String[] destinationFilter) {
         HttpURLConnection connection = null;
         try {
             String apiUrl = STOP_MONITORING_URL
@@ -264,7 +293,7 @@ public class TrainFragment extends Fragment {
 
                 Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: réponse reçue, taille=" + response.length() + " chars");
 
-                return parseStopMonitoring(response.toString(), windowStart, windowEnd, directionLabel);
+                return parseStopMonitoring(response.toString(), windowStart, windowEnd, directionLabel, destinationFilter);
             } else {
                 String errorBody = "";
                 try {
@@ -292,7 +321,8 @@ public class TrainFragment extends Fragment {
 
     private List<TrainSchedule> parseStopMonitoring(String jsonStr,
                                                      Date windowStart, Date windowEnd,
-                                                     String directionLabel) {
+                                                     String directionLabel,
+                                                     String[] destinationFilter) {
         List<TrainSchedule> schedules = new ArrayList<>();
         SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         try {
@@ -317,6 +347,7 @@ public class TrainFragment extends Fragment {
             SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
             int filteredOut = 0;
+            int filteredByDest = 0;
             int noAimedTime = 0;
             int parseErrors = 0;
 
@@ -324,6 +355,36 @@ public class TrainFragment extends Fragment {
                 JSONObject visit = visits.getJSONObject(i);
                 JSONObject journey = visit.getJSONObject("MonitoredVehicleJourney");
                 JSONObject call = journey.getJSONObject("MonitoredCall");
+
+                // Extract destination first (needed for filtering)
+                String destination = "";
+                JSONArray destNames = journey.optJSONArray("DestinationName");
+                if (destNames != null && destNames.length() > 0) {
+                    destination = destNames.getJSONObject(0).optString("value", "");
+                } else {
+                    JSONObject destName = journey.optJSONObject("DestinationName");
+                    if (destName != null) {
+                        destination = destName.optString("value", "");
+                    }
+                }
+
+                // Filter by destination: only keep trains going in the right direction
+                if (destinationFilter != null && destinationFilter.length > 0) {
+                    String destLower = destination.toLowerCase(Locale.FRENCH);
+                    boolean matchesFilter = false;
+                    for (String keyword : destinationFilter) {
+                        if (destLower.contains(keyword)) {
+                            matchesFilter = true;
+                            break;
+                        }
+                    }
+                    if (!matchesFilter) {
+                        filteredByDest++;
+                        Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
+                                + " filtrée (destination='" + destination + "' ne correspond pas au trajet)");
+                        continue;
+                    }
+                }
 
                 // Extract aimed departure time
                 String aimedStr = call.optString("AimedDepartureTime", "");
@@ -368,18 +429,6 @@ public class TrainFragment extends Fragment {
                     }
                 }
 
-                // Extract destination
-                String destination = "";
-                JSONArray destNames = journey.optJSONArray("DestinationName");
-                if (destNames != null && destNames.length() > 0) {
-                    destination = destNames.getJSONObject(0).optString("value", "");
-                } else {
-                    JSONObject destName = journey.optJSONObject("DestinationName");
-                    if (destName != null) {
-                        destination = destName.optString("value", "");
-                    }
-                }
-
                 // Extract departure status
                 String departureStatus = call.optString("DepartureStatus", "onTime");
 
@@ -388,7 +437,8 @@ public class TrainFragment extends Fragment {
                 JSONObject platformObj = call.optJSONObject("ArrivalPlatformName");
                 if (platformObj != null) {
                     platform = platformObj.optString("value", "");
-                } else {
+                }
+                if (platform.isEmpty()) {
                     JSONObject depPlatformObj = call.optJSONObject("DeparturePlatformName");
                     if (depPlatformObj != null) {
                         platform = depPlatformObj.optString("value", "");
@@ -417,6 +467,7 @@ public class TrainFragment extends Fragment {
             Log.i(TAG, "parseStopMonitoring [" + directionLabel + "]: RÉSUMÉ"
                     + " total=" + visits.length()
                     + " gardés=" + schedules.size()
+                    + " filtrés(destination)=" + filteredByDest
                     + " filtrés(hors fenêtre)=" + filteredOut
                     + " sansAimed=" + noAimedTime
                     + " erreursParse=" + parseErrors);
