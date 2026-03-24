@@ -33,9 +33,12 @@ import android.util.Log;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -61,8 +64,10 @@ public class TrainFragment extends Fragment {
 
     // Known destinations towards Villepreux direction (away from Paris)
     // Trains from Clamart with these destinations pass through Villepreux-Les Clayes
+    // Note: Rambouillet is NOT included — trains to Rambouillet take a different branch
+    // via La Verrière after Saint-Cyr and do NOT pass through Villepreux
     private static final String[] DESTINATIONS_VERS_VILLEPREUX = {
-            "villepreux", "plaisir", "rambouillet", "dreux", "mantes"
+            "villepreux", "plaisir", "dreux", "mantes"
     };
     // Trains from Villepreux towards Clamart/Paris
     private static final String[] DESTINATIONS_VERS_PARIS = {
@@ -84,17 +89,11 @@ public class TrainFragment extends Fragment {
     private TextView scheduleTitleRetour;
     private TrainScheduleAdapter scheduleAdapterRetour;
 
-    // Incidents - Aller: Clamart → Villepreux
+    // Incidents - single section for Ligne N
     private RecyclerView recyclerView;
     private TextView emptyText;
     private TextView lastUpdateText;
     private TrainIncidentAdapter adapter;
-
-    // Incidents - Retour: Villepreux → Clamart
-    private RecyclerView recyclerViewRetour;
-    private TextView emptyTextRetour;
-    private TextView lastUpdateTextRetour;
-    private TrainIncidentAdapter adapterRetour;
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -106,6 +105,19 @@ public class TrainFragment extends Fragment {
             refreshHandler.postDelayed(this, REFRESH_INTERVAL_MS);
         }
     };
+
+    /**
+     * Intermediate data from parsing a single stop visit, before cross-referencing.
+     */
+    private static class RawStopVisit {
+        String journeyRef;
+        String destination;
+        Date aimedDeparture;
+        Date expectedDeparture;
+        Date aimedArrival;
+        String departureStatus;
+        String platform;
+    }
 
     @Nullable
     @Override
@@ -136,21 +148,13 @@ public class TrainFragment extends Fragment {
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
 
-        // Incidents - Aller
+        // Incidents - single section
         recyclerView = view.findViewById(R.id.trainRecyclerView);
         emptyText = view.findViewById(R.id.trainEmptyText);
         lastUpdateText = view.findViewById(R.id.trainLastUpdate);
         adapter = new TrainIncidentAdapter();
         recyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         recyclerView.setAdapter(adapter);
-
-        // Incidents - Retour
-        recyclerViewRetour = view.findViewById(R.id.trainRecyclerViewRetour);
-        emptyTextRetour = view.findViewById(R.id.trainEmptyTextRetour);
-        lastUpdateTextRetour = view.findViewById(R.id.trainLastUpdateRetour);
-        adapterRetour = new TrainIncidentAdapter();
-        recyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
-        recyclerViewRetour.setAdapter(adapterRetour);
     }
 
     @Override
@@ -202,15 +206,24 @@ public class TrainFragment extends Fragment {
         }
 
         executor.execute(() -> {
-            Log.d(TAG, "fetchSchedules: requête Aller (Clamart → Villepreux), stop=" + CLAMART_STOP_REF);
-            List<TrainSchedule> allerSchedules = fetchStopMonitoring(
-                    token, CLAMART_STOP_REF, now, windowEnd, "Aller",
-                    DESTINATIONS_VERS_VILLEPREUX);
+            // Fetch raw data from both stations
+            Log.d(TAG, "fetchSchedules: requête Clamart, stop=" + CLAMART_STOP_REF);
+            Map<String, RawStopVisit> clamartData = fetchAndParseRaw(token, CLAMART_STOP_REF, "Clamart");
 
-            Log.d(TAG, "fetchSchedules: requête Retour (Villepreux → Clamart), stop=" + VILLEPREUX_STOP_REF);
-            List<TrainSchedule> retourSchedules = fetchStopMonitoring(
-                    token, VILLEPREUX_STOP_REF, now, windowEnd, "Retour",
-                    DESTINATIONS_VERS_PARIS);
+            Log.d(TAG, "fetchSchedules: requête Villepreux, stop=" + VILLEPREUX_STOP_REF);
+            Map<String, RawStopVisit> villepreuxData = fetchAndParseRaw(token, VILLEPREUX_STOP_REF, "Villepreux");
+
+            // Cross-reference to build schedules
+            // Aller: trains departing Clamart towards Villepreux, with arrival at Villepreux
+            List<TrainSchedule> allerSchedules = buildCrossReferencedSchedules(
+                    clamartData, villepreuxData,
+                    DESTINATIONS_VERS_VILLEPREUX, now, windowEnd, "Aller");
+
+            // Retour: trains departing Villepreux towards Paris, with arrival at Clamart
+            // Only trains that ALSO stop at Clamart are kept (excludes direct Montparnasse trains)
+            List<TrainSchedule> retourSchedules = buildCrossReferencedSchedules(
+                    villepreuxData, clamartData,
+                    DESTINATIONS_VERS_PARIS, now, windowEnd, "Retour");
 
             Log.i(TAG, "fetchSchedules: résultats Aller=" + (allerSchedules != null ? allerSchedules.size() : "null")
                     + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null"));
@@ -233,6 +246,312 @@ public class TrainFragment extends Fragment {
         });
     }
 
+    /**
+     * Fetch stop-monitoring data and parse into raw visits keyed by journey reference.
+     */
+    private Map<String, RawStopVisit> fetchAndParseRaw(String token, String stopRef, String stationLabel) {
+        HttpURLConnection connection = null;
+        try {
+            String apiUrl = STOP_MONITORING_URL
+                    + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
+                    + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
+
+            Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: URL=" + apiUrl);
+
+            URL url = new URL(apiUrl);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("apikey", token);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
+
+            int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: HTTP " + responseCode);
+
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+
+                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: réponse reçue, taille=" + response.length() + " chars");
+                return parseRawStopVisits(response.toString(), stationLabel);
+            } else {
+                String errorBody = "";
+                try {
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(connection.getErrorStream()));
+                    StringBuilder errResponse = new StringBuilder();
+                    String errLine;
+                    while ((errLine = errReader.readLine()) != null) {
+                        errResponse.append(errLine);
+                    }
+                    errReader.close();
+                    errorBody = errResponse.toString();
+                } catch (Exception ignored) {}
+                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: ERREUR HTTP " + responseCode + " body=" + errorBody);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: exception", e);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Parse stop-monitoring JSON response into a map of journey reference → raw stop visit data.
+     * No time window or destination filtering is applied here.
+     */
+    private Map<String, RawStopVisit> parseRawStopVisits(String jsonStr, String stationLabel) {
+        Map<String, RawStopVisit> visits = new HashMap<>();
+        try {
+            JSONObject root = new JSONObject(jsonStr);
+            JSONObject delivery = root
+                    .getJSONObject("Siri")
+                    .getJSONObject("ServiceDelivery")
+                    .getJSONArray("StopMonitoringDelivery")
+                    .getJSONObject(0);
+
+            if (!delivery.has("MonitoredStopVisit")) {
+                Log.w(TAG, "parseRawStopVisits [" + stationLabel + "]: pas de MonitoredStopVisit");
+                return visits;
+            }
+
+            JSONArray visitArray = delivery.getJSONArray("MonitoredStopVisit");
+            Log.i(TAG, "parseRawStopVisits [" + stationLabel + "]: " + visitArray.length() + " visites");
+
+            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
+            SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+            isoFormatNoTz.setTimeZone(TimeZone.getDefault());
+
+            int noJourneyRef = 0;
+            int parseErrors = 0;
+
+            for (int i = 0; i < visitArray.length(); i++) {
+                try {
+                    JSONObject visit = visitArray.getJSONObject(i);
+                    JSONObject journey = visit.getJSONObject("MonitoredVehicleJourney");
+                    JSONObject call = journey.getJSONObject("MonitoredCall");
+
+                    // Extract journey reference for cross-referencing between stations
+                    String journeyRef = "";
+                    JSONObject framedRef = journey.optJSONObject("FramedVehicleJourneyRef");
+                    if (framedRef != null) {
+                        journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                    }
+                    if (journeyRef.isEmpty()) {
+                        noJourneyRef++;
+                        Log.d(TAG, "parseRawStopVisits [" + stationLabel + "]: visite #" + i + " sans journeyRef, ignorée");
+                        continue;
+                    }
+
+                    RawStopVisit raw = new RawStopVisit();
+                    raw.journeyRef = journeyRef;
+
+                    // Extract destination
+                    JSONArray destNames = journey.optJSONArray("DestinationName");
+                    if (destNames != null && destNames.length() > 0) {
+                        raw.destination = destNames.getJSONObject(0).optString("value", "");
+                    } else {
+                        JSONObject destName = journey.optJSONObject("DestinationName");
+                        if (destName != null) {
+                            raw.destination = destName.optString("value", "");
+                        } else {
+                            raw.destination = "";
+                        }
+                    }
+
+                    // Parse times
+                    String aimedDepStr = call.optString("AimedDepartureTime", "");
+                    String expectedDepStr = call.optString("ExpectedDepartureTime", "");
+                    String aimedArrStr = call.optString("AimedArrivalTime", "");
+
+                    if (!aimedDepStr.isEmpty()) {
+                        raw.aimedDeparture = parseIsoDateTime(aimedDepStr, isoFormat, isoFormatNoTz);
+                    }
+                    if (!expectedDepStr.isEmpty()) {
+                        raw.expectedDeparture = parseIsoDateTime(expectedDepStr, isoFormat, isoFormatNoTz);
+                    }
+                    if (!aimedArrStr.isEmpty()) {
+                        raw.aimedArrival = parseIsoDateTime(aimedArrStr, isoFormat, isoFormatNoTz);
+                    }
+
+                    // Extract departure status
+                    raw.departureStatus = call.optString("DepartureStatus", "onTime");
+
+                    // Extract platform
+                    raw.platform = "";
+                    JSONObject platformObj = call.optJSONObject("ArrivalPlatformName");
+                    if (platformObj != null) {
+                        raw.platform = platformObj.optString("value", "");
+                    }
+                    if (raw.platform.isEmpty()) {
+                        JSONObject depPlatformObj = call.optJSONObject("DeparturePlatformName");
+                        if (depPlatformObj != null) {
+                            raw.platform = depPlatformObj.optString("value", "");
+                        }
+                    }
+
+                    visits.put(journeyRef, raw);
+                } catch (Exception e) {
+                    parseErrors++;
+                    Log.e(TAG, "parseRawStopVisits [" + stationLabel + "]: erreur visite #" + i, e);
+                }
+            }
+
+            Log.i(TAG, "parseRawStopVisits [" + stationLabel + "]: RÉSUMÉ"
+                    + " total=" + visitArray.length()
+                    + " parsés=" + visits.size()
+                    + " sansJourneyRef=" + noJourneyRef
+                    + " erreurs=" + parseErrors);
+
+        } catch (Exception e) {
+            Log.e(TAG, "parseRawStopVisits [" + stationLabel + "]: exception JSON", e);
+        }
+        return visits;
+    }
+
+    /**
+     * Build schedule list by cross-referencing origin and destination station data.
+     * Only trains that stop at BOTH stations are kept.
+     *
+     * @param originData     raw visits at the departure station
+     * @param destinationData raw visits at the arrival station
+     * @param destinationFilter keywords to filter by destination name
+     * @param windowStart    start of time window
+     * @param windowEnd      end of time window
+     * @param directionLabel label for logging
+     */
+    private List<TrainSchedule> buildCrossReferencedSchedules(
+            Map<String, RawStopVisit> originData,
+            Map<String, RawStopVisit> destinationData,
+            String[] destinationFilter,
+            Date windowStart, Date windowEnd,
+            String directionLabel) {
+
+        List<TrainSchedule> schedules = new ArrayList<>();
+
+        if (originData == null) {
+            Log.e(TAG, "buildCrossReferenced [" + directionLabel + "]: originData est null");
+            return null;
+        }
+
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+
+        int filteredByDest = 0;
+        int filteredByTime = 0;
+        int filteredByNoStop = 0;
+        int noAimedTime = 0;
+
+        for (Map.Entry<String, RawStopVisit> entry : originData.entrySet()) {
+            String journeyRef = entry.getKey();
+            RawStopVisit origin = entry.getValue();
+
+            // Filter by destination
+            if (destinationFilter != null && destinationFilter.length > 0) {
+                String destLower = origin.destination.toLowerCase(Locale.FRENCH);
+                boolean matchesFilter = false;
+                for (String keyword : destinationFilter) {
+                    if (destLower.contains(keyword)) {
+                        matchesFilter = true;
+                        break;
+                    }
+                }
+                if (!matchesFilter) {
+                    filteredByDest++;
+                    continue;
+                }
+            }
+
+            // Check aimed departure exists
+            if (origin.aimedDeparture == null) {
+                noAimedTime++;
+                continue;
+            }
+
+            // Filter by time window
+            if (origin.aimedDeparture.before(windowStart) || origin.aimedDeparture.after(windowEnd)) {
+                filteredByTime++;
+                continue;
+            }
+
+            // Cross-reference: only keep trains that also stop at the destination station
+            String arrivalTimeStr = "";
+            if (destinationData != null) {
+                RawStopVisit destVisit = destinationData.get(journeyRef);
+                if (destVisit == null) {
+                    filteredByNoStop++;
+                    Log.d(TAG, "buildCrossReferenced [" + directionLabel + "]: train "
+                            + journeyRef + " (dest=" + origin.destination
+                            + ") ne s'arrête pas à la gare d'arrivée → exclu");
+                    continue;
+                }
+                // Use arrival time at destination station, fall back to departure time
+                if (destVisit.aimedArrival != null) {
+                    arrivalTimeStr = timeFmt.format(destVisit.aimedArrival);
+                } else if (destVisit.aimedDeparture != null) {
+                    arrivalTimeStr = timeFmt.format(destVisit.aimedDeparture);
+                }
+            }
+
+            // Calculate delay
+            int delayMinutes = 0;
+            String expectedTimeStr = "";
+            if (origin.expectedDeparture != null) {
+                long diffMs = origin.expectedDeparture.getTime() - origin.aimedDeparture.getTime();
+                delayMinutes = (int) (diffMs / 60000);
+                if (delayMinutes < 0) delayMinutes = 0;
+                if (delayMinutes > 0) {
+                    expectedTimeStr = timeFmt.format(origin.expectedDeparture);
+                }
+            }
+
+            String aimedTimeStr = timeFmt.format(origin.aimedDeparture);
+
+            Log.d(TAG, "buildCrossReferenced [" + directionLabel + "]: GARDÉ "
+                    + journeyRef
+                    + " départ=" + aimedTimeStr
+                    + " arrivée=" + arrivalTimeStr
+                    + " dest=" + origin.destination
+                    + " status=" + origin.departureStatus
+                    + " retard=" + delayMinutes + "min"
+                    + " voie=" + origin.platform);
+
+            schedules.add(new TrainSchedule(
+                    origin.destination,
+                    aimedTimeStr,
+                    expectedTimeStr,
+                    arrivalTimeStr,
+                    origin.departureStatus,
+                    origin.platform,
+                    delayMinutes
+            ));
+        }
+
+        // Sort by departure time
+        Collections.sort(schedules, (a, b) ->
+                a.getAimedDepartureTime().compareTo(b.getAimedDepartureTime()));
+
+        Log.i(TAG, "buildCrossReferenced [" + directionLabel + "]: RÉSUMÉ"
+                + " total_origine=" + originData.size()
+                + " gardés=" + schedules.size()
+                + " filtrés(destination)=" + filteredByDest
+                + " filtrés(horsFenêtre)=" + filteredByTime
+                + " filtrés(pasArrêt)=" + filteredByNoStop
+                + " sansAimed=" + noAimedTime);
+
+        return schedules;
+    }
+
     private void updateScheduleUI(List<TrainSchedule> schedules, TextView emptyView,
                                   RecyclerView recycler, TrainScheduleAdapter scheduleAdapter,
                                   String direction) {
@@ -247,7 +566,8 @@ public class TrainFragment extends Fragment {
             for (int i = 0; i < schedules.size(); i++) {
                 TrainSchedule s = schedules.get(i);
                 Log.d(TAG, "  train #" + i + ": " + s.getAimedDepartureTime()
-                        + " → " + s.getDestination()
+                        + " → " + s.getArrivalTime()
+                        + " dest=" + s.getDestination()
                         + " | status=" + s.getDepartureStatus()
                         + " | retard=" + s.getDelayMinutes() + "min"
                         + " | voie=" + s.getPlatformName());
@@ -256,226 +576,6 @@ public class TrainFragment extends Fragment {
             recycler.setVisibility(View.VISIBLE);
             scheduleAdapter.updateSchedules(schedules);
         }
-    }
-
-    private List<TrainSchedule> fetchStopMonitoring(String token, String stopRef,
-                                                     Date windowStart, Date windowEnd,
-                                                     String directionLabel,
-                                                     String[] destinationFilter) {
-        HttpURLConnection connection = null;
-        try {
-            String apiUrl = STOP_MONITORING_URL
-                    + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
-                    + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
-
-            Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: URL=" + apiUrl);
-
-            URL url = new URL(apiUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: HTTP " + responseCode);
-
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-
-                Log.d(TAG, "fetchStopMonitoring [" + directionLabel + "]: réponse reçue, taille=" + response.length() + " chars");
-
-                return parseStopMonitoring(response.toString(), windowStart, windowEnd, directionLabel, destinationFilter);
-            } else {
-                String errorBody = "";
-                try {
-                    BufferedReader errReader = new BufferedReader(
-                            new InputStreamReader(connection.getErrorStream()));
-                    StringBuilder errResponse = new StringBuilder();
-                    String errLine;
-                    while ((errLine = errReader.readLine()) != null) {
-                        errResponse.append(errLine);
-                    }
-                    errReader.close();
-                    errorBody = errResponse.toString();
-                } catch (Exception ignored) {}
-                Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: ERREUR HTTP " + responseCode + " pour stop " + stopRef + " body=" + errorBody);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "fetchStopMonitoring [" + directionLabel + "]: exception pour stop " + stopRef, e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-        return null;
-    }
-
-    private List<TrainSchedule> parseStopMonitoring(String jsonStr,
-                                                     Date windowStart, Date windowEnd,
-                                                     String directionLabel,
-                                                     String[] destinationFilter) {
-        List<TrainSchedule> schedules = new ArrayList<>();
-        SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        try {
-            JSONObject root = new JSONObject(jsonStr);
-            JSONObject delivery = root
-                    .getJSONObject("Siri")
-                    .getJSONObject("ServiceDelivery")
-                    .getJSONArray("StopMonitoringDelivery")
-                    .getJSONObject(0);
-
-            if (!delivery.has("MonitoredStopVisit")) {
-                Log.w(TAG, "parseStopMonitoring [" + directionLabel + "]: pas de MonitoredStopVisit dans la réponse");
-                return schedules;
-            }
-
-            JSONArray visits = delivery.getJSONArray("MonitoredStopVisit");
-            Log.i(TAG, "parseStopMonitoring [" + directionLabel + "]: " + visits.length() + " visites dans la réponse API");
-
-            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
-            SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-            isoFormatNoTz.setTimeZone(TimeZone.getDefault());
-            SimpleDateFormat timeFormat = new SimpleDateFormat("HH:mm", Locale.getDefault());
-
-            int filteredOut = 0;
-            int filteredByDest = 0;
-            int noAimedTime = 0;
-            int parseErrors = 0;
-
-            for (int i = 0; i < visits.length(); i++) {
-                JSONObject visit = visits.getJSONObject(i);
-                JSONObject journey = visit.getJSONObject("MonitoredVehicleJourney");
-                JSONObject call = journey.getJSONObject("MonitoredCall");
-
-                // Extract destination first (needed for filtering)
-                String destination = "";
-                JSONArray destNames = journey.optJSONArray("DestinationName");
-                if (destNames != null && destNames.length() > 0) {
-                    destination = destNames.getJSONObject(0).optString("value", "");
-                } else {
-                    JSONObject destName = journey.optJSONObject("DestinationName");
-                    if (destName != null) {
-                        destination = destName.optString("value", "");
-                    }
-                }
-
-                // Filter by destination: only keep trains going in the right direction
-                if (destinationFilter != null && destinationFilter.length > 0) {
-                    String destLower = destination.toLowerCase(Locale.FRENCH);
-                    boolean matchesFilter = false;
-                    for (String keyword : destinationFilter) {
-                        if (destLower.contains(keyword)) {
-                            matchesFilter = true;
-                            break;
-                        }
-                    }
-                    if (!matchesFilter) {
-                        filteredByDest++;
-                        Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
-                                + " filtrée (destination='" + destination + "' ne correspond pas au trajet)");
-                        continue;
-                    }
-                }
-
-                // Extract aimed departure time
-                String aimedStr = call.optString("AimedDepartureTime", "");
-                String expectedStr = call.optString("ExpectedDepartureTime", "");
-
-                if (aimedStr.isEmpty()) {
-                    noAimedTime++;
-                    Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i + " ignorée (pas de AimedDepartureTime)");
-                    continue;
-                }
-
-                // Parse aimed time (with timezone support)
-                Date aimedDate = parseIsoDateTime(aimedStr, isoFormat, isoFormatNoTz);
-                if (aimedDate == null) {
-                    parseErrors++;
-                    Log.e(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i + " impossible de parser aimedStr=" + aimedStr);
-                    continue;
-                }
-
-                // Filter: keep only trains between now and now+2h
-                if (aimedDate.before(windowStart) || aimedDate.after(windowEnd)) {
-                    filteredOut++;
-                    Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
-                            + " hors fenêtre: aimed=" + logFmt.format(aimedDate)
-                            + " fenêtre=[" + logFmt.format(windowStart) + " - " + logFmt.format(windowEnd) + "]");
-                    continue;
-                }
-
-                // Calculate delay
-                int delayMinutes = 0;
-                String expectedTimeStr = "";
-                if (!expectedStr.isEmpty()) {
-                    Date expectedDate = parseIsoDateTime(expectedStr, isoFormat, isoFormatNoTz);
-                    if (expectedDate != null) {
-                        long diffMs = expectedDate.getTime() - aimedDate.getTime();
-                        delayMinutes = (int) (diffMs / 60000);
-                        if (delayMinutes < 0) delayMinutes = 0;
-                        expectedTimeStr = timeFormat.format(expectedDate);
-                    } else {
-                        Log.w(TAG, "parseStopMonitoring [" + directionLabel + "]: visite #" + i
-                                + " impossible de parser expectedStr=" + expectedStr);
-                    }
-                }
-
-                // Extract departure status
-                String departureStatus = call.optString("DepartureStatus", "onTime");
-
-                // Extract platform
-                String platform = "";
-                JSONObject platformObj = call.optJSONObject("ArrivalPlatformName");
-                if (platformObj != null) {
-                    platform = platformObj.optString("value", "");
-                }
-                if (platform.isEmpty()) {
-                    JSONObject depPlatformObj = call.optJSONObject("DeparturePlatformName");
-                    if (depPlatformObj != null) {
-                        platform = depPlatformObj.optString("value", "");
-                    }
-                }
-
-                String aimedTimeStr = timeFormat.format(aimedDate);
-
-                Log.d(TAG, "parseStopMonitoring [" + directionLabel + "]: GARDÉ visite #" + i
-                        + " aimed=" + aimedTimeStr
-                        + " dest=" + destination
-                        + " status=" + departureStatus
-                        + " delay=" + delayMinutes + "min"
-                        + " voie=" + platform);
-
-                schedules.add(new TrainSchedule(
-                        destination,
-                        aimedTimeStr,
-                        expectedTimeStr,
-                        departureStatus,
-                        platform,
-                        delayMinutes
-                ));
-            }
-
-            Log.i(TAG, "parseStopMonitoring [" + directionLabel + "]: RÉSUMÉ"
-                    + " total=" + visits.length()
-                    + " gardés=" + schedules.size()
-                    + " filtrés(destination)=" + filteredByDest
-                    + " filtrés(hors fenêtre)=" + filteredOut
-                    + " sansAimed=" + noAimedTime
-                    + " erreursParse=" + parseErrors);
-
-        } catch (Exception e) {
-            Log.e(TAG, "parseStopMonitoring [" + directionLabel + "]: exception parsing JSON", e);
-        }
-        return schedules;
     }
 
     /**
@@ -531,7 +631,6 @@ public class TrainFragment extends Fragment {
         BrokerConfig config = new BrokerConfig(requireContext());
         if (!config.hasIdfmToken()) {
             showMessage(emptyText, recyclerView, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
-            showMessage(emptyTextRetour, recyclerViewRetour, "Token IDFM non configuré.\nAllez dans Paramètres pour l'ajouter.");
             return;
         }
 
@@ -546,22 +645,15 @@ public class TrainFragment extends Fragment {
                     SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
                     String updateTime = "MAJ " + sdf.format(new Date());
                     lastUpdateText.setText(updateTime);
-                    lastUpdateTextRetour.setText(updateTime);
 
                     if (incidents == null) {
                         showMessage(emptyText, recyclerView, "Erreur de chargement.\nVérifiez votre token IDFM.");
-                        showMessage(emptyTextRetour, recyclerViewRetour, "Erreur de chargement.\nVérifiez votre token IDFM.");
                     } else if (incidents.isEmpty()) {
                         showMessage(emptyText, recyclerView, "Aucune perturbation en cours\nsur la Ligne N");
-                        showMessage(emptyTextRetour, recyclerViewRetour, "Aucune perturbation en cours\nsur la Ligne N");
                     } else {
                         emptyText.setVisibility(View.GONE);
                         recyclerView.setVisibility(View.VISIBLE);
                         adapter.updateIncidents(incidents);
-
-                        emptyTextRetour.setVisibility(View.GONE);
-                        recyclerViewRetour.setVisibility(View.VISIBLE);
-                        adapterRetour.updateIncidents(incidents);
                     }
                 });
             }

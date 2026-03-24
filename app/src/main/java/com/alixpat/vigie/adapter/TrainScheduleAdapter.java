@@ -48,10 +48,26 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.platform.setVisibility(View.GONE);
         }
 
+        // Arrival time at destination
+        String arrival = schedule.getArrivalTime();
+        if (arrival != null && !arrival.isEmpty()) {
+            holder.arrivalArrow.setVisibility(View.VISIBLE);
+            holder.arrivalTime.setVisibility(View.VISIBLE);
+            holder.arrivalTime.setText(arrival);
+        } else {
+            holder.arrivalArrow.setVisibility(View.GONE);
+            holder.arrivalTime.setVisibility(View.GONE);
+        }
+
         if (schedule.isCancelled()) {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+            holder.aimedTime.setTextColor(0xFF999999);
             holder.expectedTime.setVisibility(View.GONE);
+            if (arrival != null && !arrival.isEmpty()) {
+                holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
+                holder.arrivalTime.setTextColor(0xFF999999);
+            }
         } else if (schedule.isDelayed()) {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
@@ -59,11 +75,16 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.expectedTime.setText(schedule.getExpectedDepartureTime());
             holder.expectedTime.setTextColor(0xFFFF9800);
             holder.expectedTime.setVisibility(View.VISIBLE);
+            // Keep arrival time normal style (aimed arrival)
+            holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            holder.arrivalTime.setTextColor(0xFF1565C0);
         } else {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
             holder.aimedTime.setTextColor(0xFF000000);
             holder.expectedTime.setVisibility(View.GONE);
+            holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
+            holder.arrivalTime.setTextColor(0xFF1565C0);
         }
     }
 
@@ -75,6 +96,8 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
     static class ViewHolder extends RecyclerView.ViewHolder {
         final TextView aimedTime;
         final TextView expectedTime;
+        final TextView arrivalArrow;
+        final TextView arrivalTime;
         final TextView destination;
         final TextView platform;
         final TextView status;
@@ -83,6 +106,8 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             super(itemView);
             aimedTime = itemView.findViewById(R.id.scheduleAimedTime);
             expectedTime = itemView.findViewById(R.id.scheduleExpectedTime);
+            arrivalArrow = itemView.findViewById(R.id.scheduleArrivalArrow);
+            arrivalTime = itemView.findViewById(R.id.scheduleArrivalTime);
             destination = itemView.findViewById(R.id.scheduleDestination);
             platform = itemView.findViewById(R.id.schedulePlatform);
             status = itemView.findViewById(R.id.scheduleStatus);
