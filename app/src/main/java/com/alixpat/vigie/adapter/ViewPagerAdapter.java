@@ -7,6 +7,7 @@ import androidx.viewpager2.adapter.FragmentStateAdapter;
 
 import com.alixpat.vigie.fragment.LanFragment;
 import com.alixpat.vigie.fragment.MessagesFragment;
+import com.alixpat.vigie.fragment.TrainFragment;
 import com.alixpat.vigie.fragment.WeatherFragment;
 
 public class ViewPagerAdapter extends FragmentStateAdapter {
@@ -23,6 +24,8 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
                 return new LanFragment();
             case 2:
                 return new WeatherFragment();
+            case 3:
+                return new TrainFragment();
             default:
                 return new MessagesFragment();
         }
@@ -30,6 +33,6 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
 
     @Override
     public int getItemCount() {
-        return 3;
+        return 4;
     }
 }

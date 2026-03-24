@@ -14,6 +14,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText portField;
     private EditText usernameField;
     private EditText passwordField;
+    private EditText idfmTokenField;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -23,7 +24,7 @@ public class SettingsActivity extends AppCompatActivity {
         Toolbar toolbar = findViewById(R.id.settingsToolbar);
         setSupportActionBar(toolbar);
         if (getSupportActionBar() != null) {
-            getSupportActionBar().setTitle("Configuration Broker");
+            getSupportActionBar().setTitle("Configuration");
             getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         }
 
@@ -31,6 +32,7 @@ public class SettingsActivity extends AppCompatActivity {
         portField = findViewById(R.id.portField);
         usernameField = findViewById(R.id.usernameField);
         passwordField = findViewById(R.id.passwordField);
+        idfmTokenField = findViewById(R.id.idfmTokenField);
         Button saveButton = findViewById(R.id.saveButton);
 
         // Charger les valeurs actuelles
@@ -39,6 +41,7 @@ public class SettingsActivity extends AppCompatActivity {
         portField.setText(String.valueOf(config.getBrokerPort()));
         usernameField.setText(config.getUsername());
         passwordField.setText(config.getPassword());
+        idfmTokenField.setText(config.getIdfmToken());
 
         saveButton.setOnClickListener(v -> saveSettings());
     }
@@ -66,8 +69,11 @@ public class SettingsActivity extends AppCompatActivity {
             return;
         }
 
+        String idfmToken = idfmTokenField.getText().toString().trim();
+
         BrokerConfig config = new BrokerConfig(this);
         config.save(ip, port, username, password);
+        config.saveIdfmToken(idfmToken);
 
         Toast.makeText(this, "Configuration sauvegardée", Toast.LENGTH_SHORT).show();
         finish();
