@@ -23,6 +23,8 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.viewpager2.widget.ViewPager2;
 
+import android.content.SharedPreferences;
+
 import com.alixpat.vigie.adapter.ViewPagerAdapter;
 import com.google.android.material.tabs.TabLayout;
 import com.google.android.material.tabs.TabLayoutMediator;
@@ -31,10 +33,13 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1001;
     private static final String[] TAB_TITLES = {"Messages", "LAN"};
+    private static final String PREFS_NAME = "vigie_prefs";
+    private static final String PREF_LAST_TAB = "last_tab_position";
 
     private View statusDot;
     private TextView statusText;
     private LinearLayout statusToggle;
+    private ViewPager2 viewPager;
     private boolean serviceRunning = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
@@ -80,7 +85,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         TabLayout tabLayout = findViewById(R.id.tabLayout);
-        ViewPager2 viewPager = findViewById(R.id.viewPager);
+        viewPager = findViewById(R.id.viewPager);
 
         ViewPagerAdapter adapter = new ViewPagerAdapter(this);
         viewPager.setAdapter(adapter);
@@ -88,6 +93,13 @@ public class MainActivity extends AppCompatActivity {
         new TabLayoutMediator(tabLayout, viewPager,
                 (tab, position) -> tab.setText(TAB_TITLES[position])
         ).attach();
+
+        // Restaurer le dernier onglet sélectionné
+        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
+        int lastTab = prefs.getInt(PREF_LAST_TAB, 0);
+        if (lastTab >= 0 && lastTab < TAB_TITLES.length) {
+            viewPager.setCurrentItem(lastTab, false);
+        }
     }
 
     @Override
@@ -130,6 +142,12 @@ public class MainActivity extends AppCompatActivity {
     protected void onPause() {
         super.onPause();
         unregisterReceiver(statusReceiver);
+
+        // Sauvegarder l'onglet actuel
+        getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+                .edit()
+                .putInt(PREF_LAST_TAB, viewPager.getCurrentItem())
+                .apply();
     }
 
     private void updateStatusUI(String status, String errorMsg) {

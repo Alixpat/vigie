@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -29,11 +31,22 @@ import java.util.Map;
 public class LanFragment extends Fragment {
 
     public static final String ACTION_LAN_STATUS = "com.alixpat.vigie.LAN_STATUS";
+    private static final long REFRESH_INTERVAL_MS = 15_000; // 15 secondes
 
     private RecyclerView recyclerView;
     private TextView emptyText;
     private LanHostAdapter adapter;
     private final Map<String, LanHost> hostsMap = new LinkedHashMap<>();
+    private final Handler refreshHandler = new Handler(Looper.getMainLooper());
+    private final Runnable refreshRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (adapter != null && !hostsMap.isEmpty()) {
+                adapter.notifyDataSetChanged();
+            }
+            refreshHandler.postDelayed(this, REFRESH_INTERVAL_MS);
+        }
+    };
 
     private final BroadcastReceiver lanReceiver = new BroadcastReceiver() {
         @Override
@@ -91,11 +104,15 @@ public class LanFragment extends Fragment {
         // Restaurer les hôtes LAN depuis le cache du service
         hostsMap.putAll(MqttService.getLanHostsCache());
         refreshList();
+
+        // Démarrer le rafraîchissement périodique des temps relatifs
+        refreshHandler.postDelayed(refreshRunnable, REFRESH_INTERVAL_MS);
     }
 
     @Override
     public void onPause() {
         super.onPause();
         requireContext().unregisterReceiver(lanReceiver);
+        refreshHandler.removeCallbacks(refreshRunnable);
     }
 }
