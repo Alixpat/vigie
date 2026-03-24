@@ -13,7 +13,7 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -34,7 +34,7 @@ public class MainActivity extends AppCompatActivity {
 
     private View statusDot;
     private TextView statusText;
-    private Button toggleButton;
+    private LinearLayout statusToggle;
     private boolean serviceRunning = false;
 
     private final BroadcastReceiver statusReceiver = new BroadcastReceiver() {
@@ -59,9 +59,9 @@ public class MainActivity extends AppCompatActivity {
 
         statusDot = findViewById(R.id.statusDot);
         statusText = findViewById(R.id.statusText);
-        toggleButton = findViewById(R.id.toggleButton);
+        statusToggle = findViewById(R.id.statusToggle);
 
-        toggleButton.setOnClickListener(v -> {
+        statusToggle.setOnClickListener(v -> {
             if (serviceRunning) {
                 stopMqttService();
             } else {
@@ -118,13 +118,11 @@ public class MainActivity extends AppCompatActivity {
         // Synchroniser l'etat avec le service
         serviceRunning = isServiceRunning();
         if (serviceRunning) {
-            toggleButton.setText("Arrêter la surveillance");
             String currentStatus = MqttService.getCurrentStatus();
             String currentError = MqttService.getCurrentErrorMsg();
             updateStatusUI(currentStatus, currentError);
         } else {
             updateStatusUI(MqttService.STATUS_DISCONNECTED, null);
-            toggleButton.setText("Démarrer la surveillance");
         }
     }
 
@@ -143,31 +141,23 @@ public class MainActivity extends AppCompatActivity {
                 serviceRunning = true;
                 dotColor = 0xFF4CAF50; // vert
                 label = "Connecté";
-                toggleButton.setText("Arrêter la surveillance");
-                toggleButton.setEnabled(true);
                 break;
             case MqttService.STATUS_CONNECTING:
                 serviceRunning = true;
                 dotColor = 0xFFFF9800; // orange
                 label = "Connexion...";
                 if (errorMsg != null) label += " (" + errorMsg + ")";
-                toggleButton.setText("Arrêter la surveillance");
-                toggleButton.setEnabled(true);
                 break;
             case MqttService.STATUS_ERROR:
                 serviceRunning = true;
                 dotColor = 0xFFF44336; // rouge
                 label = "Erreur";
                 if (errorMsg != null) label += " — " + errorMsg;
-                toggleButton.setText("Arrêter la surveillance");
-                toggleButton.setEnabled(true);
                 break;
             default: // DISCONNECTED
                 serviceRunning = false;
                 dotColor = 0xFF999999; // gris
                 label = "Déconnecté";
-                toggleButton.setText("Démarrer la surveillance");
-                toggleButton.setEnabled(true);
                 break;
         }
 
