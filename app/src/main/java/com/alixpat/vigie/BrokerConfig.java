@@ -10,6 +10,7 @@ public class BrokerConfig {
     private static final String KEY_BROKER_PORT = "broker_port";
     private static final String KEY_USERNAME = "username";
     private static final String KEY_PASSWORD = "password";
+    private static final String KEY_IDFM_TOKEN = "idfm_token";
 
     private static final String DEFAULT_IP = "192.168.1.100";
     private static final int DEFAULT_PORT = 1883;
@@ -45,12 +46,27 @@ public class BrokerConfig {
         return user != null && !user.isEmpty();
     }
 
+    public String getIdfmToken() {
+        return prefs.getString(KEY_IDFM_TOKEN, "");
+    }
+
+    public boolean hasIdfmToken() {
+        String token = getIdfmToken();
+        return token != null && !token.isEmpty();
+    }
+
     public void save(String ip, int port, String username, String password) {
         prefs.edit()
                 .putString(KEY_BROKER_IP, ip)
                 .putInt(KEY_BROKER_PORT, port)
                 .putString(KEY_USERNAME, username)
                 .putString(KEY_PASSWORD, password)
+                .apply();
+    }
+
+    public void saveIdfmToken(String token) {
+        prefs.edit()
+                .putString(KEY_IDFM_TOKEN, token)
                 .apply();
     }
 }
