@@ -88,6 +88,8 @@ public class LanFragment extends Fragment {
         } else {
             requireContext().registerReceiver(lanReceiver, filter);
         }
+        // Restaurer les hôtes LAN depuis le cache du service
+        hostsMap.putAll(MqttService.getLanHostsCache());
         refreshList();
     }
 
