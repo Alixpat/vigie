@@ -17,17 +17,23 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
 
 import com.alixpat.vigie.MqttService;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.SettingsActivity;
+import com.alixpat.vigie.adapter.MessageAdapter;
 import com.alixpat.vigie.model.VigieMessage;
+
+import java.util.List;
 
 public class MessagesFragment extends Fragment {
 
     private TextView statusText;
-    private TextView lastMessageText;
     private Button toggleButton;
+    private RecyclerView messagesRecyclerView;
+    private MessageAdapter messageAdapter;
     private boolean serviceRunning = false;
 
     private final BroadcastReceiver messageReceiver = new BroadcastReceiver() {
@@ -37,7 +43,8 @@ public class MessagesFragment extends Fragment {
             if (payload != null) {
                 VigieMessage msg = VigieMessage.fromJson(payload);
                 if (msg != null) {
-                    lastMessageText.setText(msg.toString());
+                    messageAdapter.addMessage(msg);
+                    messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
                 }
             }
         }
@@ -73,7 +80,7 @@ public class MessagesFragment extends Fragment {
                     toggleButton.setEnabled(true);
                     break;
                 case MqttService.STATUS_ERROR:
-                    serviceRunning = true; // Le service tourne encore et va réessayer
+                    serviceRunning = true;
                     String errMsg = intent.getStringExtra(MqttService.EXTRA_ERROR_MSG);
                     statusText.setText("Statut : Erreur" +
                             (errMsg != null ? " — " + errMsg : "") +
@@ -97,8 +104,12 @@ public class MessagesFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
 
         statusText = view.findViewById(R.id.statusText);
-        lastMessageText = view.findViewById(R.id.lastMessageText);
         toggleButton = view.findViewById(R.id.toggleButton);
+        messagesRecyclerView = view.findViewById(R.id.messagesRecyclerView);
+
+        messageAdapter = new MessageAdapter();
+        messagesRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
+        messagesRecyclerView.setAdapter(messageAdapter);
 
         toggleButton.setOnClickListener(v -> {
             if (serviceRunning) {
@@ -119,7 +130,6 @@ public class MessagesFragment extends Fragment {
     }
 
     private void stopMqttService() {
-        // stopService fonctionne quel que soit l'état du service
         Intent serviceIntent = new Intent(requireContext(), MqttService.class);
         requireContext().stopService(serviceIntent);
         serviceRunning = false;
@@ -141,11 +151,17 @@ public class MessagesFragment extends Fragment {
             requireContext().registerReceiver(statusReceiver, statusFilter);
         }
 
+        // Synchroniser l'historique complet des messages (inclut ceux reçus en arrière-plan)
+        List<VigieMessage> history = MqttService.getMessageHistory();
+        messageAdapter.setMessages(history);
+        if (!history.isEmpty()) {
+            messagesRecyclerView.scrollToPosition(history.size() - 1);
+        }
+
         // Synchroniser l'état de l'UI avec le service réel
         serviceRunning = isServiceRunning();
         if (serviceRunning) {
             toggleButton.setText("Arrêter la surveillance");
-            // Récupérer le statut courant du service pour mettre à jour l'affichage
             String currentStatus = MqttService.getCurrentStatus();
             String currentError = MqttService.getCurrentErrorMsg();
             switch (currentStatus) {
