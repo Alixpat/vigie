@@ -191,7 +191,7 @@ public class TrainFragment extends Fragment {
         if (!isAdded() || getActivity() == null) return;
 
         int stripeColorRes;
-        String emoji;
+        String statusLabel;
         String summary;
 
         boolean hasPerturbations = perturbations != null && !perturbations.isEmpty();
@@ -207,12 +207,12 @@ public class TrainFragment extends Fragment {
             }
             if (hasBlocking) {
                 stripeColorRes = R.color.status_error;
-                emoji = "\uD83D\uDED1";
+                statusLabel = "INTERROMPU";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             } else {
                 stripeColorRes = R.color.status_warning;
-                emoji = "\u26A0\uFE0F";
+                statusLabel = "PERTURBÉ";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             }
@@ -223,20 +223,21 @@ public class TrainFragment extends Fragment {
             }
         } else if (hasTravaux) {
             stripeColorRes = R.color.status_info;
-            emoji = "\uD83D\uDEA7";
+            statusLabel = "TRAVAUX";
             summary = travaux.size() + " info"
                     + (travaux.size() > 1 ? "s" : "") + " planifi\u00e9e"
                     + (travaux.size() > 1 ? "s" : "");
         } else {
             stripeColorRes = R.color.status_ok;
-            emoji = "\u2705";
+            statusLabel = "NORMAL";
             summary = "Trafic normal";
         }
 
         int stripeColor = ContextCompat.getColor(requireContext(), stripeColorRes);
         lineStatusStripe.setBackgroundColor(stripeColor);
 
-        lineStatusEmoji.setText(emoji);
+        lineStatusEmoji.setText(statusLabel);
+        lineStatusEmoji.setTextColor(stripeColor);
         lineStatusTitle.setText("Ligne N");
         lineStatusSummary.setText(summary);
 
@@ -686,7 +687,8 @@ public class TrainFragment extends Fragment {
                         travauxSection.setVisibility(View.GONE);
                         int warningColor = ContextCompat.getColor(requireContext(), R.color.status_warning);
                         lineStatusStripe.setBackgroundColor(warningColor);
-                        lineStatusEmoji.setText("\u26A0\uFE0F");
+                        lineStatusEmoji.setText("ERREUR");
+                        lineStatusEmoji.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_warning));
                     } else {
                         List<TrainIncident> perturbations = new ArrayList<>();
                         List<TrainIncident> travaux = new ArrayList<>();

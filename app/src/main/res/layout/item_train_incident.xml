@@ -19,27 +19,15 @@
         android:padding="12dp"
         android:gravity="center_vertical">
 
-        <!-- Gauche: Emoji + Sévérité -->
-        <LinearLayout
+        <!-- Gauche: Sévérité -->
+        <TextView
+            android:id="@+id/incidentSeverity"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
             android:gravity="center"
-            android:minWidth="56dp">
-
-            <TextView
-                android:id="@+id/incidentEmoji"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="18sp" />
-
-            <TextView
-                android:id="@+id/incidentSeverity"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textStyle="bold" />
-        </LinearLayout>
+            android:minWidth="56dp"
+            android:textSize="11sp"
+            android:textStyle="bold" />
 
         <!-- Centre: Message + Période -->
         <LinearLayout
