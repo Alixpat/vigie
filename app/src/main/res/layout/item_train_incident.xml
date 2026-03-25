@@ -5,86 +5,93 @@
     android:id="@+id/incidentCard"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginBottom="6dp"
+    android:layout_marginStart="4dp"
+    android:layout_marginEnd="4dp"
+    android:layout_marginTop="3dp"
+    android:layout_marginBottom="3dp"
     app:cardElevation="1dp"
-    app:cardCornerRadius="8dp">
+    app:cardCornerRadius="6dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center_vertical">
 
-        <View
-            android:id="@+id/incidentStripe"
-            android:layout_width="4dp"
-            android:layout_height="match_parent" />
-
+        <!-- Gauche: Emoji + Sévérité -->
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="10dp">
+            android:gravity="center"
+            android:minWidth="56dp">
 
-            <LinearLayout
-                android:layout_width="match_parent"
+            <TextView
+                android:id="@+id/incidentEmoji"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:textSize="18sp" />
 
-                <TextView
-                    android:id="@+id/incidentEmoji"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="16sp" />
+            <TextView
+                android:id="@+id/incidentSeverity"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
-                <TextView
-                    android:id="@+id/incidentSeverity"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="6dp"
-                    android:textSize="13sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/incidentCause"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    android:textSize="11sp"
-                    android:textColor="@color/text_hint"
-                    android:gravity="end" />
-            </LinearLayout>
+        <!-- Centre: Message + Période -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="12dp">
 
             <TextView
                 android:id="@+id/incidentTitle"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 android:textStyle="bold"
                 android:textColor="@color/text_primary"
                 android:visibility="gone" />
 
             <TextView
                 android:id="@+id/incidentMessage"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textSize="12sp"
-                android:textColor="@color/text_secondary"
+                android:textSize="14sp"
+                android:textColor="@color/text_primary"
                 android:maxLines="3"
                 android:ellipsize="end" />
 
             <TextView
                 android:id="@+id/incidentPeriod"
-                android:layout_width="match_parent"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:textSize="10sp"
-                android:textColor="@color/text_hint" />
-
+                android:textSize="12sp"
+                android:textColor="@color/text_hint"
+                android:visibility="gone" />
         </LinearLayout>
+
+        <!-- Droite: Cause -->
+        <TextView
+            android:id="@+id/incidentCause"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/text_hint" />
+
     </LinearLayout>
+
+    <!-- Stripe en bas -->
+    <View
+        android:id="@+id/incidentStripe"
+        android:layout_width="match_parent"
+        android:layout_height="3dp"
+        android:layout_gravity="bottom" />
 
 </com.google.android.material.card.MaterialCardView>
