@@ -321,58 +321,69 @@ public class TrainFragment extends Fragment {
     }
 
     private Map<String, RawStopVisit> fetchAndParseRaw(String token, String stopRef, String stationLabel) {
-        HttpURLConnection connection = null;
-        try {
-            String apiUrl = STOP_MONITORING_URL
-                    + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
-                    + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
-
-            Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: URL=" + apiUrl);
-
-            URL url = new URL(apiUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: HTTP " + responseCode);
-
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
+        int maxRetries = 2;
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            HttpURLConnection connection = null;
+            try {
+                if (attempt > 0) {
+                    Log.i(TAG, "fetchAndParseRaw [" + stationLabel + "]: tentative " + (attempt + 1));
+                    Thread.sleep(1000L * attempt);
                 }
-                reader.close();
 
-                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: réponse reçue, taille=" + response.length() + " chars");
-                return parseRawStopVisits(response.toString(), stationLabel);
-            } else {
-                String errorBody = "";
-                try {
-                    BufferedReader errReader = new BufferedReader(
-                            new InputStreamReader(connection.getErrorStream()));
-                    StringBuilder errResponse = new StringBuilder();
-                    String errLine;
-                    while ((errLine = errReader.readLine()) != null) {
-                        errResponse.append(errLine);
+                String apiUrl = STOP_MONITORING_URL
+                        + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
+                        + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
+
+                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: URL=" + apiUrl);
+
+                URL url = new URL(apiUrl);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("apikey", token);
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
+
+                int responseCode = connection.getResponseCode();
+                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: HTTP " + responseCode);
+
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream()));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
                     }
-                    errReader.close();
-                    errorBody = errResponse.toString();
-                } catch (Exception ignored) {}
-                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: ERREUR HTTP " + responseCode + " body=" + errorBody);
+                    reader.close();
+
+                    Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: réponse reçue, taille=" + response.length() + " chars");
+                    return parseRawStopVisits(response.toString(), stationLabel);
+                } else {
+                    String errorBody = "";
+                    try {
+                        BufferedReader errReader = new BufferedReader(
+                                new InputStreamReader(connection.getErrorStream()));
+                        StringBuilder errResponse = new StringBuilder();
+                        String errLine;
+                        while ((errLine = errReader.readLine()) != null) {
+                            errResponse.append(errLine);
+                        }
+                        errReader.close();
+                        errorBody = errResponse.toString();
+                    } catch (Exception ignored) {}
+                    Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: ERREUR HTTP " + responseCode + " body=" + errorBody);
+                    if (responseCode >= 500 && attempt < maxRetries) continue;
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: exception (tentative " + (attempt + 1) + ")", e);
+                if (attempt < maxRetries) continue;
+            } finally {
+                if (connection != null) {
+                    connection.disconnect();
+                }
             }
-        } catch (Exception e) {
-            Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: exception", e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+            break;
         }
         return null;
     }
@@ -489,8 +500,8 @@ public class TrainFragment extends Fragment {
 
         List<TrainSchedule> schedules = new ArrayList<>();
 
-        if (originData == null) {
-            Log.e(TAG, "buildCrossReferenced [" + directionLabel + "]: originData est null");
+        if (originData == null || originData.isEmpty()) {
+            Log.e(TAG, "buildCrossReferenced [" + directionLabel + "]: originData est null ou vide");
             return null;
         }
 
@@ -533,14 +544,15 @@ public class TrainFragment extends Fragment {
             String arrivalTimeStr = "";
             if (destinationData != null) {
                 RawStopVisit destVisit = destinationData.get(journeyRef);
-                if (destVisit == null) {
+                if (destVisit != null) {
+                    if (destVisit.aimedArrival != null) {
+                        arrivalTimeStr = timeFmt.format(destVisit.aimedArrival);
+                    } else if (destVisit.aimedDeparture != null) {
+                        arrivalTimeStr = timeFmt.format(destVisit.aimedDeparture);
+                    }
+                } else {
                     filteredByNoStop++;
-                    continue;
-                }
-                if (destVisit.aimedArrival != null) {
-                    arrivalTimeStr = timeFmt.format(destVisit.aimedArrival);
-                } else if (destVisit.aimedDeparture != null) {
-                    arrivalTimeStr = timeFmt.format(destVisit.aimedDeparture);
+                    // Train gardé sans heure d'arrivée
                 }
             }
 
