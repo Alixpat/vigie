@@ -36,7 +36,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TrainIncident incident = incidents.get(position);
 
-        holder.emoji.setText(incident.getSeverityEmoji());
         holder.severity.setText(incident.getSeverityLabel());
         holder.severity.setTextColor(incident.getSeverityColor());
         holder.stripe.setBackgroundColor(incident.getSeverityColor());
@@ -83,7 +82,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
 
     static class ViewHolder extends RecyclerView.ViewHolder {
         final View stripe;
-        final TextView emoji;
         final TextView severity;
         final TextView cause;
         final TextView title;
@@ -93,7 +91,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
         ViewHolder(@NonNull View itemView) {
             super(itemView);
             stripe = itemView.findViewById(R.id.incidentStripe);
-            emoji = itemView.findViewById(R.id.incidentEmoji);
             severity = itemView.findViewById(R.id.incidentSeverity);
             cause = itemView.findViewById(R.id.incidentCause);
             title = itemView.findViewById(R.id.incidentTitle);

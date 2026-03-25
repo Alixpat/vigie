@@ -9,5 +9,7 @@
         <item name="colorOnSecondary">@color/on_secondary</item>
         <item name="android:statusBarColor">@color/primary_dark</item>
         <item name="android:navigationBarColor">@color/primary_dark</item>
+        <item name="android:windowBackground">@color/primary_dark</item>
+        <item name="colorSurface">@color/background_card</item>
     </style>
 </resources>

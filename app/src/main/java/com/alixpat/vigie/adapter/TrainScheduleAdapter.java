@@ -89,6 +89,8 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.expectedTime.setVisibility(View.GONE);
             holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
             holder.arrivalTime.setTextColor(primaryDark);
+            holder.status.setText(schedule.getStatusLabel());
+            holder.status.setTextColor(schedule.getStatusColor());
         }
     }
 

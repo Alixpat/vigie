@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Primary palette -->
+    <color name="primary">#1E1E1E</color>
+    <color name="primary_dark">#121212</color>
+    <color name="on_primary">#E0E0E0</color>
+
+    <!-- Secondary palette -->
+    <color name="secondary">#FFB300</color>
+    <color name="secondary_dark">#FF8F00</color>
+    <color name="on_secondary">#000000</color>
+
+    <!-- Status colors - slightly brighter for dark backgrounds -->
+    <color name="status_ok">#66BB6A</color>
+    <color name="status_warning">#FFA726</color>
+    <color name="status_error">#EF5350</color>
+    <color name="status_info">#42A5F5</color>
+    <color name="status_inactive">#BDBDBD</color>
+    <color name="status_travaux">#CE93D8</color>
+
+    <!-- Banner backgrounds (subtle dark tints) -->
+    <color name="banner_bg_ok">#1A4CAF50</color>
+    <color name="banner_bg_warning">#1AFF9800</color>
+    <color name="banner_bg_error">#1AF44336</color>
+    <color name="banner_bg_info">#1A2196F3</color>
+
+    <!-- Text colors -->
+    <color name="text_primary">#E0E0E0</color>
+    <color name="text_secondary">#B0B0B0</color>
+    <color name="text_hint">#808080</color>
+
+    <!-- Backgrounds -->
+    <color name="background_card">#1E1E1E</color>
+    <color name="background_item">#252525</color>
+    <color name="divider">#333333</color>
+</resources>
