@@ -1,17 +1,16 @@
 package com.alixpat.vigie.fragment;
 
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -22,6 +21,7 @@ import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
 import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
+import com.google.android.material.card.MaterialCardView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -48,65 +48,50 @@ import java.util.concurrent.Executors;
 public class TrainFragment extends Fragment {
 
     private static final String TAG = "TrainFragment";
-    private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
-    private static final long SCHEDULE_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 hours window
-    // Ligne N Transilien
+    private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+    private static final long SCHEDULE_WINDOW_MS = 2 * 60 * 60 * 1000;
     private static final String LINE_REF = "STIF:Line::C01736:";
     private static final String GENERAL_MESSAGE_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/general-message"
                     + "?LineRef=" + LINE_REF;
-
-    // Stop monitoring API for schedules
     private static final String STOP_MONITORING_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
-    // Clamart station MonitoringRef (Ligne N) — StopArea format required since March 2025
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
-    // Villepreux-Les Clayes station MonitoringRef (Ligne N) — StopArea format required since March 2025
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
-    // Known destinations towards Villepreux direction (away from Paris)
-    // Note: Rambouillet is NOT included — trains to Rambouillet take a different branch
-    // via La Verrière after Saint-Cyr and do NOT pass through Villepreux
     private static final String[] DESTINATIONS_VERS_VILLEPREUX = {
             "villepreux", "plaisir", "dreux", "mantes"
     };
-    // Trains from Villepreux towards Clamart/Paris
     private static final String[] DESTINATIONS_VERS_PARIS = {
             "paris", "montparnasse", "clamart", "meudon", "chaville",
             "viroflay", "versailles", "sèvres", "sevres"
     };
-
-    // Keywords to detect planned works in message content
     private static final String[] TRAVAUX_KEYWORDS = {
             "travaux", "chantier", "maintenance", "planifi",
             "programme", "prévu"
     };
 
-    // Line status banner
-    private LinearLayout lineStatusBanner;
+    private MaterialCardView lineStatusCard;
+    private View lineStatusStripe;
     private TextView lineStatusEmoji;
     private TextView lineStatusTitle;
     private TextView lineStatusUpdate;
     private TextView lineStatusSummary;
 
-    // Perturbations section
-    private LinearLayout perturbationsSection;
+    private View perturbationsSection;
     private RecyclerView perturbationsRecyclerView;
     private TrainIncidentAdapter perturbationsAdapter;
 
-    // Travaux / planned info section
-    private LinearLayout travauxSection;
+    private View travauxSection;
     private RecyclerView travauxRecyclerView;
     private TrainIncidentAdapter travauxAdapter;
 
-    // Schedules - Aller: Clamart → Villepreux
     private RecyclerView scheduleRecyclerViewAller;
     private TextView scheduleEmptyAller;
     private TextView scheduleLastUpdateAller;
     private TextView scheduleTitleAller;
     private TrainScheduleAdapter scheduleAdapterAller;
 
-    // Schedules - Retour: Villepreux → Clamart
     private RecyclerView scheduleRecyclerViewRetour;
     private TextView scheduleEmptyRetour;
     private TextView scheduleLastUpdateRetour;
@@ -124,9 +109,6 @@ public class TrainFragment extends Fragment {
         }
     };
 
-    /**
-     * Intermediate data from parsing a single stop visit, before cross-referencing.
-     */
     private static class RawStopVisit {
         String journeyRef;
         String destination;
@@ -148,28 +130,25 @@ public class TrainFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        // Line status banner
-        lineStatusBanner = view.findViewById(R.id.lineStatusBanner);
+        lineStatusCard = view.findViewById(R.id.lineStatusCard);
+        lineStatusStripe = view.findViewById(R.id.lineStatusStripe);
         lineStatusEmoji = view.findViewById(R.id.lineStatusEmoji);
         lineStatusTitle = view.findViewById(R.id.lineStatusTitle);
         lineStatusUpdate = view.findViewById(R.id.lineStatusUpdate);
         lineStatusSummary = view.findViewById(R.id.lineStatusSummary);
 
-        // Perturbations
         perturbationsSection = view.findViewById(R.id.perturbationsSection);
         perturbationsRecyclerView = view.findViewById(R.id.trainRecyclerView);
         perturbationsAdapter = new TrainIncidentAdapter();
         perturbationsRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         perturbationsRecyclerView.setAdapter(perturbationsAdapter);
 
-        // Travaux / planned info
         travauxSection = view.findViewById(R.id.travauxSection);
         travauxRecyclerView = view.findViewById(R.id.travauxRecyclerView);
         travauxAdapter = new TrainIncidentAdapter();
         travauxRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         travauxRecyclerView.setAdapter(travauxAdapter);
 
-        // Schedules - Aller
         scheduleRecyclerViewAller = view.findViewById(R.id.scheduleRecyclerViewAller);
         scheduleEmptyAller = view.findViewById(R.id.scheduleEmptyAller);
         scheduleLastUpdateAller = view.findViewById(R.id.scheduleLastUpdateAller);
@@ -178,7 +157,6 @@ public class TrainFragment extends Fragment {
         scheduleRecyclerViewAller.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewAller.setAdapter(scheduleAdapterAller);
 
-        // Schedules - Retour
         scheduleRecyclerViewRetour = view.findViewById(R.id.scheduleRecyclerViewRetour);
         scheduleEmptyRetour = view.findViewById(R.id.scheduleEmptyRetour);
         scheduleLastUpdateRetour = view.findViewById(R.id.scheduleLastUpdateRetour);
@@ -212,7 +190,7 @@ public class TrainFragment extends Fragment {
                                         List<TrainIncident> travaux) {
         if (!isAdded() || getActivity() == null) return;
 
-        int bannerColor;
+        int stripeColorRes;
         String emoji;
         String summary;
 
@@ -220,7 +198,6 @@ public class TrainFragment extends Fragment {
         boolean hasTravaux = travaux != null && !travaux.isEmpty();
 
         if (hasPerturbations) {
-            // Check for blocking perturbations
             boolean hasBlocking = false;
             for (TrainIncident p : perturbations) {
                 if ("blocking".equalsIgnoreCase(p.getSeverity())) {
@@ -229,13 +206,13 @@ public class TrainFragment extends Fragment {
                 }
             }
             if (hasBlocking) {
-                bannerColor = 0xFFF44336; // Red
-                emoji = "\uD83D\uDED1"; // stop sign
+                stripeColorRes = R.color.status_error;
+                emoji = "\uD83D\uDED1";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             } else {
-                bannerColor = 0xFFFF9800; // Orange
-                emoji = "\u26A0\uFE0F"; // warning
+                stripeColorRes = R.color.status_warning;
+                emoji = "\u26A0\uFE0F";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             }
@@ -245,27 +222,24 @@ public class TrainFragment extends Fragment {
                         + (travaux.size() > 1 ? "s" : "");
             }
         } else if (hasTravaux) {
-            bannerColor = 0xFF2196F3; // Blue
-            emoji = "\uD83D\uDEA7"; // construction
+            stripeColorRes = R.color.status_info;
+            emoji = "\uD83D\uDEA7";
             summary = travaux.size() + " info"
                     + (travaux.size() > 1 ? "s" : "") + " planifi\u00e9e"
                     + (travaux.size() > 1 ? "s" : "");
         } else {
-            bannerColor = 0xFF4CAF50; // Green
-            emoji = "\u2705"; // check mark
+            stripeColorRes = R.color.status_ok;
+            emoji = "\u2705";
             summary = "Trafic normal";
         }
 
-        // Update banner background color
-        GradientDrawable bg = (GradientDrawable) lineStatusBanner.getBackground().mutate();
-        bg.setColor(bannerColor);
-        lineStatusBanner.setBackground(bg);
+        int stripeColor = ContextCompat.getColor(requireContext(), stripeColorRes);
+        lineStatusStripe.setBackgroundColor(stripeColor);
 
         lineStatusEmoji.setText(emoji);
         lineStatusTitle.setText("Ligne N");
         lineStatusSummary.setText(summary);
 
-        // Show/hide perturbation cards
         if (hasPerturbations) {
             perturbationsSection.setVisibility(View.VISIBLE);
             perturbationsAdapter.updateIncidents(perturbations);
@@ -273,7 +247,6 @@ public class TrainFragment extends Fragment {
             perturbationsSection.setVisibility(View.GONE);
         }
 
-        // Show/hide travaux cards
         if (hasTravaux) {
             travauxSection.setVisibility(View.VISIBLE);
             travauxAdapter.updateIncidents(travaux);
@@ -303,7 +276,6 @@ public class TrainFragment extends Fragment {
         String windowStr = titleFmt.format(now) + " - " + titleFmt.format(windowEnd);
         Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
 
-        // Update titles with dynamic time window on UI thread
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                 if (!isAdded()) return;
@@ -313,14 +285,12 @@ public class TrainFragment extends Fragment {
         }
 
         executor.execute(() -> {
-            // Fetch raw data from both stations
             Log.d(TAG, "fetchSchedules: requête Clamart, stop=" + CLAMART_STOP_REF);
             Map<String, RawStopVisit> clamartData = fetchAndParseRaw(token, CLAMART_STOP_REF, "Clamart");
 
             Log.d(TAG, "fetchSchedules: requête Villepreux, stop=" + VILLEPREUX_STOP_REF);
             Map<String, RawStopVisit> villepreuxData = fetchAndParseRaw(token, VILLEPREUX_STOP_REF, "Villepreux");
 
-            // Cross-reference to build schedules
             List<TrainSchedule> allerSchedules = buildCrossReferencedSchedules(
                     clamartData, villepreuxData,
                     DESTINATIONS_VERS_VILLEPREUX, now, windowEnd, "Aller");
@@ -350,9 +320,6 @@ public class TrainFragment extends Fragment {
         });
     }
 
-    /**
-     * Fetch stop-monitoring data and parse into raw visits keyed by journey reference.
-     */
     private Map<String, RawStopVisit> fetchAndParseRaw(String token, String stopRef, String stationLabel) {
         HttpURLConnection connection = null;
         try {
@@ -410,9 +377,6 @@ public class TrainFragment extends Fragment {
         return null;
     }
 
-    /**
-     * Parse stop-monitoring JSON response into a map of journey reference → raw stop visit data.
-     */
     private Map<String, RawStopVisit> parseRawStopVisits(String jsonStr, String stationLabel) {
         Map<String, RawStopVisit> visits = new HashMap<>();
         try {
@@ -457,7 +421,6 @@ public class TrainFragment extends Fragment {
                     RawStopVisit raw = new RawStopVisit();
                     raw.journeyRef = journeyRef;
 
-                    // Extract destination
                     JSONArray destNames = journey.optJSONArray("DestinationName");
                     if (destNames != null && destNames.length() > 0) {
                         raw.destination = destNames.getJSONObject(0).optString("value", "");
@@ -470,7 +433,6 @@ public class TrainFragment extends Fragment {
                         }
                     }
 
-                    // Parse times
                     String aimedDepStr = call.optString("AimedDepartureTime", "");
                     String expectedDepStr = call.optString("ExpectedDepartureTime", "");
                     String aimedArrStr = call.optString("AimedArrivalTime", "");
@@ -518,10 +480,6 @@ public class TrainFragment extends Fragment {
         return visits;
     }
 
-    /**
-     * Build schedule list by cross-referencing origin and destination station data.
-     * Only trains that stop at BOTH stations are kept.
-     */
     private List<TrainSchedule> buildCrossReferencedSchedules(
             Map<String, RawStopVisit> originData,
             Map<String, RawStopVisit> destinationData,
@@ -547,7 +505,6 @@ public class TrainFragment extends Fragment {
             String journeyRef = entry.getKey();
             RawStopVisit origin = entry.getValue();
 
-            // Filter by destination
             if (destinationFilter != null && destinationFilter.length > 0) {
                 String destLower = origin.destination.toLowerCase(Locale.FRENCH);
                 boolean matchesFilter = false;
@@ -573,7 +530,6 @@ public class TrainFragment extends Fragment {
                 continue;
             }
 
-            // Cross-reference: only keep trains that also stop at the destination station
             String arrivalTimeStr = "";
             if (destinationData != null) {
                 RawStopVisit destVisit = destinationData.get(journeyRef);
@@ -588,7 +544,6 @@ public class TrainFragment extends Fragment {
                 }
             }
 
-            // Calculate delay
             int delayMinutes = 0;
             String expectedTimeStr = "";
             if (origin.expectedDeparture != null) {
@@ -622,7 +577,6 @@ public class TrainFragment extends Fragment {
             ));
         }
 
-        // Sort by departure time
         Collections.sort(schedules, (a, b) ->
                 a.getAimedDepartureTime().compareTo(b.getAimedDepartureTime()));
 
@@ -651,9 +605,6 @@ public class TrainFragment extends Fragment {
         }
     }
 
-    /**
-     * Parse an ISO 8601 datetime string, trying first with timezone then without.
-     */
     private static Date parseIsoDateTime(String isoStr, SimpleDateFormat withTz, SimpleDateFormat withoutTz) {
         if (isoStr == null || isoStr.isEmpty()) return null;
 
@@ -721,13 +672,10 @@ public class TrainFragment extends Fragment {
                         lineStatusSummary.setText("Erreur de chargement");
                         perturbationsSection.setVisibility(View.GONE);
                         travauxSection.setVisibility(View.GONE);
-                        // Set banner to orange for error
-                        GradientDrawable bg = (GradientDrawable) lineStatusBanner.getBackground().mutate();
-                        bg.setColor(0xFFFF9800);
-                        lineStatusBanner.setBackground(bg);
+                        int warningColor = ContextCompat.getColor(requireContext(), R.color.status_warning);
+                        lineStatusStripe.setBackgroundColor(warningColor);
                         lineStatusEmoji.setText("\u26A0\uFE0F");
                     } else {
-                        // Split into perturbations vs travaux/info
                         List<TrainIncident> perturbations = new ArrayList<>();
                         List<TrainIncident> travaux = new ArrayList<>();
 
@@ -806,7 +754,6 @@ public class TrainFragment extends Fragment {
                 JSONObject content = msg.optJSONObject("Content");
                 if (content == null) continue;
 
-                // Extract message text
                 String text = "";
                 JSONArray msgTexts = content.optJSONArray("Message");
                 if (msgTexts != null) {
@@ -823,7 +770,6 @@ public class TrainFragment extends Fragment {
                     }
                 }
 
-                // Determine channel type
                 String channel = "";
                 JSONObject channelRef = msg.optJSONObject("InfoChannelRef");
                 if (channelRef != null) {
@@ -832,7 +778,6 @@ public class TrainFragment extends Fragment {
                     channel = msg.optString("InfoChannelRef", "");
                 }
 
-                // Determine severity and type
                 String severity;
                 String type;
                 boolean isPerturbationChannel = channel.toLowerCase(Locale.FRENCH).contains("perturbation");
@@ -842,7 +787,6 @@ public class TrainFragment extends Fragment {
                     type = TrainIncident.TYPE_PERTURBATION;
                 } else {
                     severity = "information";
-                    // Check if it's about planned works
                     String textLower = text.toLowerCase(Locale.FRENCH);
                     boolean isTravauxMessage = false;
                     for (String keyword : TRAVAUX_KEYWORDS) {
@@ -854,11 +798,9 @@ public class TrainFragment extends Fragment {
                     type = isTravauxMessage ? TrainIncident.TYPE_TRAVAUX : TrainIncident.TYPE_INFORMATION;
                 }
 
-                // Extract timestamps
                 String recordedAt = formatDateTime(msg.optString("RecordedAtTime", ""));
                 String validUntil = formatDateTime(msg.optString("ValidUntilTime", ""));
 
-                // Build a meaningful title
                 String title;
                 if (TrainIncident.TYPE_PERTURBATION.equals(type)) {
                     title = "Perturbation Ligne N";

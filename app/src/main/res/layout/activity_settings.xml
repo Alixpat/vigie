@@ -96,7 +96,7 @@
                 android:layout_marginTop="4dp"
                 android:text="Token API pour les perturbations train.\nInscription sur prim.iledefrance-mobilites.fr"
                 android:textSize="12sp"
-                android:textColor="#999999" />
+                android:textColor="@color/text_hint" />
 
             <com.google.android.material.textfield.TextInputLayout
                 android:layout_width="match_parent"

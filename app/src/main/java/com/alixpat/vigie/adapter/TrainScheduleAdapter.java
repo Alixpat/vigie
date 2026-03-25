@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.alixpat.vigie.R;
@@ -37,6 +38,11 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TrainSchedule schedule = schedules.get(position);
 
+        int textPrimary = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary);
+        int textHint = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_hint);
+        int primaryDark = ContextCompat.getColor(holder.itemView.getContext(), R.color.primary_dark);
+        int warning = ContextCompat.getColor(holder.itemView.getContext(), R.color.status_warning);
+
         holder.destination.setText(schedule.getDestination());
         holder.status.setText(schedule.getStatusLabel());
         holder.status.setTextColor(schedule.getStatusColor());
@@ -48,7 +54,6 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.platform.setVisibility(View.GONE);
         }
 
-        // Arrival time at destination
         String arrival = schedule.getArrivalTime();
         if (arrival != null && !arrival.isEmpty()) {
             holder.arrivalArrow.setVisibility(View.VISIBLE);
@@ -62,29 +67,28 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         if (schedule.isCancelled()) {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(0xFF999999);
+            holder.aimedTime.setTextColor(textHint);
             holder.expectedTime.setVisibility(View.GONE);
             if (arrival != null && !arrival.isEmpty()) {
                 holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                holder.arrivalTime.setTextColor(0xFF999999);
+                holder.arrivalTime.setTextColor(textHint);
             }
         } else if (schedule.isDelayed()) {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(0xFF999999);
+            holder.aimedTime.setTextColor(textHint);
             holder.expectedTime.setText(schedule.getExpectedDepartureTime());
-            holder.expectedTime.setTextColor(0xFFFF9800);
+            holder.expectedTime.setTextColor(warning);
             holder.expectedTime.setVisibility(View.VISIBLE);
-            // Keep arrival time normal style (aimed arrival)
             holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(0xFF1565C0);
+            holder.arrivalTime.setTextColor(primaryDark);
         } else {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(0xFF000000);
+            holder.aimedTime.setTextColor(textPrimary);
             holder.expectedTime.setVisibility(View.GONE);
             holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(0xFF1565C0);
+            holder.arrivalTime.setTextColor(primaryDark);
         }
     }
 

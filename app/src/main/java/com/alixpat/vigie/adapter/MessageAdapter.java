@@ -8,6 +8,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
+import androidx.core.content.ContextCompat;
+
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.VigieMessage;
 
@@ -53,11 +55,8 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault());
         holder.timeText.setText(sdf.format(new Date(msg.getReceivedAt())));
 
-        if (msg.isHighPriority()) {
-            holder.titleText.setTextColor(0xFFF44336);
-        } else {
-            holder.titleText.setTextColor(0xFF212121);
-        }
+        int colorRes = msg.isHighPriority() ? R.color.status_error : R.color.text_primary;
+        holder.titleText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), colorRes));
     }
 
     @Override

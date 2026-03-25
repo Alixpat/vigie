@@ -50,9 +50,9 @@ public class TrainSchedule {
     }
 
     public int getStatusColor() {
-        if (isCancelled()) return 0xFFF44336; // Red
-        if (isDelayed()) return 0xFFFF9800;   // Orange
-        return 0xFF4CAF50;                     // Green
+        if (isCancelled()) return 0xFFF44336;
+        if (isDelayed()) return 0xFFFF9800;
+        return 0xFF757575;
     }
 
     public String getStatusEmoji() {

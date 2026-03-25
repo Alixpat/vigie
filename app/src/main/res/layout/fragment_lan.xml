@@ -13,7 +13,7 @@
         android:gravity="center"
         android:text="En attente des statuts LAN..."
         android:textSize="16sp"
-        android:textColor="#999999" />
+        android:textColor="@color/text_hint" />
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/lanRecyclerView"

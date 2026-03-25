@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView
     xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true">
@@ -11,59 +12,78 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- ===== LIGNE N - Bandeau d'état ===== -->
-        <LinearLayout
-            android:id="@+id/lineStatusBanner"
+        <!-- Ligne N - Bandeau d'etat sobre -->
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/lineStatusCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:background="@drawable/status_banner_bg"
-            android:padding="12dp"
-            android:layout_marginBottom="12dp">
+            android:layout_marginBottom="12dp"
+            app:cardElevation="1dp"
+            app:cardCornerRadius="8dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
+                android:orientation="horizontal">
 
-                <TextView
-                    android:id="@+id/lineStatusEmoji"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="20sp" />
+                <!-- Accent stripe -->
+                <View
+                    android:id="@+id/lineStatusStripe"
+                    android:layout_width="4dp"
+                    android:layout_height="match_parent"
+                    android:background="@color/status_ok" />
 
-                <TextView
-                    android:id="@+id/lineStatusTitle"
-                    android:layout_width="0dp"
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    android:text="Ligne N"
-                    android:textSize="16sp"
-                    android:textStyle="bold"
-                    android:textColor="#FFFFFF" />
+                    android:orientation="vertical"
+                    android:padding="12dp">
 
-                <TextView
-                    android:id="@+id/lineStatusUpdate"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="10sp"
-                    android:textColor="#CCFFFFFF" />
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+
+                        <TextView
+                            android:id="@+id/lineStatusEmoji"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:id="@+id/lineStatusTitle"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:layout_marginStart="8dp"
+                            android:text="Ligne N"
+                            android:textSize="15sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/text_primary" />
+
+                        <TextView
+                            android:id="@+id/lineStatusUpdate"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textSize="10sp"
+                            android:textColor="@color/text_hint" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/lineStatusSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:layout_marginStart="26dp"
+                        android:textSize="13sp"
+                        android:textColor="@color/text_secondary"
+                        android:text="Chargement..." />
+                </LinearLayout>
             </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
-            <TextView
-                android:id="@+id/lineStatusSummary"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:layout_marginStart="28dp"
-                android:textSize="13sp"
-                android:textColor="#EEFFFFFF"
-                android:text="Chargement..." />
-        </LinearLayout>
-
-        <!-- ===== Perturbations (visibles uniquement si perturbations en cours) ===== -->
+        <!-- Perturbations (visibles uniquement si perturbations en cours) -->
         <LinearLayout
             android:id="@+id/perturbationsSection"
             android:layout_width="match_parent"
@@ -79,7 +99,7 @@
                 android:nestedScrollingEnabled="false" />
         </LinearLayout>
 
-        <!-- ===== Infos planifiées / Travaux (visibles uniquement si présents) ===== -->
+        <!-- Infos planifiees / Travaux (visibles uniquement si presents) -->
         <LinearLayout
             android:id="@+id/travauxSection"
             android:layout_width="match_parent"
@@ -95,7 +115,7 @@
                 android:nestedScrollingEnabled="false" />
         </LinearLayout>
 
-        <!-- ===== Aller: Clamart → Villepreux - Horaires ===== -->
+        <!-- Aller: Clamart -> Villepreux - Horaires -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -110,14 +130,15 @@
                 android:layout_weight="1"
                 android:text="Clamart \u2192 Villepreux"
                 android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/scheduleLastUpdateAller"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
-                android:textColor="#999999" />
+                android:textColor="@color/text_hint" />
         </LinearLayout>
 
         <TextView
@@ -127,7 +148,7 @@
             android:gravity="center"
             android:text="Chargement des horaires..."
             android:textSize="14sp"
-            android:textColor="#999999"
+            android:textColor="@color/text_hint"
             android:paddingTop="16dp"
             android:paddingBottom="16dp" />
 
@@ -142,11 +163,11 @@
         <View
             android:layout_width="match_parent"
             android:layout_height="1dp"
-            android:background="#E0E0E0"
+            android:background="@color/divider"
             android:layout_marginTop="12dp"
             android:layout_marginBottom="12dp" />
 
-        <!-- ===== Retour: Villepreux → Clamart - Horaires ===== -->
+        <!-- Retour: Villepreux -> Clamart - Horaires -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -161,14 +182,15 @@
                 android:layout_weight="1"
                 android:text="Villepreux \u2192 Clamart"
                 android:textSize="16sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:textColor="@color/text_primary" />
 
             <TextView
                 android:id="@+id/scheduleLastUpdateRetour"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textSize="11sp"
-                android:textColor="#999999" />
+                android:textColor="@color/text_hint" />
         </LinearLayout>
 
         <TextView
@@ -178,7 +200,7 @@
             android:gravity="center"
             android:text="Chargement des horaires..."
             android:textSize="14sp"
-            android:textColor="#999999"
+            android:textColor="@color/text_hint"
             android:paddingTop="16dp"
             android:paddingBottom="16dp" />
 

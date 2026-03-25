@@ -6,7 +6,7 @@
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginBottom="6dp"
-    app:cardElevation="2dp"
+    app:cardElevation="1dp"
     app:cardCornerRadius="8dp">
 
     <LinearLayout
@@ -14,10 +14,9 @@
         android:layout_height="wrap_content"
         android:orientation="horizontal">
 
-        <!-- Colored left stripe indicating severity -->
         <View
             android:id="@+id/incidentStripe"
-            android:layout_width="5dp"
+            android:layout_width="4dp"
             android:layout_height="match_parent" />
 
         <LinearLayout
@@ -36,7 +35,7 @@
                     android:id="@+id/incidentEmoji"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textSize="18sp" />
+                    android:textSize="16sp" />
 
                 <TextView
                     android:id="@+id/incidentSeverity"
@@ -53,7 +52,7 @@
                     android:layout_weight="1"
                     android:layout_marginStart="8dp"
                     android:textSize="11sp"
-                    android:textColor="#999999"
+                    android:textColor="@color/text_hint"
                     android:gravity="end" />
             </LinearLayout>
 
@@ -64,6 +63,7 @@
                 android:layout_marginTop="4dp"
                 android:textSize="13sp"
                 android:textStyle="bold"
+                android:textColor="@color/text_primary"
                 android:visibility="gone" />
 
             <TextView
@@ -72,7 +72,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textSize="12sp"
-                android:textColor="#555555"
+                android:textColor="@color/text_secondary"
                 android:maxLines="3"
                 android:ellipsize="end" />
 
@@ -82,7 +82,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
                 android:textSize="10sp"
-                android:textColor="#999999" />
+                android:textColor="@color/text_hint" />
 
         </LinearLayout>
     </LinearLayout>
