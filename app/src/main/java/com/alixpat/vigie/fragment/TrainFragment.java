@@ -59,10 +59,6 @@ public class TrainFragment extends Fragment {
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
-    private static final String HERE_ROUTING_URL = "https://router.hereapi.com/v8/routes";
-    private static final String ISSY_COORDS = "48.8235,2.2700";
-    private static final String VILLEPREUX_COORDS = "48.8044,1.9803";
-
     private static final String[] DESTINATIONS_VERS_VILLEPREUX = {
             "villepreux", "plaisir", "dreux", "mantes"
     };
@@ -89,11 +85,6 @@ public class TrainFragment extends Fragment {
     private View travauxSection;
     private RecyclerView travauxRecyclerView;
     private TrainIncidentAdapter travauxAdapter;
-
-    private MaterialCardView drivingTimeCard;
-    private TextView drivingTimeAller;
-    private TextView drivingTimeRetour;
-    private TextView drivingTimeUpdate;
 
     private RecyclerView scheduleRecyclerViewAller;
     private TextView scheduleEmptyAller;
@@ -158,11 +149,6 @@ public class TrainFragment extends Fragment {
         travauxRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         travauxRecyclerView.setAdapter(travauxAdapter);
 
-        drivingTimeCard = view.findViewById(R.id.drivingTimeCard);
-        drivingTimeAller = view.findViewById(R.id.drivingTimeAller);
-        drivingTimeRetour = view.findViewById(R.id.drivingTimeRetour);
-        drivingTimeUpdate = view.findViewById(R.id.drivingTimeUpdate);
-
         scheduleRecyclerViewAller = view.findViewById(R.id.scheduleRecyclerViewAller);
         scheduleEmptyAller = view.findViewById(R.id.scheduleEmptyAller);
         scheduleLastUpdateAller = view.findViewById(R.id.scheduleLastUpdateAller);
@@ -196,7 +182,6 @@ public class TrainFragment extends Fragment {
     private void fetchAll() {
         fetchSchedules();
         fetchIncidents();
-        fetchDrivingTimes();
     }
 
     // ==================== LINE STATUS BANNER ====================
@@ -669,121 +654,6 @@ public class TrainFragment extends Fragment {
             Log.e("TrainFragment", "parseIsoDateTime: impossible de parser '" + isoStr + "'", e);
             return null;
         }
-    }
-
-    // ==================== DRIVING TIME (HERE API) ====================
-
-    private void fetchDrivingTimes() {
-        BrokerConfig config = new BrokerConfig(requireContext());
-        if (!config.hasHereApiKey()) {
-            Log.w(TAG, "fetchDrivingTimes: Clé API HERE non configurée");
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (isAdded()) drivingTimeCard.setVisibility(View.GONE);
-                });
-            }
-            return;
-        }
-
-        String apiKey = config.getHereApiKey();
-
-        if (getActivity() != null) {
-            getActivity().runOnUiThread(() -> {
-                if (isAdded()) drivingTimeCard.setVisibility(View.VISIBLE);
-            });
-        }
-
-        executor.execute(() -> {
-            int allerSeconds = fetchDrivingTimeFromHere(apiKey, ISSY_COORDS, VILLEPREUX_COORDS);
-            int retourSeconds = fetchDrivingTimeFromHere(apiKey, VILLEPREUX_COORDS, ISSY_COORDS);
-
-            if (getActivity() != null) {
-                getActivity().runOnUiThread(() -> {
-                    if (!isAdded()) return;
-
-                    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-                    drivingTimeUpdate.setText("MAJ " + sdf.format(new Date()));
-
-                    if (allerSeconds >= 0) {
-                        drivingTimeAller.setText(formatDuration(allerSeconds));
-                    } else {
-                        drivingTimeAller.setText("--");
-                    }
-
-                    if (retourSeconds >= 0) {
-                        drivingTimeRetour.setText(formatDuration(retourSeconds));
-                    } else {
-                        drivingTimeRetour.setText("--");
-                    }
-                });
-            }
-        });
-    }
-
-    private int fetchDrivingTimeFromHere(String apiKey, String origin, String destination) {
-        HttpURLConnection connection = null;
-        try {
-            String apiUrl = HERE_ROUTING_URL
-                    + "?transportMode=car"
-                    + "&origin=" + origin
-                    + "&destination=" + destination
-                    + "&return=summary"
-                    + "&apikey=" + URLEncoder.encode(apiKey, "UTF-8");
-
-            Log.d(TAG, "fetchDrivingTimeFromHere: " + origin + " -> " + destination);
-
-            URL url = new URL(apiUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(10000);
-            connection.setReadTimeout(10000);
-
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-
-                JSONObject root = new JSONObject(response.toString());
-                JSONArray routes = root.getJSONArray("routes");
-                if (routes.length() > 0) {
-                    JSONObject firstRoute = routes.getJSONObject(0);
-                    JSONArray sections = firstRoute.getJSONArray("sections");
-                    int totalDuration = 0;
-                    for (int i = 0; i < sections.length(); i++) {
-                        JSONObject summary = sections.getJSONObject(i).getJSONObject("summary");
-                        totalDuration += summary.getInt("duration");
-                    }
-                    Log.i(TAG, "fetchDrivingTimeFromHere: " + origin + " -> " + destination
-                            + " = " + totalDuration + "s");
-                    return totalDuration;
-                }
-            } else {
-                Log.e(TAG, "fetchDrivingTimeFromHere: HTTP " + responseCode);
-            }
-        } catch (Exception e) {
-            Log.e(TAG, "fetchDrivingTimeFromHere: exception", e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
-        }
-        return -1;
-    }
-
-    private static String formatDuration(int totalSeconds) {
-        int hours = totalSeconds / 3600;
-        int minutes = (totalSeconds % 3600) / 60;
-        if (hours > 0) {
-            return hours + "h" + String.format(Locale.getDefault(), "%02d", minutes);
-        }
-        return minutes + " min";
     }
 
     // ==================== INCIDENTS ====================
