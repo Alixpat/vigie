@@ -33,6 +33,13 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1001;
     private static final String[] TAB_TITLES = {"Messages", "LAN", "Météo", "Train", "Voiture"};
+    private static final int[] TAB_ICONS = {
+            R.drawable.ic_tab_messages,
+            R.drawable.ic_tab_lan,
+            R.drawable.ic_tab_meteo,
+            R.drawable.ic_tab_train,
+            R.drawable.ic_tab_voiture
+    };
     private static final String PREFS_NAME = "vigie_prefs";
     private static final String PREF_LAST_TAB = "last_tab_position";
 
@@ -90,7 +97,10 @@ public class MainActivity extends AppCompatActivity {
         viewPager.setAdapter(adapter);
 
         new TabLayoutMediator(tabLayout, viewPager,
-                (tab, position) -> tab.setText(TAB_TITLES[position])
+                (tab, position) -> {
+                    tab.setIcon(TAB_ICONS[position]);
+                    tab.setContentDescription(TAB_TITLES[position]);
+                }
         ).attach();
 
         SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);

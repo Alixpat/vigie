@@ -55,8 +55,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="?attr/colorPrimary"
-        app:tabTextColor="@color/on_primary"
-        app:tabSelectedTextColor="@color/on_primary"
+        app:tabIconTint="@color/on_primary"
         app:tabIndicatorColor="@color/on_primary"
         app:tabGravity="fill"
         app:tabMode="fixed" />
