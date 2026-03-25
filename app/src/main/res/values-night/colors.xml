@@ -3,6 +3,7 @@
     <!-- Primary palette -->
     <color name="primary">#1E1E1E</color>
     <color name="primary_dark">#121212</color>
+    <color name="status_bar">#000000</color>
     <color name="on_primary">#E0E0E0</color>
 
     <!-- Secondary palette -->
