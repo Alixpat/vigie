@@ -9,11 +9,25 @@ public class TrainSchedule {
     private final String departureStatus;
     private final String platformName;
     private final int delayMinutes;
+    private final String journeyRef;
+    private final long aimedDepartureMillis;
+    private final long arrivalMillis;
+    private final String originStation;
 
     public TrainSchedule(String destination, String aimedDepartureTime,
                          String expectedDepartureTime, String arrivalTime,
                          String departureStatus, String platformName,
                          int delayMinutes) {
+        this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
+                departureStatus, platformName, delayMinutes, "", 0, 0, "");
+    }
+
+    public TrainSchedule(String destination, String aimedDepartureTime,
+                         String expectedDepartureTime, String arrivalTime,
+                         String departureStatus, String platformName,
+                         int delayMinutes, String journeyRef,
+                         long aimedDepartureMillis, long arrivalMillis,
+                         String originStation) {
         this.destination = destination;
         this.aimedDepartureTime = aimedDepartureTime;
         this.expectedDepartureTime = expectedDepartureTime;
@@ -21,6 +35,10 @@ public class TrainSchedule {
         this.departureStatus = departureStatus;
         this.platformName = platformName;
         this.delayMinutes = delayMinutes;
+        this.journeyRef = journeyRef;
+        this.aimedDepartureMillis = aimedDepartureMillis;
+        this.arrivalMillis = arrivalMillis;
+        this.originStation = originStation;
     }
 
     public String getDestination() { return destination; }
@@ -30,6 +48,10 @@ public class TrainSchedule {
     public String getDepartureStatus() { return departureStatus; }
     public String getPlatformName() { return platformName; }
     public int getDelayMinutes() { return delayMinutes; }
+    public String getJourneyRef() { return journeyRef; }
+    public long getAimedDepartureMillis() { return aimedDepartureMillis; }
+    public long getArrivalMillis() { return arrivalMillis; }
+    public String getOriginStation() { return originStation; }
 
     public boolean isOnTime() {
         return delayMinutes == 0 && !"cancelled".equalsIgnoreCase(departureStatus);
@@ -59,5 +81,58 @@ public class TrainSchedule {
         if (isCancelled()) return "\u274C";
         if (isDelayed()) return "\u23F0";
         return "\u2705";
+    }
+
+    /**
+     * Estime la position actuelle du train entre l'origine et la destination
+     * en se basant sur les horaires de départ et d'arrivée.
+     *
+     * @return description textuelle de la position estimée
+     */
+    public String estimatePosition() {
+        if (isCancelled()) {
+            return "Train supprimé";
+        }
+
+        long now = System.currentTimeMillis();
+        long effectiveDeparture = aimedDepartureMillis;
+        if (delayMinutes > 0) {
+            effectiveDeparture += delayMinutes * 60_000L;
+        }
+
+        if (effectiveDeparture <= 0) {
+            return "Position inconnue";
+        }
+
+        long diffToDepart = effectiveDeparture - now;
+        long minutesToDepart = diffToDepart / 60_000;
+
+        if (diffToDepart > 0) {
+            if (minutesToDepart <= 0) {
+                return "En gare de " + originStation + " - départ imminent";
+            } else if (minutesToDepart <= 5) {
+                return "En gare de " + originStation + " - départ dans " + minutesToDepart + " min";
+            } else {
+                return "En approche de " + originStation + " - départ dans " + minutesToDepart + " min";
+            }
+        }
+
+        // Le train est parti
+        if (arrivalMillis > 0 && now < arrivalMillis) {
+            long totalTravel = arrivalMillis - effectiveDeparture;
+            long elapsed = now - effectiveDeparture;
+            if (totalTravel > 0) {
+                int progress = (int) ((elapsed * 100) / totalTravel);
+                progress = Math.min(progress, 100);
+                return "En route vers " + destination + " (" + progress + "% du trajet)";
+            }
+        }
+
+        if (arrivalMillis > 0 && now >= arrivalMillis) {
+            return "Arrivé à " + destination;
+        }
+
+        long minutesSinceDepart = (now - effectiveDeparture) / 60_000;
+        return "Parti de " + originStation + " il y a " + minutesSinceDepart + " min";
     }
 }

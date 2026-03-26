@@ -18,7 +18,16 @@ import java.util.List;
 
 public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdapter.ViewHolder> {
 
+    public interface OnTrainClickListener {
+        void onTrainClick(TrainSchedule schedule);
+    }
+
     private final List<TrainSchedule> schedules = new ArrayList<>();
+    private OnTrainClickListener clickListener;
+
+    public void setOnTrainClickListener(OnTrainClickListener listener) {
+        this.clickListener = listener;
+    }
 
     public void updateSchedules(List<TrainSchedule> newData) {
         schedules.clear();
@@ -37,6 +46,12 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TrainSchedule schedule = schedules.get(position);
+
+        holder.itemView.setOnClickListener(v -> {
+            if (clickListener != null) {
+                clickListener.onTrainClick(schedule);
+            }
+        });
 
         int textPrimary = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary);
         int textHint = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_hint);

@@ -21,7 +21,13 @@ import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
 import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
+import com.alixpat.vigie.model.TrainStop;
 import com.google.android.material.card.MaterialCardView;
+
+import android.app.AlertDialog;
+import android.graphics.Typeface;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -56,6 +62,9 @@ public class TrainFragment extends Fragment {
                     + "?LineRef=" + LINE_REF;
     private static final String STOP_MONITORING_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
+    private static final String ESTIMATED_TIMETABLE_URL =
+            "https://prim.iledefrance-mobilites.fr/marketplace/estimated-timetable"
+                    + "?LineRef=" + LINE_REF;
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
@@ -100,6 +109,7 @@ public class TrainFragment extends Fragment {
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final Map<String, List<TrainStop>> journeyStopsCache = new HashMap<>();
 
     private final Runnable refreshRunnable = new Runnable() {
         @Override
@@ -164,6 +174,9 @@ public class TrainFragment extends Fragment {
         scheduleAdapterRetour = new TrainScheduleAdapter();
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
+
+        scheduleAdapterAller.setOnTrainClickListener(this::showTrainDetailDialog);
+        scheduleAdapterRetour.setOnTrainClickListener(this::showTrainDetailDialog);
     }
 
     @Override
@@ -182,6 +195,219 @@ public class TrainFragment extends Fragment {
     private void fetchAll() {
         fetchSchedules();
         fetchIncidents();
+        fetchEstimatedTimetable();
+    }
+
+    // ==================== TRAIN DETAIL DIALOG ====================
+
+    private void showTrainDetailDialog(TrainSchedule schedule) {
+        if (!isAdded() || getActivity() == null) return;
+
+        String journeyRef = schedule.getJourneyRef();
+        List<TrainStop> stops = journeyStopsCache.get(journeyRef);
+
+        if (stops != null && !stops.isEmpty()) {
+            showStopByStopDialog(schedule, stops);
+        } else {
+            // Pas de données d'arrêts, on tente un fetch à la demande
+            Log.i(TAG, "showTrainDetailDialog: pas de stops en cache pour " + journeyRef + ", fetch en cours...");
+            BrokerConfig config = new BrokerConfig(requireContext());
+            if (config.hasIdfmToken()) {
+                executor.execute(() -> {
+                    fetchAndParseEstimatedTimetable(config.getIdfmToken());
+                    List<TrainStop> freshStops = journeyStopsCache.get(journeyRef);
+                    if (getActivity() != null) {
+                        getActivity().runOnUiThread(() -> {
+                            if (!isAdded()) return;
+                            if (freshStops != null && !freshStops.isEmpty()) {
+                                showStopByStopDialog(schedule, freshStops);
+                            } else {
+                                showFallbackDialog(schedule);
+                            }
+                        });
+                    }
+                });
+            } else {
+                showFallbackDialog(schedule);
+            }
+        }
+    }
+
+    private void showStopByStopDialog(TrainSchedule schedule, List<TrainStop> stops) {
+        ScrollView scrollView = new ScrollView(requireContext());
+        LinearLayout container = new LinearLayout(requireContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(16);
+        container.setPadding(pad, pad, pad, pad);
+        scrollView.addView(container);
+
+        // Statut global du train
+        TextView statusHeader = new TextView(requireContext());
+        statusHeader.setText(schedule.getStatusEmoji() + " " + schedule.getStatusLabel());
+        statusHeader.setTextColor(schedule.getStatusColor());
+        statusHeader.setTextSize(14);
+        statusHeader.setTypeface(null, Typeface.BOLD);
+        statusHeader.setPadding(0, 0, 0, dpToPx(12));
+        container.addView(statusHeader);
+
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        long now = System.currentTimeMillis();
+
+        // Trouver l'arrêt actuel pour le marqueur
+        int currentStopIndex = -1;
+        int betweenAfterIndex = -1;
+        for (int i = 0; i < stops.size(); i++) {
+            TrainStop.StopStatus status = stops.get(i).getStatus();
+            if (status == TrainStop.StopStatus.CURRENT) {
+                currentStopIndex = i;
+                break;
+            }
+        }
+        // Si pas d'arrêt "CURRENT", trouver entre quels arrêts
+        if (currentStopIndex == -1) {
+            for (int i = 0; i < stops.size() - 1; i++) {
+                if (stops.get(i).getStatus() == TrainStop.StopStatus.PASSED
+                        && stops.get(i + 1).getStatus() == TrainStop.StopStatus.UPCOMING) {
+                    betweenAfterIndex = i;
+                    break;
+                }
+            }
+        }
+
+        for (int i = 0; i < stops.size(); i++) {
+            TrainStop stop = stops.get(i);
+            TrainStop.StopStatus status = stop.getStatus();
+
+            LinearLayout row = new LinearLayout(requireContext());
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setPadding(0, dpToPx(2), 0, dpToPx(2));
+            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+            // Indicateur visuel (cercle/trait)
+            TextView indicator = new TextView(requireContext());
+            indicator.setTextSize(16);
+            if (i == currentStopIndex) {
+                indicator.setText("\uD83D\uDD35"); // Cercle bleu = arrêt actuel
+            } else if (i == betweenAfterIndex) {
+                indicator.setText("\u25CF"); // Cercle plein = dernier arrêt passé avant "entre deux"
+                indicator.setTextColor(0xFF9E9E9E);
+            } else if (status == TrainStop.StopStatus.PASSED) {
+                indicator.setText("\u2713"); // Check = passé
+                indicator.setTextColor(0xFF4CAF50);
+            } else {
+                indicator.setText("\u25CB"); // Cercle vide = à venir
+                indicator.setTextColor(0xFFBDBDBD);
+            }
+            indicator.setPadding(0, 0, dpToPx(10), 0);
+            row.addView(indicator);
+
+            // Horaire
+            TextView timeView = new TextView(requireContext());
+            long bestTime = stop.getBestArrivalMillis();
+            if (bestTime > 0) {
+                timeView.setText(timeFmt.format(new Date(bestTime)));
+            } else {
+                timeView.setText("--:--");
+            }
+            timeView.setTextSize(13);
+            timeView.setMinWidth(dpToPx(45));
+            if (i == currentStopIndex) {
+                timeView.setTypeface(null, Typeface.BOLD);
+                timeView.setTextColor(0xFF1976D2);
+            } else if (status == TrainStop.StopStatus.PASSED) {
+                timeView.setTextColor(0xFF9E9E9E);
+            } else {
+                timeView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
+            }
+            timeView.setPadding(0, 0, dpToPx(10), 0);
+            row.addView(timeView);
+
+            // Nom de l'arrêt
+            TextView nameView = new TextView(requireContext());
+            nameView.setText(stop.getStopName());
+            nameView.setTextSize(13);
+            if (i == currentStopIndex) {
+                nameView.setTypeface(null, Typeface.BOLD);
+                nameView.setTextColor(0xFF1976D2);
+            } else if (status == TrainStop.StopStatus.PASSED) {
+                nameView.setTextColor(0xFF9E9E9E);
+            } else {
+                nameView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
+            }
+            row.addView(nameView);
+
+            // Voie (si disponible et arrêt actuel)
+            if (stop.getPlatformName() != null && !stop.getPlatformName().isEmpty()
+                    && (i == currentStopIndex || status == TrainStop.StopStatus.UPCOMING)) {
+                TextView platformView = new TextView(requireContext());
+                platformView.setText("  v." + stop.getPlatformName());
+                platformView.setTextSize(11);
+                platformView.setTextColor(0xFF9E9E9E);
+                row.addView(platformView);
+            }
+
+            container.addView(row);
+
+            // Indicateur "entre deux arrêts"
+            if (i == betweenAfterIndex) {
+                LinearLayout betweenRow = new LinearLayout(requireContext());
+                betweenRow.setOrientation(LinearLayout.HORIZONTAL);
+                betweenRow.setPadding(0, dpToPx(1), 0, dpToPx(1));
+                betweenRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+                TextView betweenIndicator = new TextView(requireContext());
+                betweenIndicator.setText("\uD83D\uDE86"); // Train emoji
+                betweenIndicator.setTextSize(14);
+                betweenIndicator.setPadding(0, 0, dpToPx(10), 0);
+                betweenRow.addView(betweenIndicator);
+
+                TextView betweenText = new TextView(requireContext());
+                betweenText.setText("En route...");
+                betweenText.setTextSize(12);
+                betweenText.setTypeface(null, Typeface.BOLD_ITALIC);
+                betweenText.setTextColor(0xFF1976D2);
+                betweenRow.addView(betweenText);
+
+                container.addView(betweenRow);
+            }
+        }
+
+        String title = schedule.getDestination();
+        if (!schedule.getOriginStation().isEmpty()) {
+            title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(title)
+                .setView(scrollView)
+                .setPositiveButton("Fermer", null)
+                .show();
+    }
+
+    private void showFallbackDialog(TrainSchedule schedule) {
+        String message = schedule.estimatePosition()
+                + "\n\nStatut : " + schedule.getStatusEmoji() + " " + schedule.getStatusLabel()
+                + "\nDépart : " + schedule.getAimedDepartureTime();
+        if (schedule.isDelayed() && !schedule.getExpectedDepartureTime().isEmpty()) {
+            message += " (retardé \u2192 " + schedule.getExpectedDepartureTime() + ")";
+        }
+        if (schedule.getArrivalTime() != null && !schedule.getArrivalTime().isEmpty()) {
+            message += "\nArrivée : " + schedule.getArrivalTime();
+        }
+        if (schedule.getPlatformName() != null && !schedule.getPlatformName().isEmpty()) {
+            message += "\nVoie : " + schedule.getPlatformName();
+        }
+        message += "\n\nDétail des arrêts indisponible.";
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Détails du train")
+                .setMessage(message)
+                .setPositiveButton("Fermer", null)
+                .show();
+    }
+
+    private int dpToPx(int dp) {
+        return (int) (dp * getResources().getDisplayMetrics().density);
     }
 
     // ==================== LINE STATUS BANNER ====================
@@ -579,6 +805,17 @@ public class TrainFragment extends Fragment {
                     + " retard=" + delayMinutes + "min"
                     + " voie=" + origin.platform);
 
+            long arrivalMillis = 0;
+            if (destinationData != null) {
+                RawStopVisit destVisit = destinationData.get(journeyRef);
+                if (destVisit != null) {
+                    if (destVisit.aimedArrival != null) arrivalMillis = destVisit.aimedArrival.getTime();
+                    else if (destVisit.aimedDeparture != null) arrivalMillis = destVisit.aimedDeparture.getTime();
+                }
+            }
+
+            String originStation = "Aller".equals(directionLabel) ? "Clamart" : "Villepreux";
+
             schedules.add(new TrainSchedule(
                     origin.destination,
                     aimedTimeStr,
@@ -586,7 +823,11 @@ public class TrainFragment extends Fragment {
                     arrivalTimeStr,
                     origin.departureStatus,
                     origin.platform,
-                    delayMinutes
+                    delayMinutes,
+                    journeyRef,
+                    origin.aimedDeparture.getTime(),
+                    arrivalMillis,
+                    originStation
             ));
         }
 
@@ -654,6 +895,192 @@ public class TrainFragment extends Fragment {
             Log.e("TrainFragment", "parseIsoDateTime: impossible de parser '" + isoStr + "'", e);
             return null;
         }
+    }
+
+    // ==================== ESTIMATED TIMETABLE (tous les arrêts) ====================
+
+    private void fetchEstimatedTimetable() {
+        BrokerConfig config = new BrokerConfig(requireContext());
+        if (!config.hasIdfmToken()) return;
+
+        String token = config.getIdfmToken();
+        executor.execute(() -> fetchAndParseEstimatedTimetable(token));
+    }
+
+    private void fetchAndParseEstimatedTimetable(String token) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(ESTIMATED_TIMETABLE_URL);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("apikey", token);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(20000);
+            connection.setReadTimeout(20000);
+
+            int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchEstimatedTimetable: HTTP " + responseCode);
+
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                Log.d(TAG, "fetchEstimatedTimetable: réponse reçue, taille=" + response.length());
+                parseEstimatedTimetable(response.toString());
+            } else {
+                Log.e(TAG, "fetchEstimatedTimetable: ERREUR HTTP " + responseCode);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchEstimatedTimetable: exception", e);
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private void parseEstimatedTimetable(String jsonStr) {
+        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
+        SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
+        isoFormatNoTz.setTimeZone(TimeZone.getDefault());
+
+        try {
+            JSONObject root = new JSONObject(jsonStr);
+            JSONObject delivery = root
+                    .getJSONObject("Siri")
+                    .getJSONObject("ServiceDelivery")
+                    .getJSONArray("EstimatedTimetableDelivery")
+                    .getJSONObject(0);
+
+            if (!delivery.has("EstimatedJourneyVersionFrame")) {
+                Log.w(TAG, "parseEstimatedTimetable: pas de EstimatedJourneyVersionFrame");
+                return;
+            }
+
+            JSONArray frames = delivery.getJSONArray("EstimatedJourneyVersionFrame");
+            int totalJourneys = 0;
+            int totalStops = 0;
+
+            for (int f = 0; f < frames.length(); f++) {
+                JSONObject frame = frames.getJSONObject(f);
+                if (!frame.has("EstimatedVehicleJourney")) continue;
+
+                JSONArray journeys = frame.getJSONArray("EstimatedVehicleJourney");
+                for (int j = 0; j < journeys.length(); j++) {
+                    try {
+                        JSONObject journey = journeys.getJSONObject(j);
+
+                        String journeyRef = "";
+                        JSONObject framedRef = journey.optJSONObject("FramedVehicleJourneyRef");
+                        if (framedRef != null) {
+                            journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                        }
+                        if (journeyRef.isEmpty()) continue;
+
+                        List<TrainStop> stops = new ArrayList<>();
+
+                        // EstimatedCalls
+                        JSONObject estimatedCalls = journey.optJSONObject("EstimatedCalls");
+                        if (estimatedCalls != null) {
+                            JSONArray callArray = estimatedCalls.optJSONArray("EstimatedCall");
+                            if (callArray != null) {
+                                int callCount = callArray.length();
+                                for (int c = 0; c < callCount; c++) {
+                                    TrainStop stop = parseEstimatedCall(
+                                            callArray.getJSONObject(c),
+                                            isoFormat, isoFormatNoTz,
+                                            c == 0, c == callCount - 1);
+                                    if (stop != null) stops.add(stop);
+                                }
+                            }
+                        }
+
+                        // RecordedCalls (arrêts déjà passés)
+                        JSONObject recordedCalls = journey.optJSONObject("RecordedCalls");
+                        if (recordedCalls != null) {
+                            JSONArray recArray = recordedCalls.optJSONArray("RecordedCall");
+                            if (recArray != null) {
+                                List<TrainStop> recorded = new ArrayList<>();
+                                for (int c = 0; c < recArray.length(); c++) {
+                                    boolean isFirst = (c == 0 && stops.isEmpty());
+                                    TrainStop stop = parseEstimatedCall(
+                                            recArray.getJSONObject(c),
+                                            isoFormat, isoFormatNoTz,
+                                            isFirst, false);
+                                    if (stop != null) recorded.add(stop);
+                                }
+                                recorded.addAll(stops);
+                                stops = recorded;
+                            }
+                        }
+
+                        if (!stops.isEmpty()) {
+                            // Marquer premier et dernier
+                            journeyStopsCache.put(journeyRef, stops);
+                            totalJourneys++;
+                            totalStops += stops.size();
+                        }
+                    } catch (Exception e) {
+                        Log.e(TAG, "parseEstimatedTimetable: erreur journey #" + j, e);
+                    }
+                }
+            }
+
+            Log.i(TAG, "parseEstimatedTimetable: " + totalJourneys + " trajets, "
+                    + totalStops + " arrêts au total");
+
+        } catch (Exception e) {
+            Log.e(TAG, "parseEstimatedTimetable: exception JSON", e);
+        }
+    }
+
+    private TrainStop parseEstimatedCall(JSONObject call, SimpleDateFormat isoFormat,
+                                          SimpleDateFormat isoFormatNoTz,
+                                          boolean isFirst, boolean isLast) {
+        try {
+            // Nom de l'arrêt
+            String stopName = "";
+            JSONArray stopNames = call.optJSONArray("StopPointName");
+            if (stopNames != null && stopNames.length() > 0) {
+                stopName = stopNames.getJSONObject(0).optString("value", "");
+            } else {
+                JSONObject stopNameObj = call.optJSONObject("StopPointName");
+                if (stopNameObj != null) {
+                    stopName = stopNameObj.optString("value", "");
+                }
+            }
+            if (stopName.isEmpty()) return null;
+
+            // Horaires
+            long aimedArr = parseToMillis(call.optString("AimedArrivalTime", ""), isoFormat, isoFormatNoTz);
+            long expectedArr = parseToMillis(call.optString("ExpectedArrivalTime", ""), isoFormat, isoFormatNoTz);
+            long aimedDep = parseToMillis(call.optString("AimedDepartureTime", ""), isoFormat, isoFormatNoTz);
+            long expectedDep = parseToMillis(call.optString("ExpectedDepartureTime", ""), isoFormat, isoFormatNoTz);
+
+            // Voie
+            String platform = "";
+            JSONObject platformObj = call.optJSONObject("ArrivalPlatformName");
+            if (platformObj != null) platform = platformObj.optString("value", "");
+            if (platform.isEmpty()) {
+                JSONObject depPlatformObj = call.optJSONObject("DeparturePlatformName");
+                if (depPlatformObj != null) platform = depPlatformObj.optString("value", "");
+            }
+
+            return new TrainStop(stopName, aimedArr, expectedArr, aimedDep, expectedDep,
+                    platform, isFirst, isLast);
+        } catch (Exception e) {
+            Log.e(TAG, "parseEstimatedCall: erreur", e);
+            return null;
+        }
+    }
+
+    private long parseToMillis(String isoStr, SimpleDateFormat withTz, SimpleDateFormat withoutTz) {
+        if (isoStr == null || isoStr.isEmpty()) return 0;
+        Date d = parseIsoDateTime(isoStr, withTz, withoutTz);
+        return d != null ? d.getTime() : 0;
     }
 
     // ==================== INCIDENTS ====================
