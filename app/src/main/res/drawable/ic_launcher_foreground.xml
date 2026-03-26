@@ -5,34 +5,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Vigie (Lighthouse/Watchtower) -->
+    <!-- Vigie (Lighthouse/Watchtower) - scaled to 70% and centered in safe zone -->
 
     <!-- Light beams -->
     <path
         android:fillColor="#90CAF9"
-        android:pathData="M44,26 L26,18 L30,34 Z" />
+        android:pathData="M47,36.5 L34.5,31 L37,42 Z" />
     <path
         android:fillColor="#90CAF9"
-        android:pathData="M64,26 L82,18 L78,34 Z" />
+        android:pathData="M61,36.5 L73.5,31 L71,42 Z" />
 
     <!-- Lighthouse silhouette -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M39,85 L39,80 L42,80 L45,34 L41,34 L41,30 L44,30 L44,22 L51,22 L54,17 L57,22 L64,22 L64,30 L67,30 L67,34 L63,34 L66,80 L69,80 L69,85 Z" />
+        android:pathData="M43.5,78 L43.5,74.5 L45.5,74.5 L47.5,42 L45,42 L45,39.5 L47,39.5 L47,34 L51.9,34 L54,30 L56.1,34 L61,34 L61,39.5 L63,39.5 L63,42 L60.5,42 L62.5,74.5 L64.5,74.5 L64.5,78 Z" />
 
     <!-- Light chamber glow (amber) -->
     <path
         android:fillColor="#FFD54F"
-        android:pathData="M48,24 L60,24 L60,28 L48,28 Z" />
+        android:pathData="M50,35 L58,35 L58,38 L50,38 Z" />
 
     <!-- Tower window upper -->
     <path
         android:fillColor="#1565C0"
-        android:pathData="M50,44 L58,44 L58,51 L50,51 Z" />
+        android:pathData="M51,49 L57,49 L57,54 L51,54 Z" />
 
     <!-- Tower window lower -->
     <path
         android:fillColor="#1565C0"
-        android:pathData="M49,59 L59,59 L59,66 L49,66 Z" />
+        android:pathData="M50.5,59.5 L57.5,59.5 L57.5,64.5 L50.5,64.5 Z" />
 
 </vector>
