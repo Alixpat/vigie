@@ -210,11 +210,16 @@ public class TrainFragment extends Fragment {
             showStopByStopDialog(schedule, stops);
         } else {
             // Pas de données d'arrêts, on tente un fetch à la demande
-            Log.i(TAG, "showTrainDetailDialog: pas de stops en cache pour " + journeyRef + ", fetch en cours...");
+            Log.i(TAG, "showTrainDetailDialog: pas de stops en cache pour " + journeyRef
+                    + ", cache contient " + journeyStopsCache.size() + " trajets, fetch en cours...");
             BrokerConfig config = new BrokerConfig(requireContext());
             if (config.hasIdfmToken()) {
                 executor.execute(() -> {
-                    fetchAndParseEstimatedTimetable(config.getIdfmToken());
+                    // Vérifier le cache d'abord (un fetch précédent a pu le remplir pendant l'attente dans la queue)
+                    List<TrainStop> alreadyCached = journeyStopsCache.get(journeyRef);
+                    if (alreadyCached == null || alreadyCached.isEmpty()) {
+                        fetchAndParseEstimatedTimetable(config.getIdfmToken());
+                    }
                     List<TrainStop> freshStops = journeyStopsCache.get(journeyRef);
                     if (getActivity() != null) {
                         getActivity().runOnUiThread(() -> {
@@ -222,6 +227,8 @@ public class TrainFragment extends Fragment {
                             if (freshStops != null && !freshStops.isEmpty()) {
                                 showStopByStopDialog(schedule, freshStops);
                             } else {
+                                Log.w(TAG, "showTrainDetailDialog: stops introuvables pour " + journeyRef
+                                        + " après fetch, clés en cache: " + journeyStopsCache.keySet());
                                 showFallbackDialog(schedule);
                             }
                         });
@@ -649,7 +656,12 @@ public class TrainFragment extends Fragment {
                     String journeyRef = "";
                     JSONObject framedRef = journey.optJSONObject("FramedVehicleJourneyRef");
                     if (framedRef != null) {
-                        journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                        JSONObject jrObj = framedRef.optJSONObject("DatedVehicleJourneyRef");
+                        if (jrObj != null) {
+                            journeyRef = jrObj.optString("value", "");
+                        } else {
+                            journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                        }
                     }
                     if (journeyRef.isEmpty()) {
                         noJourneyRef++;
@@ -992,7 +1004,12 @@ public class TrainFragment extends Fragment {
                         String journeyRef = "";
                         JSONObject framedRef = journey.optJSONObject("FramedVehicleJourneyRef");
                         if (framedRef != null) {
-                            journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                            JSONObject jrObj = framedRef.optJSONObject("DatedVehicleJourneyRef");
+                            if (jrObj != null) {
+                                journeyRef = jrObj.optString("value", "");
+                            } else {
+                                journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
+                            }
                         }
                         if (journeyRef.isEmpty()) continue;
 
