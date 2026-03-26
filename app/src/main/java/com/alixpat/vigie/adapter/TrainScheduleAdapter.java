@@ -40,7 +40,6 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
 
         int textPrimary = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary);
         int textHint = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_hint);
-        int primaryDark = ContextCompat.getColor(holder.itemView.getContext(), R.color.primary_dark);
         int warning = ContextCompat.getColor(holder.itemView.getContext(), R.color.status_warning);
 
         holder.destination.setText(schedule.getDestination());
@@ -81,14 +80,14 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.expectedTime.setTextColor(warning);
             holder.expectedTime.setVisibility(View.VISIBLE);
             holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(primaryDark);
+            holder.arrivalTime.setTextColor(textPrimary);
         } else {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
             holder.aimedTime.setTextColor(textPrimary);
             holder.expectedTime.setVisibility(View.GONE);
             holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(primaryDark);
+            holder.arrivalTime.setTextColor(textPrimary);
             holder.status.setText(schedule.getStatusLabel());
             holder.status.setTextColor(schedule.getStatusColor());
         }
