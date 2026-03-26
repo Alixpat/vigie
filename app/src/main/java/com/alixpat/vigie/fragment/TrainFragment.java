@@ -23,6 +23,9 @@ import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.google.android.material.card.MaterialCardView;
 
+import android.app.AlertDialog;
+import android.widget.ProgressBar;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -164,6 +167,9 @@ public class TrainFragment extends Fragment {
         scheduleAdapterRetour = new TrainScheduleAdapter();
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
+
+        scheduleAdapterAller.setOnTrainClickListener(this::showTrainDetailDialog);
+        scheduleAdapterRetour.setOnTrainClickListener(this::showTrainDetailDialog);
     }
 
     @Override
@@ -182,6 +188,101 @@ public class TrainFragment extends Fragment {
     private void fetchAll() {
         fetchSchedules();
         fetchIncidents();
+    }
+
+    // ==================== TRAIN DETAIL DIALOG ====================
+
+    private void showTrainDetailDialog(TrainSchedule schedule) {
+        if (!isAdded() || getActivity() == null) return;
+
+        View dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_train_detail, null);
+
+        TextView position = dialogView.findViewById(R.id.dialogPosition);
+        ProgressBar progressBar = dialogView.findViewById(R.id.dialogProgressBar);
+        TextView departure = dialogView.findViewById(R.id.dialogDeparture);
+        TextView arrival = dialogView.findViewById(R.id.dialogArrival);
+        View arrivalRow = dialogView.findViewById(R.id.dialogArrivalRow);
+        TextView destination = dialogView.findViewById(R.id.dialogDestination);
+        TextView platform = dialogView.findViewById(R.id.dialogPlatform);
+        View platformRow = dialogView.findViewById(R.id.dialogPlatformRow);
+        TextView status = dialogView.findViewById(R.id.dialogStatus);
+
+        // Position estimée
+        position.setText(schedule.estimatePosition());
+
+        // Barre de progression
+        int progress = computeProgress(schedule);
+        if (progress >= 0) {
+            progressBar.setProgress(progress);
+            progressBar.setVisibility(View.VISIBLE);
+        } else {
+            progressBar.setVisibility(View.GONE);
+        }
+
+        // Horaires de départ
+        String depText = schedule.getAimedDepartureTime();
+        if (schedule.isDelayed() && !schedule.getExpectedDepartureTime().isEmpty()) {
+            depText += " (retardé → " + schedule.getExpectedDepartureTime() + ")";
+        }
+        departure.setText(depText);
+
+        // Arrivée
+        String arrivalTime = schedule.getArrivalTime();
+        if (arrivalTime != null && !arrivalTime.isEmpty()) {
+            arrival.setText(arrivalTime);
+            arrivalRow.setVisibility(View.VISIBLE);
+        } else {
+            arrivalRow.setVisibility(View.GONE);
+        }
+
+        // Destination
+        destination.setText(schedule.getDestination());
+
+        // Voie
+        String platformName = schedule.getPlatformName();
+        if (platformName != null && !platformName.isEmpty()) {
+            platform.setText("Voie " + platformName);
+            platformRow.setVisibility(View.VISIBLE);
+        } else {
+            platformRow.setVisibility(View.GONE);
+        }
+
+        // Statut
+        status.setText(schedule.getStatusEmoji() + " " + schedule.getStatusLabel());
+        status.setTextColor(schedule.getStatusColor());
+
+        String title = schedule.getOriginStation().isEmpty()
+                ? "Détails du train"
+                : schedule.getOriginStation() + " → " + schedule.getDestination();
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(title)
+                .setView(dialogView)
+                .setPositiveButton("Fermer", null)
+                .show();
+    }
+
+    private int computeProgress(TrainSchedule schedule) {
+        if (schedule.isCancelled()) return -1;
+        if (schedule.getAimedDepartureMillis() <= 0) return -1;
+
+        long now = System.currentTimeMillis();
+        long effectiveDeparture = schedule.getAimedDepartureMillis();
+        if (schedule.getDelayMinutes() > 0) {
+            effectiveDeparture += schedule.getDelayMinutes() * 60_000L;
+        }
+
+        if (now < effectiveDeparture) return 0;
+
+        if (schedule.getArrivalMillis() > 0) {
+            long totalTravel = schedule.getArrivalMillis() - effectiveDeparture;
+            if (totalTravel > 0) {
+                long elapsed = now - effectiveDeparture;
+                return Math.min((int) ((elapsed * 100) / totalTravel), 100);
+            }
+        }
+        return -1;
     }
 
     // ==================== LINE STATUS BANNER ====================
