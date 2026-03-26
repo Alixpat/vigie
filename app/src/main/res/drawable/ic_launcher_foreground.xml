@@ -5,8 +5,34 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Lettre "V" blanche centrée -->
+    <!-- Vigie (Lighthouse/Watchtower) -->
+
+    <!-- Light beams -->
+    <path
+        android:fillColor="#90CAF9"
+        android:pathData="M44,26 L26,18 L30,34 Z" />
+    <path
+        android:fillColor="#90CAF9"
+        android:pathData="M64,26 L82,18 L78,34 Z" />
+
+    <!-- Lighthouse silhouette -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M38,30 L54,78 L70,30 L62,30 L54,62 L46,30 Z" />
+        android:pathData="M39,85 L39,80 L42,80 L45,34 L41,34 L41,30 L44,30 L44,22 L51,22 L54,17 L57,22 L64,22 L64,30 L67,30 L67,34 L63,34 L66,80 L69,80 L69,85 Z" />
+
+    <!-- Light chamber glow (amber) -->
+    <path
+        android:fillColor="#FFD54F"
+        android:pathData="M48,24 L60,24 L60,28 L48,28 Z" />
+
+    <!-- Tower window upper -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M50,44 L58,44 L58,51 L50,51 Z" />
+
+    <!-- Tower window lower -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M49,59 L59,59 L59,66 L49,66 Z" />
+
 </vector>
