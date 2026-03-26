@@ -949,18 +949,33 @@ public class TrainFragment extends Fragment {
 
         try {
             JSONObject root = new JSONObject(jsonStr);
-            JSONObject delivery = root
+            JSONObject serviceDelivery = root
                     .getJSONObject("Siri")
-                    .getJSONObject("ServiceDelivery")
-                    .getJSONArray("EstimatedTimetableDelivery")
-                    .getJSONObject(0);
+                    .getJSONObject("ServiceDelivery");
+
+            // EstimatedTimetableDelivery peut être un objet ou un tableau
+            JSONObject delivery;
+            JSONArray etdArray = serviceDelivery.optJSONArray("EstimatedTimetableDelivery");
+            if (etdArray != null) {
+                delivery = etdArray.getJSONObject(0);
+            } else {
+                delivery = serviceDelivery.optJSONObject("EstimatedTimetableDelivery");
+            }
+            if (delivery == null) {
+                Log.w(TAG, "parseEstimatedTimetable: pas de EstimatedTimetableDelivery");
+                return;
+            }
 
             if (!delivery.has("EstimatedJourneyVersionFrame")) {
                 Log.w(TAG, "parseEstimatedTimetable: pas de EstimatedJourneyVersionFrame");
                 return;
             }
 
-            JSONArray frames = delivery.getJSONArray("EstimatedJourneyVersionFrame");
+            JSONArray frames = getFlexibleJSONArray(delivery, "EstimatedJourneyVersionFrame");
+            if (frames == null) {
+                Log.w(TAG, "parseEstimatedTimetable: EstimatedJourneyVersionFrame illisible");
+                return;
+            }
             int totalJourneys = 0;
             int totalStops = 0;
 
@@ -968,7 +983,8 @@ public class TrainFragment extends Fragment {
                 JSONObject frame = frames.getJSONObject(f);
                 if (!frame.has("EstimatedVehicleJourney")) continue;
 
-                JSONArray journeys = frame.getJSONArray("EstimatedVehicleJourney");
+                JSONArray journeys = getFlexibleJSONArray(frame, "EstimatedVehicleJourney");
+                if (journeys == null) continue;
                 for (int j = 0; j < journeys.length(); j++) {
                     try {
                         JSONObject journey = journeys.getJSONObject(j);
@@ -985,7 +1001,7 @@ public class TrainFragment extends Fragment {
                         // EstimatedCalls
                         JSONObject estimatedCalls = journey.optJSONObject("EstimatedCalls");
                         if (estimatedCalls != null) {
-                            JSONArray callArray = estimatedCalls.optJSONArray("EstimatedCall");
+                            JSONArray callArray = getFlexibleJSONArray(estimatedCalls, "EstimatedCall");
                             if (callArray != null) {
                                 int callCount = callArray.length();
                                 for (int c = 0; c < callCount; c++) {
@@ -1001,7 +1017,7 @@ public class TrainFragment extends Fragment {
                         // RecordedCalls (arrêts déjà passés)
                         JSONObject recordedCalls = journey.optJSONObject("RecordedCalls");
                         if (recordedCalls != null) {
-                            JSONArray recArray = recordedCalls.optJSONArray("RecordedCall");
+                            JSONArray recArray = getFlexibleJSONArray(recordedCalls, "RecordedCall");
                             if (recArray != null) {
                                 List<TrainStop> recorded = new ArrayList<>();
                                 for (int c = 0; c < recArray.length(); c++) {
@@ -1052,6 +1068,26 @@ public class TrainFragment extends Fragment {
                     stopName = stopNameObj.optString("value", "");
                 }
             }
+            // Fallback : extraire le nom depuis StopPointRef si StopPointName absent
+            if (stopName.isEmpty()) {
+                String stopRef = "";
+                JSONObject stopRefObj = call.optJSONObject("StopPointRef");
+                if (stopRefObj != null) {
+                    stopRef = stopRefObj.optString("value", "");
+                } else {
+                    stopRef = call.optString("StopPointRef", "");
+                }
+                if (!stopRef.isEmpty()) {
+                    // Extraire un nom lisible du ref (ex: "STIF:StopPoint:Q:43111:" -> "Arrêt 43111")
+                    String[] parts = stopRef.split(":");
+                    for (int p = parts.length - 1; p >= 0; p--) {
+                        if (!parts[p].isEmpty()) {
+                            stopName = "Arrêt " + parts[p];
+                            break;
+                        }
+                    }
+                }
+            }
             if (stopName.isEmpty()) return null;
 
             // Horaires
@@ -1081,6 +1117,22 @@ public class TrainFragment extends Fragment {
         if (isoStr == null || isoStr.isEmpty()) return 0;
         Date d = parseIsoDateTime(isoStr, withTz, withoutTz);
         return d != null ? d.getTime() : 0;
+    }
+
+    /**
+     * L'API IDFM SIRI peut retourner un élément unique comme JSONObject
+     * au lieu d'un JSONArray. Cette méthode normalise en JSONArray.
+     */
+    private JSONArray getFlexibleJSONArray(JSONObject parent, String key) {
+        JSONArray arr = parent.optJSONArray(key);
+        if (arr != null) return arr;
+        JSONObject obj = parent.optJSONObject(key);
+        if (obj != null) {
+            JSONArray wrapped = new JSONArray();
+            wrapped.put(obj);
+            return wrapped;
+        }
+        return null;
     }
 
     // ==================== INCIDENTS ====================
