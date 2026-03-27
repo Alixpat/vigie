@@ -1,6 +1,9 @@
 package com.alixpat.vigie.adapter;
 
 import android.graphics.Paint;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -80,7 +83,22 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
 
         String travelTime = schedule.getTravelTime();
         if (travelTime != null) {
-            holder.travelTime.setText("Trajet : " + travelTime);
+            String full = "Trajet : " + travelTime;
+            // Rendre les secondes (ex: " 05s") plus petites
+            int sIdx = full.lastIndexOf("s");
+            if (sIdx > 0) {
+                // Trouver le début de la partie secondes (espace avant les chiffres des secondes)
+                int secStart = full.lastIndexOf(" ", sIdx - 1);
+                if (secStart >= 0) {
+                    SpannableString span = new SpannableString(full);
+                    span.setSpan(new RelativeSizeSpan(0.8f), secStart, sIdx + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                    holder.travelTime.setText(span);
+                } else {
+                    holder.travelTime.setText(full);
+                }
+            } else {
+                holder.travelTime.setText(full);
+            }
             holder.travelTime.setVisibility(View.VISIBLE);
         } else {
             holder.travelTime.setVisibility(View.GONE);
