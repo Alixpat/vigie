@@ -89,7 +89,7 @@ public class TrainSchedule {
         if (durationMillis <= 0) {
             return null;
         }
-        long totalMinutes = durationMillis / 60_000;
+        long totalMinutes = Math.round(durationMillis / 60_000.0);
         if (totalMinutes < 60) {
             return totalMinutes + " min";
         }
