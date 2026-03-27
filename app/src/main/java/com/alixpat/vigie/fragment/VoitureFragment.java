@@ -36,7 +36,7 @@ public class VoitureFragment extends Fragment {
     private static final String TAG = "VoitureFragment";
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
-    private static final String HERE_ROUTING_URL = "https://router.hereapi.com/v8/routes";
+    private static final String TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute";
     private static final String ISSY_COORDS = "48.8235,2.2700";
     private static final String VILLEPREUX_COORDS = "48.8044,1.9803";
 
@@ -90,24 +90,24 @@ public class VoitureFragment extends Fragment {
 
     private void fetchDrivingTimes() {
         BrokerConfig config = new BrokerConfig(requireContext());
-        if (!config.hasHereApiKey()) {
-            Log.w(TAG, "fetchDrivingTimes: Clé API HERE non configurée");
+        if (!config.hasTomTomApiKey()) {
+            Log.w(TAG, "fetchDrivingTimes: Clé API TomTom non configurée");
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
                     if (!isAdded()) return;
                     drivingTimeCard.setVisibility(View.GONE);
                     drivingTimeEmpty.setVisibility(View.VISIBLE);
-                    drivingTimeEmpty.setText("Clé API HERE non configurée.\nRendez-vous dans les paramètres.");
+                    drivingTimeEmpty.setText("Clé API TomTom non configurée.\nRendez-vous dans les paramètres.");
                 });
             }
             return;
         }
 
-        String apiKey = config.getHereApiKey();
+        String apiKey = config.getTomTomApiKey();
 
         executor.execute(() -> {
-            int allerSeconds = fetchDrivingTimeFromHere(apiKey, ISSY_COORDS, VILLEPREUX_COORDS);
-            int retourSeconds = fetchDrivingTimeFromHere(apiKey, VILLEPREUX_COORDS, ISSY_COORDS);
+            int allerSeconds = fetchDrivingTimeFromTomTom(apiKey, ISSY_COORDS, VILLEPREUX_COORDS);
+            int retourSeconds = fetchDrivingTimeFromTomTom(apiKey, VILLEPREUX_COORDS, ISSY_COORDS);
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -126,17 +126,17 @@ public class VoitureFragment extends Fragment {
         });
     }
 
-    private int fetchDrivingTimeFromHere(String apiKey, String origin, String destination) {
+    private int fetchDrivingTimeFromTomTom(String apiKey, String origin, String destination) {
         HttpURLConnection connection = null;
         try {
-            String apiUrl = HERE_ROUTING_URL
-                    + "?transportMode=car"
-                    + "&origin=" + origin
-                    + "&destination=" + destination
-                    + "&return=summary"
-                    + "&apikey=" + URLEncoder.encode(apiKey, "UTF-8");
+            String apiUrl = TOMTOM_ROUTING_URL
+                    + "/" + origin + ":" + destination
+                    + "/json"
+                    + "?key=" + URLEncoder.encode(apiKey, "UTF-8")
+                    + "&traffic=true"
+                    + "&travelMode=car";
 
-            Log.d(TAG, "fetchDrivingTimeFromHere: " + origin + " -> " + destination);
+            Log.d(TAG, "fetchDrivingTimeFromTomTom: " + origin + " -> " + destination);
 
             URL url = new URL(apiUrl);
             connection = (HttpURLConnection) url.openConnection();
@@ -160,21 +160,18 @@ public class VoitureFragment extends Fragment {
                 JSONArray routes = root.getJSONArray("routes");
                 if (routes.length() > 0) {
                     JSONObject firstRoute = routes.getJSONObject(0);
-                    JSONArray sections = firstRoute.getJSONArray("sections");
-                    int totalDuration = 0;
-                    for (int i = 0; i < sections.length(); i++) {
-                        JSONObject summary = sections.getJSONObject(i).getJSONObject("summary");
-                        totalDuration += summary.getInt("duration");
-                    }
-                    Log.i(TAG, "fetchDrivingTimeFromHere: " + origin + " -> " + destination
-                            + " = " + totalDuration + "s");
-                    return totalDuration;
+                    JSONObject summary = firstRoute.getJSONObject("summary");
+                    int travelTimeSeconds = summary.getInt("travelTimeInSeconds");
+                    Log.i(TAG, "fetchDrivingTimeFromTomTom: " + origin + " -> " + destination
+                            + " = " + travelTimeSeconds + "s (traffic: "
+                            + summary.getInt("trafficDelayInSeconds") + "s delay)");
+                    return travelTimeSeconds;
                 }
             } else {
-                Log.e(TAG, "fetchDrivingTimeFromHere: HTTP " + responseCode);
+                Log.e(TAG, "fetchDrivingTimeFromTomTom: HTTP " + responseCode);
             }
         } catch (Exception e) {
-            Log.e(TAG, "fetchDrivingTimeFromHere: exception", e);
+            Log.e(TAG, "fetchDrivingTimeFromTomTom: exception", e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
