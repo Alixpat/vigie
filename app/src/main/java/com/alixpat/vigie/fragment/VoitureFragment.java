@@ -1,5 +1,6 @@
 package com.alixpat.vigie.fragment;
 
+import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -28,8 +29,10 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.LinkedList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -38,12 +41,17 @@ public class VoitureFragment extends Fragment {
 
     private static final String TAG = "VoitureFragment";
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+    private static final long HISTORY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
 
     private static final String TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute";
     // Rue Claude Bernard, Issy-les-Moulineaux
     private static final String ISSY_COORDS = "48.8148,2.2699";
     // Avenue d'Anjou, Villepreux
     private static final String VILLEPREUX_COORDS = "48.8340,1.9970";
+
+    private static final String PREFS_NAME = "vigie_driving_history";
+    private static final String PREF_ALLER_HISTORY = "aller_history";
+    private static final String PREF_RETOUR_HISTORY = "retour_history";
 
     private MaterialCardView drivingTimeCard;
     private TextView drivingTimeAller;
@@ -55,10 +63,9 @@ public class VoitureFragment extends Fragment {
     private TextView drivingTimeFlowAller;
     private TextView drivingTimeFlowRetour;
 
-    // History over 30 min (6 entries at 5-min intervals)
-    private static final int HISTORY_SIZE = 7; // current + 6 previous
-    private final LinkedList<Integer> allerHistory = new LinkedList<>();
-    private final LinkedList<Integer> retourHistory = new LinkedList<>();
+    // Timestamped history entries for 30-min rolling average
+    private final List<long[]> allerHistory = new ArrayList<>(); // [timestamp, seconds]
+    private final List<long[]> retourHistory = new ArrayList<>();
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -96,6 +103,7 @@ public class VoitureFragment extends Fragment {
     @Override
     public void onResume() {
         super.onResume();
+        loadHistory();
         fetchDrivingTimes();
         refreshHandler.postDelayed(refreshRunnable, REFRESH_INTERVAL_MS);
     }
@@ -104,6 +112,7 @@ public class VoitureFragment extends Fragment {
     public void onPause() {
         super.onPause();
         refreshHandler.removeCallbacks(refreshRunnable);
+        saveHistory();
     }
 
     private void fetchDrivingTimes() {
@@ -215,22 +224,42 @@ public class VoitureFragment extends Fragment {
         return new int[]{-1, -1};
     }
 
-    private void addToHistory(LinkedList<Integer> history, int value) {
-        history.addLast(value);
-        if (history.size() > HISTORY_SIZE) {
-            history.removeFirst();
+    private void addToHistory(List<long[]> history, int value) {
+        long now = System.currentTimeMillis();
+        history.add(new long[]{now, value});
+        pruneHistory(history);
+    }
+
+    private void pruneHistory(List<long[]> history) {
+        long cutoff = System.currentTimeMillis() - HISTORY_WINDOW_MS;
+        Iterator<long[]> it = history.iterator();
+        while (it.hasNext()) {
+            if (it.next()[0] < cutoff) {
+                it.remove();
+            } else {
+                break; // entries are chronological, no need to check further
+            }
         }
     }
 
-    private void updateTrend(TextView trendView, int currentSeconds, LinkedList<Integer> history) {
+    private int computeAverage(List<long[]> history) {
+        if (history.isEmpty()) return -1;
+        long sum = 0;
+        for (long[] entry : history) {
+            sum += entry[1];
+        }
+        return (int) (sum / history.size());
+    }
+
+    private void updateTrend(TextView trendView, int currentSeconds, List<long[]> history) {
         if (currentSeconds < 0 || history.isEmpty()) {
             trendView.setVisibility(View.GONE);
             return;
         }
 
-        // Compare current value with the oldest value in the history window
-        int oldestSeconds = history.getFirst();
-        int diffSeconds = currentSeconds - oldestSeconds;
+        // Compare current value with the average over the 30-min history window
+        int averageSeconds = computeAverage(history);
+        int diffSeconds = currentSeconds - averageSeconds;
 
         trendView.setVisibility(View.VISIBLE);
         // Ignore minor variations (less than 2 minutes)
@@ -245,6 +274,48 @@ public class VoitureFragment extends Fragment {
             int diffMin = Math.abs(diffSeconds) / 60;
             trendView.setText("\u2198 -" + diffMin + " min"); // ↘ -X min
             trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_ok));
+        }
+    }
+
+    private void saveHistory() {
+        SharedPreferences prefs = requireContext().getSharedPreferences(PREFS_NAME, 0);
+        SharedPreferences.Editor editor = prefs.edit();
+        editor.putString(PREF_ALLER_HISTORY, serializeHistory(allerHistory));
+        editor.putString(PREF_RETOUR_HISTORY, serializeHistory(retourHistory));
+        editor.apply();
+    }
+
+    private void loadHistory() {
+        SharedPreferences prefs = requireContext().getSharedPreferences(PREFS_NAME, 0);
+        allerHistory.clear();
+        retourHistory.clear();
+        deserializeHistory(prefs.getString(PREF_ALLER_HISTORY, ""), allerHistory);
+        deserializeHistory(prefs.getString(PREF_RETOUR_HISTORY, ""), retourHistory);
+        pruneHistory(allerHistory);
+        pruneHistory(retourHistory);
+    }
+
+    private static String serializeHistory(List<long[]> history) {
+        JSONArray arr = new JSONArray();
+        for (long[] entry : history) {
+            JSONArray pair = new JSONArray();
+            pair.put(entry[0]);
+            pair.put(entry[1]);
+            arr.put(pair);
+        }
+        return arr.toString();
+    }
+
+    private static void deserializeHistory(String json, List<long[]> out) {
+        if (json == null || json.isEmpty()) return;
+        try {
+            JSONArray arr = new JSONArray(json);
+            for (int i = 0; i < arr.length(); i++) {
+                JSONArray pair = arr.getJSONArray(i);
+                out.add(new long[]{pair.getLong(0), pair.getLong(1)});
+            }
+        } catch (Exception e) {
+            Log.w("VoitureFragment", "Failed to deserialize history", e);
         }
     }
 
