@@ -15,6 +15,8 @@ import androidx.fragment.app.Fragment;
 
 import com.alixpat.vigie.BrokerConfig;
 import com.alixpat.vigie.R;
+import androidx.core.content.ContextCompat;
+
 import com.google.android.material.card.MaterialCardView;
 
 import org.json.JSONArray;
@@ -27,6 +29,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.LinkedList;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -47,6 +50,15 @@ public class VoitureFragment extends Fragment {
     private TextView drivingTimeRetour;
     private TextView drivingTimeUpdate;
     private TextView drivingTimeEmpty;
+    private TextView drivingTimeTrendAller;
+    private TextView drivingTimeTrendRetour;
+    private TextView drivingTimeFlowAller;
+    private TextView drivingTimeFlowRetour;
+
+    // History over 30 min (6 entries at 5-min intervals)
+    private static final int HISTORY_SIZE = 7; // current + 6 previous
+    private final LinkedList<Integer> allerHistory = new LinkedList<>();
+    private final LinkedList<Integer> retourHistory = new LinkedList<>();
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -75,6 +87,10 @@ public class VoitureFragment extends Fragment {
         drivingTimeRetour = view.findViewById(R.id.drivingTimeRetour);
         drivingTimeUpdate = view.findViewById(R.id.drivingTimeUpdate);
         drivingTimeEmpty = view.findViewById(R.id.drivingTimeEmpty);
+        drivingTimeTrendAller = view.findViewById(R.id.drivingTimeTrendAller);
+        drivingTimeTrendRetour = view.findViewById(R.id.drivingTimeTrendRetour);
+        drivingTimeFlowAller = view.findViewById(R.id.drivingTimeFlowAller);
+        drivingTimeFlowRetour = view.findViewById(R.id.drivingTimeFlowRetour);
     }
 
     @Override
@@ -108,8 +124,12 @@ public class VoitureFragment extends Fragment {
         String apiKey = config.getTomTomApiKey();
 
         executor.execute(() -> {
-            int allerSeconds = fetchDrivingTimeFromTomTom(apiKey, ISSY_COORDS, VILLEPREUX_COORDS);
-            int retourSeconds = fetchDrivingTimeFromTomTom(apiKey, VILLEPREUX_COORDS, ISSY_COORDS);
+            int[] allerResult = fetchRouteInfo(apiKey, ISSY_COORDS, VILLEPREUX_COORDS);
+            int[] retourResult = fetchRouteInfo(apiKey, VILLEPREUX_COORDS, ISSY_COORDS);
+            int allerSeconds = allerResult[0];
+            int allerDelay = allerResult[1];
+            int retourSeconds = retourResult[0];
+            int retourDelay = retourResult[1];
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -123,12 +143,24 @@ public class VoitureFragment extends Fragment {
 
                     drivingTimeAller.setText(allerSeconds >= 0 ? formatDuration(allerSeconds) : "--");
                     drivingTimeRetour.setText(retourSeconds >= 0 ? formatDuration(retourSeconds) : "--");
+
+                    updateTrend(drivingTimeTrendAller, allerSeconds, allerHistory);
+                    updateTrend(drivingTimeTrendRetour, retourSeconds, retourHistory);
+
+                    updateFlowStatus(drivingTimeFlowAller, allerSeconds, allerDelay);
+                    updateFlowStatus(drivingTimeFlowRetour, retourSeconds, retourDelay);
+
+                    if (allerSeconds >= 0) addToHistory(allerHistory, allerSeconds);
+                    if (retourSeconds >= 0) addToHistory(retourHistory, retourSeconds);
                 });
             }
         });
     }
 
-    private int fetchDrivingTimeFromTomTom(String apiKey, String origin, String destination) {
+    /**
+     * Returns [travelTimeInSeconds, trafficDelayInSeconds] or [-1, -1] on error.
+     */
+    private int[] fetchRouteInfo(String apiKey, String origin, String destination) {
         HttpURLConnection connection = null;
         try {
             String apiUrl = TOMTOM_ROUTING_URL
@@ -138,7 +170,7 @@ public class VoitureFragment extends Fragment {
                     + "&traffic=true"
                     + "&travelMode=car";
 
-            Log.d(TAG, "fetchDrivingTimeFromTomTom: " + origin + " -> " + destination);
+            Log.d(TAG, "fetchRouteInfo: " + origin + " -> " + destination);
 
             URL url = new URL(apiUrl);
             connection = (HttpURLConnection) url.openConnection();
@@ -164,22 +196,77 @@ public class VoitureFragment extends Fragment {
                     JSONObject firstRoute = routes.getJSONObject(0);
                     JSONObject summary = firstRoute.getJSONObject("summary");
                     int travelTimeSeconds = summary.getInt("travelTimeInSeconds");
-                    Log.i(TAG, "fetchDrivingTimeFromTomTom: " + origin + " -> " + destination
+                    int trafficDelay = summary.getInt("trafficDelayInSeconds");
+                    Log.i(TAG, "fetchRouteInfo: " + origin + " -> " + destination
                             + " = " + travelTimeSeconds + "s (traffic: "
-                            + summary.getInt("trafficDelayInSeconds") + "s delay)");
-                    return travelTimeSeconds;
+                            + trafficDelay + "s delay)");
+                    return new int[]{travelTimeSeconds, trafficDelay};
                 }
             } else {
-                Log.e(TAG, "fetchDrivingTimeFromTomTom: HTTP " + responseCode);
+                Log.e(TAG, "fetchRouteInfo: HTTP " + responseCode);
             }
         } catch (Exception e) {
-            Log.e(TAG, "fetchDrivingTimeFromTomTom: exception", e);
+            Log.e(TAG, "fetchRouteInfo: exception", e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
             }
         }
-        return -1;
+        return new int[]{-1, -1};
+    }
+
+    private void addToHistory(LinkedList<Integer> history, int value) {
+        history.addLast(value);
+        if (history.size() > HISTORY_SIZE) {
+            history.removeFirst();
+        }
+    }
+
+    private void updateTrend(TextView trendView, int currentSeconds, LinkedList<Integer> history) {
+        if (currentSeconds < 0 || history.isEmpty()) {
+            trendView.setVisibility(View.GONE);
+            return;
+        }
+
+        // Compare current value with the oldest value in the history window
+        int oldestSeconds = history.getFirst();
+        int diffSeconds = currentSeconds - oldestSeconds;
+
+        trendView.setVisibility(View.VISIBLE);
+        // Ignore minor variations (less than 2 minutes)
+        if (Math.abs(diffSeconds) < 120) {
+            trendView.setText("Stable");
+            trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_info));
+        } else if (diffSeconds > 0) {
+            int diffMin = diffSeconds / 60;
+            trendView.setText("\u25B2 +" + diffMin + " min"); // ▲ +X min
+            trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error));
+        } else {
+            int diffMin = Math.abs(diffSeconds) / 60;
+            trendView.setText("\u25BC -" + diffMin + " min"); // ▼ -X min
+            trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_ok));
+        }
+    }
+
+    private void updateFlowStatus(TextView flowView, int travelTimeSeconds, int trafficDelaySeconds) {
+        if (travelTimeSeconds < 0 || trafficDelaySeconds < 0) {
+            flowView.setVisibility(View.GONE);
+            return;
+        }
+
+        flowView.setVisibility(View.VISIBLE);
+        double delayRatio = (double) trafficDelaySeconds / travelTimeSeconds;
+
+        if (delayRatio < 0.10) {
+            flowView.setText("Fluide");
+            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_ok));
+        } else if (delayRatio < 0.25) {
+            flowView.setText("Ralenti");
+            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_warning));
+        } else {
+            flowView.setText("Dense");
+            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error));
+        }
     }
 
     private static String formatDuration(int totalSeconds) {
