@@ -235,15 +235,15 @@ public class VoitureFragment extends Fragment {
         trendView.setVisibility(View.VISIBLE);
         // Ignore minor variations (less than 2 minutes)
         if (Math.abs(diffSeconds) < 120) {
-            trendView.setText("Stable");
+            trendView.setText("\u2192"); // → stable
             trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_info));
         } else if (diffSeconds > 0) {
             int diffMin = diffSeconds / 60;
-            trendView.setText("\u25B2 +" + diffMin + " min"); // ▲ +X min
+            trendView.setText("\u2197 +" + diffMin + " min"); // ↗ +X min
             trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error));
         } else {
             int diffMin = Math.abs(diffSeconds) / 60;
-            trendView.setText("\u25BC -" + diffMin + " min"); // ▼ -X min
+            trendView.setText("\u2198 -" + diffMin + " min"); // ↘ -X min
             trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_ok));
         }
     }
