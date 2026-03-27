@@ -37,8 +37,10 @@ public class VoitureFragment extends Fragment {
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
 
     private static final String TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute";
-    private static final String ISSY_COORDS = "48.8235,2.2700";
-    private static final String VILLEPREUX_COORDS = "48.8044,1.9803";
+    // Rue Claude Bernard, Issy-les-Moulineaux
+    private static final String ISSY_COORDS = "48.8148,2.2699";
+    // Avenue d'Anjou, Villepreux
+    private static final String VILLEPREUX_COORDS = "48.8340,1.9970";
 
     private MaterialCardView drivingTimeCard;
     private TextView drivingTimeAller;
