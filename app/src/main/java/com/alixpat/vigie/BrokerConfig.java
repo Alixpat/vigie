@@ -11,7 +11,7 @@ public class BrokerConfig {
     private static final String KEY_USERNAME = "username";
     private static final String KEY_PASSWORD = "password";
     private static final String KEY_IDFM_TOKEN = "idfm_token";
-    private static final String KEY_HERE_API_KEY = "here_api_key";
+    private static final String KEY_TOMTOM_API_KEY = "tomtom_api_key";
 
     private static final String DEFAULT_IP = "192.168.1.100";
     private static final int DEFAULT_PORT = 1883;
@@ -71,18 +71,18 @@ public class BrokerConfig {
                 .apply();
     }
 
-    public String getHereApiKey() {
-        return prefs.getString(KEY_HERE_API_KEY, "");
+    public String getTomTomApiKey() {
+        return prefs.getString(KEY_TOMTOM_API_KEY, "");
     }
 
-    public boolean hasHereApiKey() {
-        String key = getHereApiKey();
+    public boolean hasTomTomApiKey() {
+        String key = getTomTomApiKey();
         return key != null && !key.isEmpty();
     }
 
-    public void saveHereApiKey(String apiKey) {
+    public void saveTomTomApiKey(String apiKey) {
         prefs.edit()
-                .putString(KEY_HERE_API_KEY, apiKey)
+                .putString(KEY_TOMTOM_API_KEY, apiKey)
                 .apply();
     }
 }

@@ -15,7 +15,7 @@ public class SettingsActivity extends AppCompatActivity {
     private EditText usernameField;
     private EditText passwordField;
     private EditText idfmTokenField;
-    private EditText hereApiKeyField;
+    private EditText tomtomApiKeyField;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -34,7 +34,7 @@ public class SettingsActivity extends AppCompatActivity {
         usernameField = findViewById(R.id.usernameField);
         passwordField = findViewById(R.id.passwordField);
         idfmTokenField = findViewById(R.id.idfmTokenField);
-        hereApiKeyField = findViewById(R.id.hereApiKeyField);
+        tomtomApiKeyField = findViewById(R.id.tomtomApiKeyField);
         Button saveButton = findViewById(R.id.saveButton);
 
         // Charger les valeurs actuelles
@@ -44,7 +44,7 @@ public class SettingsActivity extends AppCompatActivity {
         usernameField.setText(config.getUsername());
         passwordField.setText(config.getPassword());
         idfmTokenField.setText(config.getIdfmToken());
-        hereApiKeyField.setText(config.getHereApiKey());
+        tomtomApiKeyField.setText(config.getTomTomApiKey());
 
         saveButton.setOnClickListener(v -> saveSettings());
     }
@@ -73,12 +73,12 @@ public class SettingsActivity extends AppCompatActivity {
         }
 
         String idfmToken = idfmTokenField.getText().toString().trim();
-        String hereApiKey = hereApiKeyField.getText().toString().trim();
+        String tomtomApiKey = tomtomApiKeyField.getText().toString().trim();
 
         BrokerConfig config = new BrokerConfig(this);
         config.save(ip, port, username, password);
         config.saveIdfmToken(idfmToken);
-        config.saveHereApiKey(hereApiKey);
+        config.saveTomTomApiKey(tomtomApiKey);
 
         Toast.makeText(this, "Configuration sauvegardée", Toast.LENGTH_SHORT).show();
         finish();
