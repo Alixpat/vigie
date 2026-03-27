@@ -26,6 +26,9 @@ import com.google.android.material.card.MaterialCardView;
 
 import android.app.AlertDialog;
 import android.graphics.Typeface;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.RelativeSizeSpan;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 
@@ -257,7 +260,8 @@ public class TrainFragment extends Fragment {
         statusHeader.setPadding(0, 0, 0, dpToPx(12));
         container.addView(statusHeader);
 
-        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat timeFmtHm = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat timeFmtSec = new SimpleDateFormat(":ss", Locale.getDefault());
         long now = System.currentTimeMillis();
 
         // Trouver l'arrêt actuel pour le marqueur
@@ -312,7 +316,12 @@ public class TrainFragment extends Fragment {
             TextView timeView = new TextView(requireContext());
             long bestTime = stop.getBestArrivalMillis();
             if (bestTime > 0) {
-                timeView.setText(timeFmt.format(new Date(bestTime)));
+                Date bestDate = new Date(bestTime);
+                String main = timeFmtHm.format(bestDate);
+                String sec = timeFmtSec.format(bestDate);
+                SpannableString span = new SpannableString(main + sec);
+                span.setSpan(new RelativeSizeSpan(0.7f), main.length(), main.length() + sec.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                timeView.setText(span);
             } else {
                 timeView.setText("--:--");
             }
@@ -417,6 +426,20 @@ public class TrainFragment extends Fragment {
         return (int) (dp * getResources().getDisplayMetrics().density);
     }
 
+    /**
+     * Formate un timestamp avec les secondes en plus petit.
+     * Ex: "MAJ 14:32:05" avec ":05" en taille réduite (0.7x).
+     */
+    private static SpannableString formatTimeWithSmallSeconds(String prefix, Date date) {
+        SimpleDateFormat hhmm = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat ss = new SimpleDateFormat(":ss", Locale.getDefault());
+        String main = prefix + hhmm.format(date);
+        String seconds = ss.format(date);
+        SpannableString span = new SpannableString(main + seconds);
+        span.setSpan(new RelativeSizeSpan(0.7f), main.length(), main.length() + seconds.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return span;
+    }
+
     // ==================== LINE STATUS BANNER ====================
 
     private void updateLineStatusBanner(List<TrainIncident> perturbations,
@@ -506,15 +529,13 @@ public class TrainFragment extends Fragment {
         Date now = new Date();
         Date windowEnd = new Date(now.getTime() + SCHEDULE_WINDOW_MS);
         SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        SimpleDateFormat titleFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        String windowStr = titleFmt.format(now) + " - " + titleFmt.format(windowEnd);
         Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
 
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                 if (!isAdded()) return;
-                scheduleTitleAller.setText("Clamart \u2192 Villepreux (" + windowStr + ")");
-                scheduleTitleRetour.setText("Villepreux \u2192 Clamart (" + windowStr + ")");
+                scheduleTitleAller.setText("Clamart \u2192 Villepreux des 2 prochaines heures");
+                scheduleTitleRetour.setText("Villepreux \u2192 Clamart des 2 prochaines heures");
             });
         }
 
@@ -540,8 +561,7 @@ public class TrainFragment extends Fragment {
                 getActivity().runOnUiThread(() -> {
                     if (!isAdded()) return;
 
-                    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-                    String updateTime = "MAJ " + sdf.format(new Date());
+                    SpannableString updateTime = formatTimeWithSmallSeconds("MAJ ", new Date());
                     scheduleLastUpdateAller.setText(updateTime);
                     scheduleLastUpdateRetour.setText(updateTime);
 
@@ -744,7 +764,7 @@ public class TrainFragment extends Fragment {
             return null;
         }
 
-        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
 
         int filteredByDest = 0;
         int filteredByTime = 0;
@@ -1174,8 +1194,7 @@ public class TrainFragment extends Fragment {
                 getActivity().runOnUiThread(() -> {
                     if (!isAdded()) return;
 
-                    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-                    lineStatusUpdate.setText("MAJ " + sdf.format(new Date()));
+                    lineStatusUpdate.setText(formatTimeWithSmallSeconds("MAJ ", new Date()));
 
                     if (allIncidents == null) {
                         lineStatusSummary.setText("Erreur de chargement");
