@@ -257,7 +257,7 @@ public class TrainFragment extends Fragment {
         statusHeader.setPadding(0, 0, 0, dpToPx(12));
         container.addView(statusHeader);
 
-        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         long now = System.currentTimeMillis();
 
         // Trouver l'arrêt actuel pour le marqueur
@@ -506,7 +506,7 @@ public class TrainFragment extends Fragment {
         Date now = new Date();
         Date windowEnd = new Date(now.getTime() + SCHEDULE_WINDOW_MS);
         SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        SimpleDateFormat titleFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat titleFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
         String windowStr = titleFmt.format(now) + " - " + titleFmt.format(windowEnd);
         Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
 
@@ -744,7 +744,7 @@ public class TrainFragment extends Fragment {
             return null;
         }
 
-        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
+        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
 
         int filteredByDest = 0;
         int filteredByTime = 0;

@@ -79,7 +79,7 @@ public class TrainSchedule {
 
     /**
      * Calcule le temps de trajet entre le départ et l'arrivée.
-     * @return durée formatée (ex: "32 min", "1h12") ou null si indisponible
+     * @return durée formatée (ex: "32min 15s", "1h12min 05s") ou null si indisponible
      */
     public String getTravelTime() {
         if (aimedDepartureMillis <= 0 || arrivalMillis <= 0) {
@@ -89,16 +89,14 @@ public class TrainSchedule {
         if (durationMillis <= 0) {
             return null;
         }
-        long totalMinutes = Math.round(durationMillis / 60_000.0);
-        if (totalMinutes < 60) {
-            return totalMinutes + " min";
+        long totalSeconds = durationMillis / 1000;
+        long hours = totalSeconds / 3600;
+        long minutes = (totalSeconds % 3600) / 60;
+        long seconds = totalSeconds % 60;
+        if (hours > 0) {
+            return hours + "h" + String.format("%02d", minutes) + "min " + String.format("%02d", seconds) + "s";
         }
-        long hours = totalMinutes / 60;
-        long minutes = totalMinutes % 60;
-        if (minutes == 0) {
-            return hours + "h";
-        }
-        return hours + "h" + String.format("%02d", minutes);
+        return minutes + "min " + String.format("%02d", seconds) + "s";
     }
 
     public String getStatusEmoji() {
