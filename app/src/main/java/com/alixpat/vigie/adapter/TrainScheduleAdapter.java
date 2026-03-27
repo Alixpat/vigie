@@ -78,6 +78,14 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             holder.arrivalTime.setVisibility(View.GONE);
         }
 
+        String travelTime = schedule.getTravelTime();
+        if (travelTime != null) {
+            holder.travelTime.setText("Trajet : " + travelTime);
+            holder.travelTime.setVisibility(View.VISIBLE);
+        } else {
+            holder.travelTime.setVisibility(View.GONE);
+        }
+
         if (schedule.isCancelled()) {
             holder.aimedTime.setText(schedule.getAimedDepartureTime());
             holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
@@ -118,6 +126,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         final TextView expectedTime;
         final TextView arrivalArrow;
         final TextView arrivalTime;
+        final TextView travelTime;
         final TextView destination;
         final TextView platform;
         final TextView status;
@@ -128,6 +137,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             expectedTime = itemView.findViewById(R.id.scheduleExpectedTime);
             arrivalArrow = itemView.findViewById(R.id.scheduleArrivalArrow);
             arrivalTime = itemView.findViewById(R.id.scheduleArrivalTime);
+            travelTime = itemView.findViewById(R.id.scheduleTravelTime);
             destination = itemView.findViewById(R.id.scheduleDestination);
             platform = itemView.findViewById(R.id.schedulePlatform);
             status = itemView.findViewById(R.id.scheduleStatus);

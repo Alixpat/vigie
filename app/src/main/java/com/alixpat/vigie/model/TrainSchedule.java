@@ -77,6 +77,30 @@ public class TrainSchedule {
         return 0xFF4CAF50;
     }
 
+    /**
+     * Calcule le temps de trajet entre le départ et l'arrivée.
+     * @return durée formatée (ex: "32 min", "1h12") ou null si indisponible
+     */
+    public String getTravelTime() {
+        if (aimedDepartureMillis <= 0 || arrivalMillis <= 0) {
+            return null;
+        }
+        long durationMillis = arrivalMillis - aimedDepartureMillis;
+        if (durationMillis <= 0) {
+            return null;
+        }
+        long totalMinutes = durationMillis / 60_000;
+        if (totalMinutes < 60) {
+            return totalMinutes + " min";
+        }
+        long hours = totalMinutes / 60;
+        long minutes = totalMinutes % 60;
+        if (minutes == 0) {
+            return hours + "h";
+        }
+        return hours + "h" + String.format("%02d", minutes);
+    }
+
     public String getStatusEmoji() {
         if (isCancelled()) return "\u274C";
         if (isDelayed()) return "\u23F0";
