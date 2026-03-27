@@ -59,6 +59,14 @@
             </LinearLayout>
 
             <TextView
+                android:id="@+id/scheduleTravelTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/text_hint"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/scheduleExpectedTime"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
