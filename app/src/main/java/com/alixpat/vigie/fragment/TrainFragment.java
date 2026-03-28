@@ -70,6 +70,8 @@ public class TrainFragment extends Fragment {
     private static final String ESTIMATED_TIMETABLE_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/estimated-timetable"
                     + "?LineRef=" + LINE_REF;
+    private static final String LINE_REPORTS_URL =
+            "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/line_reports";
     private static final String STOP_POINTS_DISCOVERY_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/stop_points?count=100";
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
@@ -1817,7 +1819,32 @@ public class TrainFragment extends Fragment {
 
         String token = config.getIdfmToken();
         executor.execute(() -> {
-            List<TrainIncident> allIncidents = fetchIncidentsFromApi(token);
+            List<TrainIncident> generalMessageIncidents = fetchIncidentsFromApi(token);
+            List<TrainIncident> lineReportIncidents = fetchLineReportsFromApi(token);
+
+            // Fusionner les deux sources
+            List<TrainIncident> allIncidents = new ArrayList<>();
+            if (lineReportIncidents != null) {
+                allIncidents.addAll(lineReportIncidents);
+            }
+            if (generalMessageIncidents != null) {
+                // Ajouter les messages généraux qui ne font pas doublon
+                for (TrainIncident gm : generalMessageIncidents) {
+                    boolean duplicate = false;
+                    String gmTextLower = gm.getMessage().toLowerCase(Locale.FRENCH);
+                    for (TrainIncident lr : allIncidents) {
+                        String lrTextLower = lr.getMessage().toLowerCase(Locale.FRENCH);
+                        // Doublon si le texte de l'un contient celui de l'autre
+                        if (gmTextLower.contains(lrTextLower) || lrTextLower.contains(gmTextLower)) {
+                            duplicate = true;
+                            break;
+                        }
+                    }
+                    if (!duplicate) {
+                        allIncidents.add(gm);
+                    }
+                }
+            }
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -1825,7 +1852,7 @@ public class TrainFragment extends Fragment {
 
                     lineStatusUpdate.setText(formatTimeWithSmallSeconds("MAJ ", new Date()));
 
-                    if (allIncidents == null) {
+                    if (allIncidents.isEmpty() && generalMessageIncidents == null && lineReportIncidents == null) {
                         lineStatusSummary.setText("Erreur de chargement");
                         perturbationsSection.setVisibility(View.GONE);
                         travauxSection.setVisibility(View.GONE);
@@ -1856,6 +1883,193 @@ public class TrainFragment extends Fragment {
         emptyView.setText(message);
         emptyView.setVisibility(View.VISIBLE);
         recycler.setVisibility(View.GONE);
+    }
+
+    private List<TrainIncident> fetchLineReportsFromApi(String token) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(LINE_REPORTS_URL);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("apikey", token);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
+
+            int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchLineReportsFromApi: response code " + responseCode);
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+
+                List<TrainIncident> result = parseLineReportsResponse(response.toString());
+                Log.i(TAG, "fetchLineReportsFromApi: parsed " + result.size() + " disruptions");
+                return result;
+            } else {
+                Log.w(TAG, "fetchLineReportsFromApi: HTTP error " + responseCode);
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchLineReportsFromApi: network error", e);
+        } finally {
+            if (connection != null) {
+                connection.disconnect();
+            }
+        }
+        return null;
+    }
+
+    private List<TrainIncident> parseLineReportsResponse(String jsonStr) {
+        List<TrainIncident> incidents = new ArrayList<>();
+        try {
+            JSONObject root = new JSONObject(jsonStr);
+            JSONArray disruptions = root.optJSONArray("disruptions");
+            if (disruptions == null) return incidents;
+
+            for (int i = 0; i < disruptions.length(); i++) {
+                JSONObject disruption = disruptions.getJSONObject(i);
+
+                // Statut de la disruption (past = terminée, on ignore)
+                String disruptionStatus = disruption.optString("status", "");
+                if ("past".equalsIgnoreCase(disruptionStatus)) continue;
+
+                // Sévérité
+                JSONObject severityObj = disruption.optJSONObject("severity");
+                String severityEffect = "";
+                String severityName = "";
+                int severityPriority = 99;
+                if (severityObj != null) {
+                    severityEffect = severityObj.optString("effect", "");
+                    severityName = severityObj.optString("name", "");
+                    severityPriority = severityObj.optInt("priority", 99);
+                }
+
+                // Cause
+                String cause = disruption.optString("cause", "");
+
+                // Périodes d'application
+                String validFrom = "";
+                String validUntil = "";
+                JSONArray periods = disruption.optJSONArray("application_periods");
+                if (periods != null && periods.length() > 0) {
+                    JSONObject period = periods.getJSONObject(0);
+                    validFrom = formatNavitiaDateTime(period.optString("begin", ""));
+                    validUntil = formatNavitiaDateTime(period.optString("end", ""));
+                }
+
+                // Messages
+                String text = "";
+                JSONArray messages = disruption.optJSONArray("messages");
+                if (messages != null) {
+                    for (int j = 0; j < messages.length(); j++) {
+                        JSONObject msgObj = messages.getJSONObject(j);
+                        String msgText = msgObj.optString("text", "");
+                        String channel = "";
+                        JSONObject channelObj = msgObj.optJSONObject("channel");
+                        if (channelObj != null) {
+                            channel = channelObj.optString("name", "");
+                        }
+                        // Préférer le message du canal "titre" ou le plus long
+                        if (text.isEmpty() || msgText.length() > text.length()) {
+                            text = msgText;
+                        }
+                    }
+                }
+
+                if (text.isEmpty()) {
+                    text = cause.isEmpty() ? severityName : cause;
+                }
+                if (text.isEmpty()) continue;
+
+                // Classifier
+                String type;
+                String severity;
+                String textLower = text.toLowerCase(Locale.FRENCH);
+                String causeLower = cause.toLowerCase(Locale.FRENCH);
+
+                boolean isBlocking = "NO_SERVICE".equalsIgnoreCase(severityEffect)
+                        || "SIGNIFICANT_DELAYS".equalsIgnoreCase(severityEffect)
+                        || severityPriority <= 1;
+                boolean isDisturbed = "REDUCED_SERVICE".equalsIgnoreCase(severityEffect)
+                        || "DETOUR".equalsIgnoreCase(severityEffect)
+                        || "OTHER_EFFECT".equalsIgnoreCase(severityEffect)
+                        || severityPriority <= 3;
+
+                // Détection travaux
+                boolean isTravaux = false;
+                for (String keyword : TRAVAUX_KEYWORDS) {
+                    if (textLower.contains(keyword) || causeLower.contains(keyword)) {
+                        isTravaux = true;
+                        break;
+                    }
+                }
+
+                if (isTravaux && !isBlocking) {
+                    type = TrainIncident.TYPE_TRAVAUX;
+                    severity = "information";
+                } else if (isBlocking) {
+                    type = TrainIncident.TYPE_PERTURBATION;
+                    severity = "blocking";
+                } else if (isDisturbed) {
+                    type = TrainIncident.TYPE_PERTURBATION;
+                    severity = "delays";
+                } else {
+                    // Vérifier les mots-clés de perturbation dans le texte
+                    boolean hasPerturbKeyword = false;
+                    for (String keyword : PERTURBATION_KEYWORDS) {
+                        if (textLower.contains(keyword)) {
+                            hasPerturbKeyword = true;
+                            break;
+                        }
+                    }
+                    if (hasPerturbKeyword) {
+                        type = TrainIncident.TYPE_PERTURBATION;
+                        severity = "delays";
+                    } else {
+                        type = TrainIncident.TYPE_INFORMATION;
+                        severity = "information";
+                    }
+                }
+
+                String title;
+                if (TrainIncident.TYPE_PERTURBATION.equals(type)) {
+                    title = "Perturbation Ligne N";
+                } else if (TrainIncident.TYPE_TRAVAUX.equals(type)) {
+                    title = "Travaux Ligne N";
+                } else {
+                    title = "Info Ligne N";
+                }
+
+                incidents.add(new TrainIncident(
+                        title, text, severity, cause, validFrom, validUntil, type
+                ));
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "parseLineReportsResponse: error parsing JSON", e);
+            Log.d(TAG, "parseLineReportsResponse: raw (first 500): "
+                    + jsonStr.substring(0, Math.min(500, jsonStr.length())));
+        }
+        return incidents;
+    }
+
+    private static String formatNavitiaDateTime(String navitiaDate) {
+        if (navitiaDate == null || navitiaDate.isEmpty()) return "";
+        try {
+            // Format Navitia: "20260328T143000" -> "2026-03-28 14:30"
+            if (navitiaDate.length() >= 13) {
+                return navitiaDate.substring(0, 4) + "-" + navitiaDate.substring(4, 6) + "-"
+                        + navitiaDate.substring(6, 8) + " " + navitiaDate.substring(9, 11)
+                        + ":" + navitiaDate.substring(11, 13);
+            }
+            return navitiaDate;
+        } catch (Exception e) {
+            return navitiaDate;
+        }
     }
 
     private List<TrainIncident> fetchIncidentsFromApi(String token) {

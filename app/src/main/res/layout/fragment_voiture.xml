@@ -23,18 +23,8 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="4dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/status_info" />
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp">
+                android:orientation="vertical"
+                android:padding="12dp">
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -46,7 +36,7 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            android:text="Temps de trajet voiture"
+                            android:text="Temps de trajet estimé"
                             android:textSize="15sp"
                             android:textStyle="bold"
                             android:textColor="@color/text_primary" />
@@ -153,7 +143,6 @@
                             android:visibility="gone" />
                     </LinearLayout>
                 </LinearLayout>
-            </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
         <TextView
