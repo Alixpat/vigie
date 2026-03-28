@@ -684,6 +684,14 @@ public class TrainFragment extends Fragment {
                         }
                     }
                     if (journeyRef.isEmpty()) {
+                        JSONObject djrObj = journey.optJSONObject("DatedVehicleJourneyRef");
+                        if (djrObj != null) {
+                            journeyRef = djrObj.optString("value", "");
+                        } else {
+                            journeyRef = journey.optString("DatedVehicleJourneyRef", "");
+                        }
+                    }
+                    if (journeyRef.isEmpty()) {
                         noJourneyRef++;
                         continue;
                     }
@@ -1047,6 +1055,17 @@ public class TrainFragment extends Fragment {
                         } else {
                             if (f == 0 && j == 0) {
                                 Log.d(TAG, "parseEstimatedTimetable: journey[0] pas de FramedVehicleJourneyRef");
+                            }
+                        }
+                        if (journeyRef.isEmpty()) {
+                            JSONObject djrObj = journey.optJSONObject("DatedVehicleJourneyRef");
+                            if (djrObj != null) {
+                                journeyRef = djrObj.optString("value", "");
+                            } else {
+                                journeyRef = journey.optString("DatedVehicleJourneyRef", "");
+                            }
+                            if (f == 0 && j == 0 && !journeyRef.isEmpty()) {
+                                Log.d(TAG, "parseEstimatedTimetable: journey[0] using direct DatedVehicleJourneyRef=" + journeyRef);
                             }
                         }
                         if (journeyRef.isEmpty()) {
