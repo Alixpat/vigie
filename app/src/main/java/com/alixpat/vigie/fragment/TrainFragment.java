@@ -70,6 +70,9 @@ public class TrainFragment extends Fragment {
     private static final String ESTIMATED_TIMETABLE_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/estimated-timetable"
                     + "?LineRef=" + LINE_REF;
+    private static final String STOP_POINTS_DISCOVERY_URL =
+            "https://prim.iledefrance-mobilites.fr/marketplace/stop-points-discovery"
+                    + "?LineRef=" + LINE_REF;
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
@@ -124,6 +127,7 @@ public class TrainFragment extends Fragment {
     private final Map<String, List<TrainStop>> journeyStopsCache = new HashMap<>();
     private final Map<String, String> journeyTrainNumberCache = new HashMap<>();
     private final Map<String, String> journeyMissionNameCache = new HashMap<>();
+    private final Map<String, String> stopPointNameCache = new HashMap<>();
 
     private final Runnable refreshRunnable = new Runnable() {
         @Override
@@ -216,6 +220,7 @@ public class TrainFragment extends Fragment {
     private void fetchAll() {
         fetchSchedules();
         fetchIncidents();
+        fetchStopPointNames();
         fetchEstimatedTimetable();
     }
 
@@ -1224,6 +1229,127 @@ public class TrainFragment extends Fragment {
         }
     }
 
+    // ==================== STOP POINTS DISCOVERY (noms des arrêts) ====================
+
+    private void fetchStopPointNames() {
+        if (!stopPointNameCache.isEmpty()) return; // Déjà chargé
+        BrokerConfig config = new BrokerConfig(requireContext());
+        if (!config.hasIdfmToken()) return;
+
+        String token = config.getIdfmToken();
+        executor.execute(() -> fetchAndParseStopPointNames(token));
+    }
+
+    private void fetchAndParseStopPointNames(String token) {
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL(STOP_POINTS_DISCOVERY_URL);
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("apikey", token);
+            connection.setRequestProperty("Accept", "application/json");
+            connection.setConnectTimeout(15000);
+            connection.setReadTimeout(15000);
+
+            int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchStopPointNames: HTTP " + responseCode);
+
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                BufferedReader reader = new BufferedReader(
+                        new InputStreamReader(connection.getInputStream()));
+                StringBuilder response = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    response.append(line);
+                }
+                reader.close();
+                parseStopPointNames(response.toString());
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "fetchStopPointNames: exception", e);
+        } finally {
+            if (connection != null) connection.disconnect();
+        }
+    }
+
+    private void parseStopPointNames(String jsonStr) {
+        try {
+            JSONObject root = new JSONObject(jsonStr);
+            JSONObject siri = root.optJSONObject("Siri");
+            if (siri == null) { siri = root; }
+
+            JSONObject delivery = siri.optJSONObject("StopPointsDelivery");
+            if (delivery == null) {
+                Log.w(TAG, "parseStopPointNames: pas de StopPointsDelivery");
+                return;
+            }
+
+            JSONArray annotated = delivery.optJSONArray("AnnotatedStopPointRef");
+            if (annotated == null) {
+                // Essayer en tant qu'objet unique
+                JSONObject single = delivery.optJSONObject("AnnotatedStopPointRef");
+                if (single != null) {
+                    annotated = new JSONArray();
+                    annotated.put(single);
+                }
+            }
+            if (annotated == null) {
+                Log.w(TAG, "parseStopPointNames: pas de AnnotatedStopPointRef");
+                return;
+            }
+
+            int count = 0;
+            for (int i = 0; i < annotated.length(); i++) {
+                JSONObject entry = annotated.getJSONObject(i);
+
+                String stopRef = "";
+                JSONObject stopRefObj = entry.optJSONObject("StopPointRef");
+                if (stopRefObj != null) {
+                    stopRef = stopRefObj.optString("value", "");
+                } else {
+                    stopRef = entry.optString("StopPointRef", "");
+                }
+
+                String stopName = "";
+                JSONObject stopNameObj = entry.optJSONObject("StopName");
+                if (stopNameObj != null) {
+                    stopName = stopNameObj.optString("value", "");
+                } else {
+                    stopName = entry.optString("StopName", "");
+                }
+
+                if (!stopRef.isEmpty() && !stopName.isEmpty()) {
+                    // Extraire l'ID numérique du ref (ex: "STIF:StopPoint:Q:43111:" -> "43111")
+                    String numericId = extractNumericId(stopRef);
+                    if (!numericId.isEmpty()) {
+                        stopPointNameCache.put(numericId, stopName);
+                        count++;
+                    }
+                }
+            }
+            Log.i(TAG, "parseStopPointNames: " + count + " arrêts chargés dans le cache");
+
+        } catch (Exception e) {
+            Log.e(TAG, "parseStopPointNames: exception JSON", e);
+        }
+    }
+
+    /**
+     * Extrait l'ID numérique d'un StopPointRef STIF.
+     * Ex: "STIF:StopPoint:Q:43111:" -> "43111"
+     * Ex: "STIF:StopArea:SP:43111:" -> "43111"
+     */
+    private static String extractNumericId(String stopRef) {
+        if (stopRef == null || stopRef.isEmpty()) return "";
+        String[] parts = stopRef.split(":");
+        for (int p = parts.length - 1; p >= 0; p--) {
+            if (!parts[p].isEmpty()) {
+                return parts[p];
+            }
+        }
+        return "";
+    }
+
     // ==================== ESTIMATED TIMETABLE (tous les arrêts) ====================
 
     private void fetchEstimatedTimetable() {
@@ -1470,7 +1596,7 @@ public class TrainFragment extends Fragment {
                     stopName = stopNameObj.optString("value", "");
                 }
             }
-            // Fallback : extraire le nom depuis StopPointRef si StopPointName absent
+            // Fallback : résoudre le nom depuis StopPointRef via le cache stop-points-discovery
             if (stopName.isEmpty()) {
                 String stopRef = "";
                 JSONObject stopRefObj = call.optJSONObject("StopPointRef");
@@ -1480,12 +1606,14 @@ public class TrainFragment extends Fragment {
                     stopRef = call.optString("StopPointRef", "");
                 }
                 if (!stopRef.isEmpty()) {
-                    // Extraire un nom lisible du ref (ex: "STIF:StopPoint:Q:43111:" -> "Arrêt 43111")
-                    String[] parts = stopRef.split(":");
-                    for (int p = parts.length - 1; p >= 0; p--) {
-                        if (!parts[p].isEmpty()) {
-                            stopName = "Arrêt " + parts[p];
-                            break;
+                    String numericId = extractNumericId(stopRef);
+                    if (!numericId.isEmpty()) {
+                        // Chercher dans le cache stop-points-discovery
+                        String cached = stopPointNameCache.get(numericId);
+                        if (cached != null && !cached.isEmpty()) {
+                            stopName = cached;
+                        } else {
+                            stopName = "Arrêt " + numericId;
                         }
                     }
                 }
