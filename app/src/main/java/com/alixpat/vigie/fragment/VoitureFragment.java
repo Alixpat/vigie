@@ -41,7 +41,7 @@ public class VoitureFragment extends Fragment {
 
     private static final String TAG = "VoitureFragment";
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
-    private static final long HISTORY_WINDOW_MS = 30 * 60 * 1000; // 30 minutes
+    private static final long HISTORY_WINDOW_MS = 2 * 60 * 60 * 1000; // 2 heures
 
     private static final String TOMTOM_ROUTING_URL = "https://api.tomtom.com/routing/1/calculateRoute";
     // Rue Claude Bernard, Issy-les-Moulineaux
@@ -262,8 +262,8 @@ public class VoitureFragment extends Fragment {
         int diffSeconds = currentSeconds - averageSeconds;
 
         trendView.setVisibility(View.VISIBLE);
-        // Ignore minor variations (less than 2 minutes)
-        if (Math.abs(diffSeconds) < 120) {
+        // Ignore minor variations (less than 1 minute)
+        if (Math.abs(diffSeconds) < 60) {
             trendView.setText("\u2192"); // → stable
             trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_info));
         } else if (diffSeconds > 0) {
