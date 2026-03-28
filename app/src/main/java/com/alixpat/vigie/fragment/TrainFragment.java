@@ -71,8 +71,7 @@ public class TrainFragment extends Fragment {
             "https://prim.iledefrance-mobilites.fr/marketplace/estimated-timetable"
                     + "?LineRef=" + LINE_REF;
     private static final String STOP_POINTS_DISCOVERY_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/stop-points-discovery"
-                    + "?LineRef=" + LINE_REF;
+            "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/stop_points?count=100";
     private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
     private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
 
@@ -1275,59 +1274,27 @@ public class TrainFragment extends Fragment {
     private void parseStopPointNames(String jsonStr) {
         try {
             JSONObject root = new JSONObject(jsonStr);
-            JSONObject siri = root.optJSONObject("Siri");
-            if (siri == null) { siri = root; }
-
-            JSONObject delivery = siri.optJSONObject("StopPointsDelivery");
-            if (delivery == null) {
-                Log.w(TAG, "parseStopPointNames: pas de StopPointsDelivery");
-                return;
-            }
-
-            JSONArray annotated = delivery.optJSONArray("AnnotatedStopPointRef");
-            if (annotated == null) {
-                // Essayer en tant qu'objet unique
-                JSONObject single = delivery.optJSONObject("AnnotatedStopPointRef");
-                if (single != null) {
-                    annotated = new JSONArray();
-                    annotated.put(single);
-                }
-            }
-            if (annotated == null) {
-                Log.w(TAG, "parseStopPointNames: pas de AnnotatedStopPointRef");
+            JSONArray stopPoints = root.optJSONArray("stop_points");
+            if (stopPoints == null) {
+                Log.w(TAG, "parseStopPointNames: pas de stop_points dans la réponse Navitia");
                 return;
             }
 
             int count = 0;
-            for (int i = 0; i < annotated.length(); i++) {
-                JSONObject entry = annotated.getJSONObject(i);
+            for (int i = 0; i < stopPoints.length(); i++) {
+                JSONObject entry = stopPoints.getJSONObject(i);
+                String stopId = entry.optString("id", "");
+                String stopName = entry.optString("name", "");
 
-                String stopRef = "";
-                JSONObject stopRefObj = entry.optJSONObject("StopPointRef");
-                if (stopRefObj != null) {
-                    stopRef = stopRefObj.optString("value", "");
-                } else {
-                    stopRef = entry.optString("StopPointRef", "");
-                }
-
-                String stopName = "";
-                JSONObject stopNameObj = entry.optJSONObject("StopName");
-                if (stopNameObj != null) {
-                    stopName = stopNameObj.optString("value", "");
-                } else {
-                    stopName = entry.optString("StopName", "");
-                }
-
-                if (!stopRef.isEmpty() && !stopName.isEmpty()) {
-                    // Extraire l'ID numérique du ref (ex: "STIF:StopPoint:Q:43111:" -> "43111")
-                    String numericId = extractNumericId(stopRef);
+                if (!stopId.isEmpty() && !stopName.isEmpty()) {
+                    String numericId = extractNumericId(stopId);
                     if (!numericId.isEmpty()) {
                         stopPointNameCache.put(numericId, stopName);
                         count++;
                     }
                 }
             }
-            Log.i(TAG, "parseStopPointNames: " + count + " arrêts chargés dans le cache");
+            Log.i(TAG, "parseStopPointNames: " + count + " arrêts chargés dans le cache (Navitia)");
 
         } catch (Exception e) {
             Log.e(TAG, "parseStopPointNames: exception JSON", e);
