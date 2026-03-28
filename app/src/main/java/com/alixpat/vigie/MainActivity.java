@@ -32,11 +32,10 @@ import com.google.android.material.tabs.TabLayoutMediator;
 public class MainActivity extends AppCompatActivity {
 
     private static final int REQUEST_NOTIFICATION_PERMISSION = 1001;
-    private static final String[] TAB_TITLES = {"Messages", "LAN", "Backup", "Météo", "Train", "Voiture"};
+    private static final String[] TAB_TITLES = {"Messages", "Infra", "Météo", "Train", "Voiture"};
     private static final int[] TAB_ICONS = {
             R.drawable.ic_tab_messages,
             R.drawable.ic_tab_lan,
-            R.drawable.ic_tab_backup,
             R.drawable.ic_tab_meteo,
             R.drawable.ic_tab_train,
             R.drawable.ic_tab_voiture

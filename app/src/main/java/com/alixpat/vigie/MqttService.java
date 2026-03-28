@@ -20,9 +20,9 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
-import com.alixpat.vigie.fragment.BackupFragment;
-import com.alixpat.vigie.fragment.LanFragment;
+import com.alixpat.vigie.fragment.InfraFragment;
 import com.alixpat.vigie.model.BackupJob;
+import com.alixpat.vigie.model.InternetStatus;
 import com.alixpat.vigie.model.LanHost;
 import com.alixpat.vigie.model.VigieMessage;
 
@@ -63,6 +63,10 @@ public class MqttService extends Service {
     private static final Map<String, BackupJob> backupJobsCache =
             Collections.synchronizedMap(new LinkedHashMap<>());
 
+    // Cache des statuts internet
+    private static final Map<String, InternetStatus> internetCache =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
     public static String getCurrentStatus() {
         return currentStatus;
     }
@@ -86,6 +90,12 @@ public class MqttService extends Service {
     public static Map<String, BackupJob> getBackupJobsCache() {
         synchronized (backupJobsCache) {
             return new LinkedHashMap<>(backupJobsCache);
+        }
+    }
+
+    public static Map<String, InternetStatus> getInternetCache() {
+        synchronized (internetCache) {
+            return new LinkedHashMap<>(internetCache);
         }
     }
 
@@ -182,7 +192,7 @@ public class MqttService extends Service {
                     LanHost lanHost = LanHost.fromJson(payload);
                     if (lanHost != null) {
                         lanHostsCache.put(lanHost.getIp(), lanHost);
-                        Intent broadcast = new Intent(LanFragment.ACTION_LAN_STATUS);
+                        Intent broadcast = new Intent(InfraFragment.ACTION_LAN_STATUS);
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
                         sendBroadcast(broadcast);
@@ -192,7 +202,17 @@ public class MqttService extends Service {
                     BackupJob backupJob = BackupJob.fromJson(payload);
                     if (backupJob != null) {
                         backupJobsCache.put(backupJob.getJob(), backupJob);
-                        Intent broadcast = new Intent(BackupFragment.ACTION_BACKUP_STATUS);
+                        Intent broadcast = new Intent(InfraFragment.ACTION_BACKUP_STATUS);
+                        broadcast.putExtra("payload", payload);
+                        broadcast.setPackage(getPackageName());
+                        sendBroadcast(broadcast);
+                        return;
+                    }
+
+                    InternetStatus internetStatus = InternetStatus.fromJson(payload);
+                    if (internetStatus != null) {
+                        internetCache.put(internetStatus.getName(), internetStatus);
+                        Intent broadcast = new Intent(InfraFragment.ACTION_INTERNET_STATUS);
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
                         sendBroadcast(broadcast);
