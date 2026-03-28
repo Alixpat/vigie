@@ -834,8 +834,7 @@ public class TrainFragment extends Fragment {
 
                 String apiUrl = STOP_MONITORING_URL
                         + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
-                        + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8")
-                        + "&MaximumNumberOfCalls.Onwards=20";
+                        + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
 
                 Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: URL=" + apiUrl);
 
@@ -1022,39 +1021,6 @@ public class TrainFragment extends Fragment {
                     }
 
                     visits.put(journeyRef, raw);
-
-                    // Construire la liste d'arrêts depuis MonitoredCall + OnwardCalls
-                    // pour les trajets absents de l'estimated-timetable
-                    if (!journeyStopsCache.containsKey(journeyRef)) {
-                        SimpleDateFormat isoFmt = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
-                        SimpleDateFormat isoFmtNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-                        isoFmtNoTz.setTimeZone(TimeZone.getDefault());
-                        List<TrainStop> onwardStops = new ArrayList<>();
-
-                        // MonitoredCall = arrêt actuel
-                        TrainStop monitoredStop = parseEstimatedCall(call, isoFmt, isoFmtNoTz, true, false);
-                        if (monitoredStop != null) onwardStops.add(monitoredStop);
-
-                        // OnwardCalls = arrêts suivants
-                        JSONObject onwardCalls = journey.optJSONObject("OnwardCalls");
-                        if (onwardCalls != null) {
-                            JSONArray onwardArray = getFlexibleJSONArray(onwardCalls, "OnwardCall");
-                            if (onwardArray != null) {
-                                for (int oc = 0; oc < onwardArray.length(); oc++) {
-                                    boolean isLast = (oc == onwardArray.length() - 1);
-                                    TrainStop stop = parseEstimatedCall(
-                                            onwardArray.getJSONObject(oc), isoFmt, isoFmtNoTz, false, isLast);
-                                    if (stop != null) onwardStops.add(stop);
-                                }
-                            }
-                        }
-
-                        if (onwardStops.size() > 1) {
-                            journeyStopsCache.put(journeyRef, onwardStops);
-                            Log.i(TAG, "parseRawStopVisits: OnwardCalls pour " + journeyRef
-                                    + " → " + onwardStops.size() + " arrêts cachés");
-                        }
-                    }
                 } catch (Exception e) {
                     parseErrors++;
                     Log.e(TAG, "parseRawStopVisits [" + stationLabel + "]: erreur visite #" + i, e);
