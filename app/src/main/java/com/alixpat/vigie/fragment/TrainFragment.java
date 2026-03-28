@@ -1011,27 +1011,48 @@ public class TrainFragment extends Fragment {
             int totalJourneys = 0;
             int totalStops = 0;
 
+            Log.d(TAG, "parseEstimatedTimetable: frames.length=" + frames.length());
             for (int f = 0; f < frames.length(); f++) {
                 JSONObject frame = frames.getJSONObject(f);
-                if (!frame.has("EstimatedVehicleJourney")) continue;
+                if (f == 0) {
+                    Log.d(TAG, "parseEstimatedTimetable: frame[0] keys=" + iteratorToString(frame.keys()));
+                }
+                if (!frame.has("EstimatedVehicleJourney")) {
+                    Log.d(TAG, "parseEstimatedTimetable: frame[" + f + "] pas de EstimatedVehicleJourney");
+                    continue;
+                }
 
                 JSONArray journeys = getFlexibleJSONArray(frame, "EstimatedVehicleJourney");
                 if (journeys == null) continue;
+                Log.d(TAG, "parseEstimatedTimetable: frame[" + f + "] journeys.length=" + journeys.length());
                 for (int j = 0; j < journeys.length(); j++) {
                     try {
                         JSONObject journey = journeys.getJSONObject(j);
+                        if (j == 0 && f == 0) {
+                            Log.d(TAG, "parseEstimatedTimetable: journey[0] keys=" + iteratorToString(journey.keys()));
+                        }
 
                         String journeyRef = "";
                         JSONObject framedRef = journey.optJSONObject("FramedVehicleJourneyRef");
                         if (framedRef != null) {
+                            if (f == 0 && j == 0) {
+                                Log.d(TAG, "parseEstimatedTimetable: framedRef keys=" + iteratorToString(framedRef.keys()));
+                            }
                             JSONObject jrObj = framedRef.optJSONObject("DatedVehicleJourneyRef");
                             if (jrObj != null) {
                                 journeyRef = jrObj.optString("value", "");
                             } else {
                                 journeyRef = framedRef.optString("DatedVehicleJourneyRef", "");
                             }
+                        } else {
+                            if (f == 0 && j == 0) {
+                                Log.d(TAG, "parseEstimatedTimetable: journey[0] pas de FramedVehicleJourneyRef");
+                            }
                         }
-                        if (journeyRef.isEmpty()) continue;
+                        if (journeyRef.isEmpty()) {
+                            if (j < 3) Log.d(TAG, "parseEstimatedTimetable: journey[" + j + "] journeyRef vide, skip");
+                            continue;
+                        }
 
                         List<TrainStop> stops = new ArrayList<>();
 
@@ -1154,6 +1175,16 @@ public class TrainFragment extends Fragment {
         if (isoStr == null || isoStr.isEmpty()) return 0;
         Date d = parseIsoDateTime(isoStr, withTz, withoutTz);
         return d != null ? d.getTime() : 0;
+    }
+
+    private String iteratorToString(java.util.Iterator<?> it) {
+        StringBuilder sb = new StringBuilder("[");
+        while (it.hasNext()) {
+            if (sb.length() > 1) sb.append(", ");
+            sb.append(it.next());
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**
