@@ -301,7 +301,7 @@ public class TrainFragment extends Fragment {
         statusHeader.setTextColor(schedule.getStatusColor());
         statusHeader.setTextSize(14);
         statusHeader.setTypeface(null, Typeface.BOLD);
-        statusHeader.setPadding(0, 0, 0, dpToPx(12));
+        statusHeader.setPadding(0, 0, 0, dpToPx(4));
         container.addView(statusHeader);
 
         SimpleDateFormat timeFmtHm = new SimpleDateFormat("HH:mm", Locale.getDefault());
@@ -327,6 +327,41 @@ public class TrainFragment extends Fragment {
                     break;
                 }
             }
+        }
+
+        // Résumé de la position actuelle du train
+        String positionText = null;
+        if (currentStopIndex >= 0) {
+            positionText = "\uD83D\uDCCD En gare de " + stops.get(currentStopIndex).getStopName();
+        } else if (betweenAfterIndex >= 0 && betweenAfterIndex + 1 < stops.size()) {
+            positionText = "\uD83D\uDE86 Entre " + stops.get(betweenAfterIndex).getStopName()
+                    + " et " + stops.get(betweenAfterIndex + 1).getStopName();
+        } else {
+            // Tous UPCOMING = pas encore parti
+            boolean allUpcoming = true;
+            for (TrainStop s : stops) {
+                if (s.getStatus() != TrainStop.StopStatus.UPCOMING) { allUpcoming = false; break; }
+            }
+            if (allUpcoming && !stops.isEmpty()) {
+                positionText = "\u23F3 Pas encore parti de " + stops.get(0).getStopName();
+            }
+            // Tous PASSED = arrivé
+            boolean allPassed = true;
+            for (TrainStop s : stops) {
+                if (s.getStatus() != TrainStop.StopStatus.PASSED) { allPassed = false; break; }
+            }
+            if (allPassed && !stops.isEmpty()) {
+                positionText = "\u2705 Arrivé à " + stops.get(stops.size() - 1).getStopName();
+            }
+        }
+        if (positionText != null) {
+            TextView positionView = new TextView(requireContext());
+            positionView.setText(positionText);
+            positionView.setTextColor(0xFF1976D2);
+            positionView.setTextSize(14);
+            positionView.setTypeface(null, Typeface.BOLD);
+            positionView.setPadding(0, dpToPx(4), 0, dpToPx(12));
+            container.addView(positionView);
         }
 
         for (int i = 0; i < stops.size(); i++) {
