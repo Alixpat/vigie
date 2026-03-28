@@ -10,6 +10,9 @@ public class InternetStatus {
     private String host;
     private String status;
     private Double latency_ms;
+    private String last_downtime_start;
+    private String last_downtime_end;
+    private Double last_downtime_duration_minutes;
     private transient long lastUpdate;
 
     private static final Gson gson = new Gson();
@@ -36,6 +39,18 @@ public class InternetStatus {
 
     public Double getLatencyMs() {
         return latency_ms;
+    }
+
+    public String getLastDowntimeStart() {
+        return last_downtime_start;
+    }
+
+    public String getLastDowntimeEnd() {
+        return last_downtime_end;
+    }
+
+    public Double getLastDowntimeDurationMinutes() {
+        return last_downtime_duration_minutes;
     }
 
     public long getLastUpdate() {

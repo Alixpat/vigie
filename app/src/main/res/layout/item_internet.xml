@@ -44,6 +44,14 @@
                 android:textColor="@color/text_secondary" />
 
             <TextView
+                android:id="@+id/downtimeText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textColor="@color/status_warning"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/lastUpdateText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"

@@ -58,6 +58,23 @@ public class InternetAdapter extends RecyclerView.Adapter<InternetAdapter.ViewHo
         GradientDrawable indicator = (GradientDrawable) holder.statusIndicator.getBackground();
         indicator.setColor(color);
 
+        // Dernière coupure
+        if (item.getLastDowntimeDurationMinutes() != null && item.getLastDowntimeDurationMinutes() > 0) {
+            double mins = item.getLastDowntimeDurationMinutes();
+            String durationStr;
+            if (mins >= 60) {
+                int h = (int) (mins / 60);
+                int m = (int) (mins % 60);
+                durationStr = h + "h" + (m > 0 ? String.format(Locale.getDefault(), "%02dm", m) : "");
+            } else {
+                durationStr = String.format(Locale.getDefault(), "%.0f min", mins);
+            }
+            holder.downtimeText.setText("Dernière coupure : " + durationStr);
+            holder.downtimeText.setVisibility(View.VISIBLE);
+        } else {
+            holder.downtimeText.setVisibility(View.GONE);
+        }
+
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 item.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
@@ -74,6 +91,7 @@ public class InternetAdapter extends RecyclerView.Adapter<InternetAdapter.ViewHo
         final View statusIndicator;
         final TextView nameText;
         final TextView detailText;
+        final TextView downtimeText;
         final TextView lastUpdateText;
 
         ViewHolder(@NonNull View itemView) {
@@ -81,6 +99,7 @@ public class InternetAdapter extends RecyclerView.Adapter<InternetAdapter.ViewHo
             statusIndicator = itemView.findViewById(R.id.statusIndicator);
             nameText = itemView.findViewById(R.id.nameText);
             detailText = itemView.findViewById(R.id.detailText);
+            downtimeText = itemView.findViewById(R.id.downtimeText);
             lastUpdateText = itemView.findViewById(R.id.lastUpdateText);
         }
     }
