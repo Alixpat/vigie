@@ -20,7 +20,9 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
+import com.alixpat.vigie.fragment.BackupFragment;
 import com.alixpat.vigie.fragment.LanFragment;
+import com.alixpat.vigie.model.BackupJob;
 import com.alixpat.vigie.model.LanHost;
 import com.alixpat.vigie.model.VigieMessage;
 
@@ -57,6 +59,10 @@ public class MqttService extends Service {
     private static final Map<String, LanHost> lanHostsCache =
             Collections.synchronizedMap(new LinkedHashMap<>());
 
+    // Cache des jobs de sauvegarde
+    private static final Map<String, BackupJob> backupJobsCache =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
     public static String getCurrentStatus() {
         return currentStatus;
     }
@@ -74,6 +80,12 @@ public class MqttService extends Service {
     public static Map<String, LanHost> getLanHostsCache() {
         synchronized (lanHostsCache) {
             return new LinkedHashMap<>(lanHostsCache);
+        }
+    }
+
+    public static Map<String, BackupJob> getBackupJobsCache() {
+        synchronized (backupJobsCache) {
+            return new LinkedHashMap<>(backupJobsCache);
         }
     }
 
@@ -171,6 +183,16 @@ public class MqttService extends Service {
                     if (lanHost != null) {
                         lanHostsCache.put(lanHost.getIp(), lanHost);
                         Intent broadcast = new Intent(LanFragment.ACTION_LAN_STATUS);
+                        broadcast.putExtra("payload", payload);
+                        broadcast.setPackage(getPackageName());
+                        sendBroadcast(broadcast);
+                        return;
+                    }
+
+                    BackupJob backupJob = BackupJob.fromJson(payload);
+                    if (backupJob != null) {
+                        backupJobsCache.put(backupJob.getJob(), backupJob);
+                        Intent broadcast = new Intent(BackupFragment.ACTION_BACKUP_STATUS);
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
                         sendBroadcast(broadcast);
