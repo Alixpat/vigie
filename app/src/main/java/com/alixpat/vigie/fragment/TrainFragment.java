@@ -266,6 +266,9 @@ public class TrainFragment extends Fragment {
     }
 
     private void showStopByStopDialog(TrainSchedule schedule, List<TrainStop> stops) {
+        // Trier les arrêts chronologiquement
+        stops = new ArrayList<>(stops);
+        Collections.sort(stops, (a, b) -> Long.compare(a.getBestTimeMillis(), b.getBestTimeMillis()));
         ScrollView scrollView = new ScrollView(requireContext());
         LinearLayout container = new LinearLayout(requireContext());
         container.setOrientation(LinearLayout.VERTICAL);
@@ -397,7 +400,7 @@ public class TrainFragment extends Fragment {
             if (stop.getPlatformName() != null && !stop.getPlatformName().isEmpty()
                     && (i == currentStopIndex || status == TrainStop.StopStatus.UPCOMING)) {
                 TextView platformView = new TextView(requireContext());
-                platformView.setText("  v." + stop.getPlatformName());
+                platformView.setText("  Voie " + stop.getPlatformName());
                 platformView.setTextSize(11);
                 platformView.setTextColor(0xFF9E9E9E);
                 row.addView(platformView);
@@ -1163,7 +1166,7 @@ public class TrainFragment extends Fragment {
         }
 
         Collections.sort(schedules, (a, b) ->
-                a.getAimedDepartureTime().compareTo(b.getAimedDepartureTime()));
+                Long.compare(a.getAimedDepartureMillis(), b.getAimedDepartureMillis()));
 
         Log.i(TAG, "buildCrossReferenced [" + directionLabel + "]: RÉSUMÉ"
                 + " total_origine=" + originData.size()
