@@ -554,7 +554,7 @@ public class TrainFragment extends Fragment {
             for (int i = 0; i < stops.size(); i++) {
                 TrainStop s = stops.get(i);
                 if (i > 0) stopStatuses.append(" | ");
-                stopStatuses.append(s.getStopName()).append("=").append(s.getStatus());
+                stopStatuses.append(resolveStopName(s.getStopName())).append("=").append(s.getStatus());
             }
             Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " stops(" + stops.size() + "): " + stopStatuses);
 
@@ -564,9 +564,9 @@ public class TrainFragment extends Fragment {
                 TrainStop.StopStatus status = stop.getStatus();
 
                 if (status == TrainStop.StopStatus.CURRENT) {
-                    currentStop = stop.getStopName();
+                    currentStop = resolveStopName(stop.getStopName());
                     if (i + 1 < stops.size()) {
-                        nextStop = stops.get(i + 1).getStopName();
+                        nextStop = resolveStopName(stops.get(i + 1).getStopName());
                     }
                     progress = 0.1f; // En gare
                     Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " → CURRENT trouvé: " + currentStop);
@@ -579,8 +579,8 @@ public class TrainFragment extends Fragment {
                 for (int i = 0; i < stops.size() - 1; i++) {
                     if (stops.get(i).getStatus() == TrainStop.StopStatus.PASSED
                             && stops.get(i + 1).getStatus() == TrainStop.StopStatus.UPCOMING) {
-                        currentStop = stops.get(i).getStopName();
-                        nextStop = stops.get(i + 1).getStopName();
+                        currentStop = resolveStopName(stops.get(i).getStopName());
+                        nextStop = resolveStopName(stops.get(i + 1).getStopName());
 
                         // Calculer la progression entre les deux arrêts
                         long depTime = stops.get(i).getBestTimeMillis();
@@ -598,15 +598,15 @@ public class TrainFragment extends Fragment {
 
             // Train pas encore parti ou toutes les gares sont UPCOMING
             if (currentStop == null) {
-                currentStop = firstStop.getStopName();
+                currentStop = resolveStopName(firstStop.getStopName());
                 if (stops.size() > 1) {
-                    nextStop = stops.get(1).getStopName();
+                    nextStop = resolveStopName(stops.get(1).getStopName());
                 }
                 progress = 0f;
             }
 
             // Déterminer le statut du train
-            String destination = lastStop.getStopName();
+            String destination = resolveStopName(lastStop.getStopName());
             boolean onTime = true;
             boolean delayed = false;
             boolean cancelled = false;
@@ -1335,6 +1335,20 @@ public class TrainFragment extends Fragment {
     }
 
     /**
+     * Résout un nom d'arrêt "Arrêt XXXXX" en nom réel depuis le cache.
+     * Si le nom n'est pas un ID ou si le cache ne contient pas l'ID, retourne le nom original.
+     */
+    private String resolveStopName(String name) {
+        if (name == null || !name.startsWith("Arrêt ")) return name;
+        String numericId = name.substring(6).trim(); // "Arrêt 43219" → "43219"
+        String cached = stopPointNameCache.get(numericId);
+        if (cached != null && !cached.isEmpty()) {
+            return cached;
+        }
+        return name;
+    }
+
+    /**
      * Extrait l'ID numérique d'un StopPointRef STIF.
      * Ex: "STIF:StopPoint:Q:43111:" -> "43111"
      * Ex: "STIF:StopArea:SP:43111:" -> "43111"
@@ -1361,6 +1375,12 @@ public class TrainFragment extends Fragment {
     }
 
     private void fetchAndParseEstimatedTimetable(String token) {
+        // S'assurer que le cache de noms d'arrêts est chargé avant de parser le timetable
+        if (stopPointNameCache.isEmpty()) {
+            Log.i(TAG, "fetchAndParseEstimatedTimetable: cache de noms vide, chargement synchrone");
+            fetchAndParseStopPointNames(token);
+            Log.i(TAG, "fetchAndParseEstimatedTimetable: cache chargé avec " + stopPointNameCache.size() + " entrées");
+        }
         HttpURLConnection connection = null;
         try {
             URL url = new URL(ESTIMATED_TIMETABLE_URL);
