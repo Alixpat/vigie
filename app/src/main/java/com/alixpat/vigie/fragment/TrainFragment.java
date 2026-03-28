@@ -530,13 +530,28 @@ public class TrainFragment extends Fragment {
             long firstTime = firstStop.getBestTimeMillis();
 
             // Ignorer les trains déjà arrivés ou pas encore partis dans > 30min
-            if (lastTime > 0 && now > lastTime + 5 * 60_000L) continue;
-            if (firstTime > 0 && firstTime - now > 30 * 60_000L) continue;
+            if (lastTime > 0 && now > lastTime + 5 * 60_000L) {
+                Log.d(TAG, "buildTrainsOnMap: SKIP " + journeyRef + " déjà arrivé (lastTime=" + lastTime + " now=" + now + " diff=" + ((now - lastTime) / 60000) + "min)");
+                continue;
+            }
+            if (firstTime > 0 && firstTime - now > 30 * 60_000L) {
+                Log.d(TAG, "buildTrainsOnMap: SKIP " + journeyRef + " départ dans +" + ((firstTime - now) / 60000) + "min");
+                continue;
+            }
 
             // Trouver la position du train
             String currentStop = null;
             String nextStop = null;
             float progress = 0f;
+
+            // Log des statuts de chaque arrêt pour ce trajet
+            StringBuilder stopStatuses = new StringBuilder();
+            for (int i = 0; i < stops.size(); i++) {
+                TrainStop s = stops.get(i);
+                if (i > 0) stopStatuses.append(" | ");
+                stopStatuses.append(s.getStopName()).append("=").append(s.getStatus());
+            }
+            Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " stops(" + stops.size() + "): " + stopStatuses);
 
             // Chercher entre quels arrêts le train se trouve
             for (int i = 0; i < stops.size(); i++) {
@@ -549,6 +564,7 @@ public class TrainFragment extends Fragment {
                         nextStop = stops.get(i + 1).getStopName();
                     }
                     progress = 0.1f; // En gare
+                    Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " → CURRENT trouvé: " + currentStop);
                     break;
                 }
             }
