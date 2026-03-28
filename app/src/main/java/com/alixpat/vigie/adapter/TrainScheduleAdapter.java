@@ -38,6 +38,10 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         notifyDataSetChanged();
     }
 
+    public List<TrainSchedule> getSchedules() {
+        return new ArrayList<>(schedules);
+    }
+
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
