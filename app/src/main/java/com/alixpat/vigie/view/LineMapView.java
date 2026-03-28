@@ -11,6 +11,8 @@ import android.graphics.Typeface;
 import android.util.AttributeSet;
 import android.view.View;
 
+import android.util.Log;
+
 import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.TrainStop;
 
@@ -27,6 +29,8 @@ import java.util.Map;
  * avec les arrêts et les positions des trains en temps réel.
  */
 public class LineMapView extends View {
+
+    private static final String TAG = "LineMapView";
 
     // Couleur officielle de la Ligne N (vert Transilien)
     private static final int COLOR_LINE_N = 0xFF00A86B;
@@ -142,7 +146,7 @@ public class LineMapView extends View {
         branchOffsetX = 100 * density;
         startX = 24 * density;
         startY = 60 * density;
-        legendHeight = 50 * density;
+        legendHeight = 34 * density;
 
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(lineWidth);
@@ -189,6 +193,14 @@ public class LineMapView extends View {
         trains.clear();
         if (trainList != null) {
             trains.addAll(trainList);
+        }
+        Log.i(TAG, "setTrains: " + trains.size() + " trains reçus");
+        for (int i = 0; i < trains.size(); i++) {
+            TrainOnMap t = trains.get(i);
+            Log.d(TAG, "  train[" + i + "] journey=" + t.journeyRef
+                    + " current=" + t.currentStopName + " next=" + t.nextStopName
+                    + " progress=" + t.progressBetweenStops + " dest=" + t.destination
+                    + " mission=" + t.missionName + " num=" + t.trainNumber);
         }
         invalidate();
     }
@@ -303,6 +315,7 @@ public class LineMapView extends View {
         }
 
         // ====== TRAINS ======
+        Log.i(TAG, "onDraw: " + stationPositions.size() + " stations positionnées, " + trains.size() + " trains à dessiner");
         for (TrainOnMap train : trains) {
             drawTrain(canvas, train);
         }
@@ -312,8 +325,6 @@ public class LineMapView extends View {
         float density = getResources().getDisplayMetrics().density;
         float ly = 8 * density;
         float lx = startX;
-        float dotR = 4 * density;
-        float spacing = 6 * density;
 
         // Fond légende
         canvas.drawRoundRect(new RectF(4 * density, 2 * density, width - 4 * density, startY + legendHeight - 8 * density),
@@ -328,21 +339,7 @@ public class LineMapView extends View {
         legendTextPaint.setTextSize(textSizeSmall);
         ly += textSizeLegend + 10 * density;
 
-        // Légende des branches (même couleur Ligne N)
-        String[] legendLabels = {
-                "Tronc commun", "→ Rambouillet", "→ Mantes", "→ Dreux"
-        };
-
-        for (int i = 0; i < legendLabels.length; i++) {
-            trainPaint.setColor(COLOR_LINE_N);
-            canvas.drawCircle(lx + dotR, ly + dotR, dotR, trainPaint);
-            legendTextPaint.setColor(COLOR_TEXT);
-            canvas.drawText(legendLabels[i], lx + dotR * 2 + spacing, ly + dotR + textSizeSmall / 3, legendTextPaint);
-            lx += textPaint.measureText(legendLabels[i]) + dotR * 2 + spacing + 16 * density;
-        }
-
-        // Légende trains
-        ly += 16 * density;
+        // Légende trains (statuts uniquement)
         lx = startX;
         int[] trainColors = {COLOR_TRAIN_ON_TIME, COLOR_TRAIN_DELAYED, COLOR_TRAIN_CANCELLED};
         String[] trainLabels = {"À l'heure", "Retardé", "Supprimé"};
@@ -407,6 +404,10 @@ public class LineMapView extends View {
         float[] posFrom = findStationPos(train.currentStopName);
         float[] posTo = findStationPos(train.nextStopName);
 
+        Log.d(TAG, "drawTrain: mission=" + train.missionName + " num=" + train.trainNumber
+                + " current='" + train.currentStopName + "' → posFrom=" + (posFrom != null ? "[" + posFrom[0] + "," + posFrom[1] + "]" : "NULL")
+                + " | next='" + train.nextStopName + "' → posTo=" + (posTo != null ? "[" + posTo[0] + "," + posTo[1] + "]" : "NULL"));
+
         float tx, ty;
 
         if (posFrom != null && posTo != null) {
@@ -421,6 +422,8 @@ public class LineMapView extends View {
             tx = posTo[0];
             ty = posTo[1];
         } else {
+            Log.w(TAG, "drawTrain: AUCUNE position trouvée pour train mission=" + train.missionName
+                    + " current='" + train.currentStopName + "' next='" + train.nextStopName + "' → TRAIN NON DESSINÉ");
             return; // Pas de position trouvée
         }
 
@@ -481,16 +484,23 @@ public class LineMapView extends View {
     }
 
     private float[] findStationPos(String stopName) {
-        if (stopName == null || stopName.isEmpty()) return null;
+        if (stopName == null || stopName.isEmpty()) {
+            Log.d(TAG, "findStationPos: stopName est null/vide");
+            return null;
+        }
         String normalized = LineNStation.normalize(stopName);
 
         // Recherche exacte
         float[] pos = stationPositions.get(normalized);
-        if (pos != null) return pos;
+        if (pos != null) {
+            Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → EXACT MATCH");
+            return pos;
+        }
 
         // Recherche partielle
         for (Map.Entry<String, float[]> entry : stationPositions.entrySet()) {
             if (entry.getKey().contains(normalized) || normalized.contains(entry.getKey())) {
+                Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → PARTIAL MATCH avec '" + entry.getKey() + "'");
                 return entry.getValue();
             }
         }
@@ -500,10 +510,14 @@ public class LineMapView extends View {
             String[] words = normalized.split("\\s+");
             for (String word : words) {
                 if (word.length() > 3 && entry.getKey().contains(word)) {
+                    Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → KEYWORD MATCH mot='" + word + "' avec '" + entry.getKey() + "'");
                     return entry.getValue();
                 }
             }
         }
+
+        // Log des stations connues pour diagnostic
+        Log.w(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → AUCUNE CORRESPONDANCE. Stations connues: " + stationPositions.keySet());
         return null;
     }
 }
