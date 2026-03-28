@@ -445,32 +445,133 @@ public class TrainFragment extends Fragment {
     }
 
     private void showFallbackDialog(TrainSchedule schedule) {
-        StringBuilder trainId = new StringBuilder();
+        ScrollView scrollView = new ScrollView(requireContext());
+        LinearLayout container = new LinearLayout(requireContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        int pad = dpToPx(16);
+        container.setPadding(pad, pad, pad, pad);
+        scrollView.addView(container);
+
+        // Info train (numéro + mission)
+        StringBuilder trainInfoStr = new StringBuilder();
         if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
-            trainId.append("Train ").append(schedule.getTrainNumber());
+            trainInfoStr.append("Train ").append(schedule.getTrainNumber());
         }
         if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
-            if (trainId.length() > 0) trainId.append(" \u2022 ");
-            trainId.append(schedule.getMissionName());
+            if (trainInfoStr.length() > 0) trainInfoStr.append(" \u2022 ");
+            trainInfoStr.append(schedule.getMissionName());
         }
-        String message = (trainId.length() > 0 ? trainId + "\n\n" : "")
-                + schedule.estimatePosition()
-                + "\n\nStatut : " + schedule.getStatusEmoji() + " " + schedule.getStatusLabel()
-                + "\nDépart : " + schedule.getAimedDepartureTime();
+        if (trainInfoStr.length() > 0) {
+            TextView trainInfoHeader = new TextView(requireContext());
+            trainInfoHeader.setText(trainInfoStr.toString());
+            trainInfoHeader.setTextColor(0xFF00A86B);
+            trainInfoHeader.setTextSize(15);
+            trainInfoHeader.setTypeface(null, Typeface.BOLD);
+            trainInfoHeader.setPadding(0, 0, 0, dpToPx(4));
+            container.addView(trainInfoHeader);
+        }
+
+        // Statut
+        TextView statusView = new TextView(requireContext());
+        statusView.setText(schedule.getStatusEmoji() + " " + schedule.getStatusLabel());
+        statusView.setTextColor(schedule.getStatusColor());
+        statusView.setTextSize(14);
+        statusView.setTypeface(null, Typeface.BOLD);
+        statusView.setPadding(0, 0, 0, dpToPx(12));
+        container.addView(statusView);
+
+        // Position actuelle (mise en avant)
+        TextView positionView = new TextView(requireContext());
+        positionView.setText(schedule.estimatePosition());
+        positionView.setTextColor(0xFF1976D2);
+        positionView.setTextSize(15);
+        positionView.setTypeface(null, Typeface.BOLD);
+        positionView.setPadding(0, 0, 0, dpToPx(4));
+        container.addView(positionView);
+
+        // Barre de progression visuelle
+        long now = System.currentTimeMillis();
+        long effectiveDeparture = schedule.getAimedDepartureMillis();
+        if (schedule.getDelayMinutes() > 0) {
+            effectiveDeparture += schedule.getDelayMinutes() * 60_000L;
+        }
+        if (effectiveDeparture > 0 && schedule.getArrivalMillis() > 0 && now >= effectiveDeparture && now < schedule.getArrivalMillis()) {
+            long totalTravel = schedule.getArrivalMillis() - effectiveDeparture;
+            long elapsed = now - effectiveDeparture;
+            int progress = (int) ((elapsed * 100) / totalTravel);
+            progress = Math.max(0, Math.min(100, progress));
+
+            android.widget.ProgressBar progressBar = new android.widget.ProgressBar(
+                    requireContext(), null, android.R.attr.progressBarStyleHorizontal);
+            progressBar.setMax(100);
+            progressBar.setProgress(progress);
+            progressBar.setPadding(0, dpToPx(4), 0, dpToPx(12));
+            container.addView(progressBar);
+        } else {
+            // Espacement
+            TextView spacer = new TextView(requireContext());
+            spacer.setPadding(0, 0, 0, dpToPx(8));
+            container.addView(spacer);
+        }
+
+        // Trajet : origine → destination
+        if (!schedule.getOriginStation().isEmpty()) {
+            TextView trajetView = new TextView(requireContext());
+            trajetView.setText(schedule.getOriginStation() + "  \u2192  " + schedule.getDestination());
+            trajetView.setTextSize(13);
+            trajetView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
+            trajetView.setPadding(0, 0, 0, dpToPx(8));
+            container.addView(trajetView);
+        }
+
+        // Départ
+        StringBuilder depStr = new StringBuilder("Départ : " + schedule.getAimedDepartureTime());
         if (schedule.isDelayed() && !schedule.getExpectedDepartureTime().isEmpty()) {
-            message += " (retardé \u2192 " + schedule.getExpectedDepartureTime() + ")";
+            depStr.append("  \u2192  ").append(schedule.getExpectedDepartureTime());
         }
+        TextView depView = new TextView(requireContext());
+        depView.setText(depStr.toString());
+        depView.setTextSize(13);
+        depView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
+        container.addView(depView);
+
+        // Arrivée
         if (schedule.getArrivalTime() != null && !schedule.getArrivalTime().isEmpty()) {
-            message += "\nArrivée : " + schedule.getArrivalTime();
+            TextView arrView = new TextView(requireContext());
+            arrView.setText("Arrivée : " + schedule.getArrivalTime());
+            arrView.setTextSize(13);
+            arrView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
+            container.addView(arrView);
         }
+
+        // Temps de trajet
+        String travelTime = schedule.getTravelTime();
+        if (travelTime != null) {
+            TextView travelView = new TextView(requireContext());
+            travelView.setText("Trajet : " + travelTime);
+            travelView.setTextSize(13);
+            travelView.setTextColor(0xFF757575);
+            container.addView(travelView);
+        }
+
+        // Voie
         if (schedule.getPlatformName() != null && !schedule.getPlatformName().isEmpty()) {
-            message += "\nVoie : " + schedule.getPlatformName();
+            TextView platformView = new TextView(requireContext());
+            platformView.setText("Voie " + schedule.getPlatformName());
+            platformView.setTextSize(13);
+            platformView.setTextColor(0xFF757575);
+            platformView.setPadding(0, dpToPx(4), 0, 0);
+            container.addView(platformView);
         }
-        message += "\n\nDétail des arrêts indisponible.";
+
+        String title = schedule.getDestination();
+        if (!schedule.getOriginStation().isEmpty()) {
+            title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
+        }
 
         new AlertDialog.Builder(requireContext())
-                .setTitle("Détails du train")
-                .setMessage(message)
+                .setTitle(title)
+                .setView(scrollView)
                 .setPositiveButton("Fermer", null)
                 .show();
     }
