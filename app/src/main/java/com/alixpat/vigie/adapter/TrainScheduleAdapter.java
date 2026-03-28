@@ -68,6 +68,22 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         holder.status.setText(schedule.getStatusLabel());
         holder.status.setTextColor(schedule.getStatusColor());
 
+        // Afficher numéro de train et nom de mission
+        StringBuilder trainInfo = new StringBuilder();
+        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
+            trainInfo.append("Train ").append(schedule.getTrainNumber());
+        }
+        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
+            if (trainInfo.length() > 0) trainInfo.append(" \u2022 ");
+            trainInfo.append(schedule.getMissionName());
+        }
+        if (trainInfo.length() > 0) {
+            holder.trainInfo.setText(trainInfo.toString());
+            holder.trainInfo.setVisibility(View.VISIBLE);
+        } else {
+            holder.trainInfo.setVisibility(View.GONE);
+        }
+
         if (schedule.getPlatformName() != null && !schedule.getPlatformName().isEmpty()) {
             holder.platform.setText("Voie " + schedule.getPlatformName());
             holder.platform.setVisibility(View.VISIBLE);
@@ -150,6 +166,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         final TextView arrivalTime;
         final TextView travelTime;
         final TextView destination;
+        final TextView trainInfo;
         final TextView platform;
         final TextView status;
 
@@ -161,6 +178,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             arrivalTime = itemView.findViewById(R.id.scheduleArrivalTime);
             travelTime = itemView.findViewById(R.id.scheduleTravelTime);
             destination = itemView.findViewById(R.id.scheduleDestination);
+            trainInfo = itemView.findViewById(R.id.scheduleTrainInfo);
             platform = itemView.findViewById(R.id.schedulePlatform);
             status = itemView.findViewById(R.id.scheduleStatus);
         }

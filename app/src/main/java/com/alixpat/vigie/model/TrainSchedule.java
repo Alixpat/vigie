@@ -13,13 +13,15 @@ public class TrainSchedule {
     private final long aimedDepartureMillis;
     private final long arrivalMillis;
     private final String originStation;
+    private final String trainNumber;
+    private final String missionName;
 
     public TrainSchedule(String destination, String aimedDepartureTime,
                          String expectedDepartureTime, String arrivalTime,
                          String departureStatus, String platformName,
                          int delayMinutes) {
         this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
-                departureStatus, platformName, delayMinutes, "", 0, 0, "");
+                departureStatus, platformName, delayMinutes, "", 0, 0, "", "", "");
     }
 
     public TrainSchedule(String destination, String aimedDepartureTime,
@@ -28,6 +30,17 @@ public class TrainSchedule {
                          int delayMinutes, String journeyRef,
                          long aimedDepartureMillis, long arrivalMillis,
                          String originStation) {
+        this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
+                departureStatus, platformName, delayMinutes, journeyRef,
+                aimedDepartureMillis, arrivalMillis, originStation, "", "");
+    }
+
+    public TrainSchedule(String destination, String aimedDepartureTime,
+                         String expectedDepartureTime, String arrivalTime,
+                         String departureStatus, String platformName,
+                         int delayMinutes, String journeyRef,
+                         long aimedDepartureMillis, long arrivalMillis,
+                         String originStation, String trainNumber, String missionName) {
         this.destination = destination;
         this.aimedDepartureTime = aimedDepartureTime;
         this.expectedDepartureTime = expectedDepartureTime;
@@ -39,6 +52,8 @@ public class TrainSchedule {
         this.aimedDepartureMillis = aimedDepartureMillis;
         this.arrivalMillis = arrivalMillis;
         this.originStation = originStation;
+        this.trainNumber = trainNumber != null ? trainNumber : "";
+        this.missionName = missionName != null ? missionName : "";
     }
 
     public String getDestination() { return destination; }
@@ -52,6 +67,8 @@ public class TrainSchedule {
     public long getAimedDepartureMillis() { return aimedDepartureMillis; }
     public long getArrivalMillis() { return arrivalMillis; }
     public String getOriginStation() { return originStation; }
+    public String getTrainNumber() { return trainNumber; }
+    public String getMissionName() { return missionName; }
 
     public boolean isOnTime() {
         return delayMinutes == 0 && !"cancelled".equalsIgnoreCase(departureStatus);

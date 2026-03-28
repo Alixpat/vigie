@@ -91,6 +91,15 @@
                 android:textColor="@color/text_primary" />
 
             <TextView
+                android:id="@+id/scheduleTrainInfo"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:textColor="@color/text_secondary"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/schedulePlatform"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
