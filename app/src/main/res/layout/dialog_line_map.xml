@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@color/background_card">
+
+    <!-- Header avec bouton fermer -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="12dp"
+        android:background="@color/primary">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Plan de la Ligne N"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="@color/on_primary" />
+
+        <TextView
+            android:id="@+id/lineMapTrainCount"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textColor="@color/on_primary"
+            android:layout_marginEnd="12dp" />
+
+        <TextView
+            android:id="@+id/lineMapClose"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="✕"
+            android:textSize="20sp"
+            android:textColor="@color/on_primary"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp" />
+    </LinearLayout>
+
+    <!-- ScrollView contenant la vue schématique -->
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <com.alixpat.vigie.view.LineMapView
+                android:id="@+id/lineMapView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:minWidth="400dp" />
+
+        </HorizontalScrollView>
+    </ScrollView>
+
+</LinearLayout>

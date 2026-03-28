@@ -19,9 +19,11 @@ import com.alixpat.vigie.BrokerConfig;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
+import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
+import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
 
 import android.app.AlertDialog;
@@ -180,6 +182,11 @@ public class TrainFragment extends Fragment {
 
         scheduleAdapterAller.setOnTrainClickListener(this::showTrainDetailDialog);
         scheduleAdapterRetour.setOnTrainClickListener(this::showTrainDetailDialog);
+
+        View lineMapButton = view.findViewById(R.id.lineMapButton);
+        if (lineMapButton != null) {
+            lineMapButton.setOnClickListener(v -> showLineMapDialog());
+        }
     }
 
     @Override
@@ -420,6 +427,170 @@ public class TrainFragment extends Fragment {
                 .setMessage(message)
                 .setPositiveButton("Fermer", null)
                 .show();
+    }
+
+    // ==================== PLAN DE LA LIGNE ====================
+
+    private void showLineMapDialog() {
+        if (!isAdded() || getActivity() == null) return;
+
+        View dialogView = LayoutInflater.from(requireContext())
+                .inflate(R.layout.dialog_line_map, null);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext())
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+
+        LineMapView lineMapView = dialogView.findViewById(R.id.lineMapView);
+        TextView trainCountView = dialogView.findViewById(R.id.lineMapTrainCount);
+        TextView closeButton = dialogView.findViewById(R.id.lineMapClose);
+
+        closeButton.setOnClickListener(v -> dialog.dismiss());
+
+        // Construire la liste des trains sur le plan
+        List<LineMapView.TrainOnMap> trainsOnMap = buildTrainsOnMap();
+        lineMapView.setTrains(trainsOnMap);
+
+        if (trainCountView != null) {
+            int count = trainsOnMap.size();
+            trainCountView.setText(count + " train" + (count > 1 ? "s" : "") + " en circulation");
+        }
+
+        dialog.show();
+
+        // Forcer le plein écran après show()
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+    }
+
+    private List<LineMapView.TrainOnMap> buildTrainsOnMap() {
+        List<LineMapView.TrainOnMap> result = new ArrayList<>();
+        long now = System.currentTimeMillis();
+
+        for (Map.Entry<String, List<TrainStop>> entry : journeyStopsCache.entrySet()) {
+            String journeyRef = entry.getKey();
+            List<TrainStop> stops = entry.getValue();
+            if (stops == null || stops.isEmpty()) continue;
+
+            // Vérifier si ce train est encore actif (pas encore arrivé au terminus)
+            TrainStop lastStop = stops.get(stops.size() - 1);
+            TrainStop firstStop = stops.get(0);
+            long lastTime = lastStop.getBestArrivalMillis();
+            long firstTime = firstStop.getBestTimeMillis();
+
+            // Ignorer les trains déjà arrivés ou pas encore partis dans > 30min
+            if (lastTime > 0 && now > lastTime + 5 * 60_000L) continue;
+            if (firstTime > 0 && firstTime - now > 30 * 60_000L) continue;
+
+            // Trouver la position du train
+            String currentStop = null;
+            String nextStop = null;
+            float progress = 0f;
+
+            // Chercher entre quels arrêts le train se trouve
+            for (int i = 0; i < stops.size(); i++) {
+                TrainStop stop = stops.get(i);
+                TrainStop.StopStatus status = stop.getStatus();
+
+                if (status == TrainStop.StopStatus.CURRENT) {
+                    currentStop = stop.getStopName();
+                    if (i + 1 < stops.size()) {
+                        nextStop = stops.get(i + 1).getStopName();
+                    }
+                    progress = 0.1f; // En gare
+                    break;
+                }
+            }
+
+            // Si pas trouvé "CURRENT", chercher entre deux arrêts
+            if (currentStop == null) {
+                for (int i = 0; i < stops.size() - 1; i++) {
+                    if (stops.get(i).getStatus() == TrainStop.StopStatus.PASSED
+                            && stops.get(i + 1).getStatus() == TrainStop.StopStatus.UPCOMING) {
+                        currentStop = stops.get(i).getStopName();
+                        nextStop = stops.get(i + 1).getStopName();
+
+                        // Calculer la progression entre les deux arrêts
+                        long depTime = stops.get(i).getBestTimeMillis();
+                        long arrTime = stops.get(i + 1).getBestArrivalMillis();
+                        if (depTime > 0 && arrTime > depTime) {
+                            progress = (float)(now - depTime) / (float)(arrTime - depTime);
+                            progress = Math.max(0.1f, Math.min(0.9f, progress));
+                        } else {
+                            progress = 0.5f;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            // Train pas encore parti
+            if (currentStop == null && firstTime > 0 && now < firstTime) {
+                currentStop = firstStop.getStopName();
+                progress = 0f;
+            }
+
+            if (currentStop == null) continue;
+
+            // Déterminer le statut du train
+            String destination = lastStop.getStopName();
+            boolean onTime = true;
+            boolean delayed = false;
+            boolean cancelled = false;
+            int delayMinutes = 0;
+
+            // Chercher le TrainSchedule correspondant pour le statut
+            List<TrainSchedule> allSchedules = new ArrayList<>();
+            if (scheduleAdapterAller != null) allSchedules.addAll(scheduleAdapterAller.getSchedules());
+            if (scheduleAdapterRetour != null) allSchedules.addAll(scheduleAdapterRetour.getSchedules());
+
+            for (TrainSchedule schedule : allSchedules) {
+                if (journeyRef.equals(schedule.getJourneyRef())) {
+                    cancelled = schedule.isCancelled();
+                    delayed = schedule.isDelayed();
+                    onTime = schedule.isOnTime();
+                    delayMinutes = schedule.getDelayMinutes();
+                    destination = schedule.getDestination();
+                    break;
+                }
+            }
+
+            if (cancelled) continue; // Ne pas afficher les trains supprimés sur le plan
+
+            // Label court pour le train
+            String label = shortenDestination(destination);
+
+            result.add(new LineMapView.TrainOnMap(
+                    journeyRef, destination,
+                    currentStop, nextStop, progress,
+                    onTime, delayed, cancelled, delayMinutes, label));
+        }
+
+        return result;
+    }
+
+    private static String shortenDestination(String dest) {
+        if (dest == null) return "";
+        String lower = dest.toLowerCase(Locale.FRENCH);
+        if (lower.contains("montparnasse") || lower.contains("paris")) return "Paris";
+        if (lower.contains("rambouillet")) return "Ramb.";
+        if (lower.contains("mantes")) return "Mantes";
+        if (lower.contains("dreux")) return "Dreux";
+        if (lower.contains("plaisir")) return "Plaisir";
+        if (lower.contains("versailles")) return "Versail.";
+        if (lower.contains("villepreux")) return "Villep.";
+        if (dest.length() > 8) return dest.substring(0, 7) + ".";
+        return dest;
     }
 
     private int dpToPx(int dp) {
