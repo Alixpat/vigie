@@ -84,6 +84,13 @@ public class TrainFragment extends Fragment {
             "travaux", "chantier", "maintenance", "planifi",
             "programme", "prévu"
     };
+    private static final String[] PERTURBATION_KEYWORDS = {
+            "interrompu", "perturbé", "ralenti", "supprimé",
+            "retard", "allongement", "dévié", "régulation"
+    };
+    private static final String[] BLOCKING_KEYWORDS = {
+            "interrompu", "supprimé", "immobilis"
+    };
 
     private MaterialCardView lineStatusCard;
     private View lineStatusStripe;
@@ -1593,6 +1600,7 @@ public class TrainFragment extends Fragment {
             connection.setReadTimeout(15000);
 
             int responseCode = connection.getResponseCode();
+            Log.d(TAG, "fetchIncidentsFromApi: response code " + responseCode);
             if (responseCode == HttpURLConnection.HTTP_OK) {
                 BufferedReader reader = new BufferedReader(
                         new InputStreamReader(connection.getInputStream()));
@@ -1603,10 +1611,14 @@ public class TrainFragment extends Fragment {
                 }
                 reader.close();
 
-                return parseIncidentResponse(response.toString());
+                List<TrainIncident> result = parseIncidentResponse(response.toString());
+                Log.i(TAG, "fetchIncidentsFromApi: parsed " + result.size() + " incidents");
+                return result;
+            } else {
+                Log.w(TAG, "fetchIncidentsFromApi: HTTP error " + responseCode);
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "fetchIncidentsFromApi: network error", e);
         } finally {
             if (connection != null) {
                 connection.disconnect();
@@ -1640,6 +1652,7 @@ public class TrainFragment extends Fragment {
                 if (msgTexts != null) {
                     for (int j = 0; j < msgTexts.length(); j++) {
                         JSONObject msgObj = msgTexts.getJSONObject(j);
+                        // Handle MessageText as object {"value": "..."} or plain string
                         JSONObject msgText = msgObj.optJSONObject("MessageText");
                         if (msgText != null) {
                             String value = msgText.optString("value", "");
@@ -1647,8 +1660,28 @@ public class TrainFragment extends Fragment {
                                 text = value;
                                 break;
                             }
+                        } else {
+                            String value = msgObj.optString("MessageText", "");
+                            if (!value.isEmpty()) {
+                                text = value;
+                                break;
+                            }
                         }
                     }
+                }
+
+                // Fallback: try to get text directly from Content if Message array yielded nothing
+                if (text.isEmpty()) {
+                    // Some API responses put text directly in Content.Message as a string
+                    String directMsg = content.optString("Message", "");
+                    if (!directMsg.isEmpty()) {
+                        text = directMsg;
+                    }
+                }
+
+                if (text.isEmpty()) {
+                    Log.w(TAG, "parseIncidentResponse: empty text for message index " + i
+                            + ", content keys: " + content.keys());
                 }
 
                 String channel = "";
@@ -1661,14 +1694,31 @@ public class TrainFragment extends Fragment {
 
                 String severity;
                 String type;
+                String textLower = text.toLowerCase(Locale.FRENCH);
                 boolean isPerturbationChannel = channel.toLowerCase(Locale.FRENCH).contains("perturbation");
 
-                if (isPerturbationChannel) {
-                    severity = "blocking";
+                // Detect perturbation keywords in text regardless of channel
+                boolean hasPerturbationKeywords = false;
+                for (String keyword : PERTURBATION_KEYWORDS) {
+                    if (textLower.contains(keyword)) {
+                        hasPerturbationKeywords = true;
+                        break;
+                    }
+                }
+
+                if (isPerturbationChannel || hasPerturbationKeywords) {
                     type = TrainIncident.TYPE_PERTURBATION;
+                    // Determine actual severity from message content
+                    boolean isBlocking = false;
+                    for (String keyword : BLOCKING_KEYWORDS) {
+                        if (textLower.contains(keyword)) {
+                            isBlocking = true;
+                            break;
+                        }
+                    }
+                    severity = isBlocking ? "blocking" : "delays";
                 } else {
                     severity = "information";
-                    String textLower = text.toLowerCase(Locale.FRENCH);
                     boolean isTravauxMessage = false;
                     for (String keyword : TRAVAUX_KEYWORDS) {
                         if (textLower.contains(keyword)) {
@@ -1704,7 +1754,9 @@ public class TrainFragment extends Fragment {
                 }
             }
         } catch (Exception e) {
-            e.printStackTrace();
+            Log.e(TAG, "parseIncidentResponse: error parsing JSON", e);
+            Log.d(TAG, "parseIncidentResponse: raw response (first 500 chars): "
+                    + jsonStr.substring(0, Math.min(500, jsonStr.length())));
         }
         return incidents;
     }
