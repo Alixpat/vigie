@@ -115,6 +115,8 @@ public class TrainFragment extends Fragment {
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Map<String, List<TrainStop>> journeyStopsCache = new HashMap<>();
+    private final Map<String, String> journeyTrainNumberCache = new HashMap<>();
+    private final Map<String, String> journeyMissionNameCache = new HashMap<>();
 
     private final Runnable refreshRunnable = new Runnable() {
         @Override
@@ -132,6 +134,8 @@ public class TrainFragment extends Fragment {
         Date aimedArrival;
         String departureStatus;
         String platform;
+        String trainNumber;
+        String missionName;
     }
 
     @Nullable
@@ -257,6 +261,25 @@ public class TrainFragment extends Fragment {
         int pad = dpToPx(16);
         container.setPadding(pad, pad, pad, pad);
         scrollView.addView(container);
+
+        // Info train (numéro + mission)
+        StringBuilder trainInfoStr = new StringBuilder();
+        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
+            trainInfoStr.append("Train ").append(schedule.getTrainNumber());
+        }
+        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
+            if (trainInfoStr.length() > 0) trainInfoStr.append(" \u2022 ");
+            trainInfoStr.append(schedule.getMissionName());
+        }
+        if (trainInfoStr.length() > 0) {
+            TextView trainInfoHeader = new TextView(requireContext());
+            trainInfoHeader.setText(trainInfoStr.toString());
+            trainInfoHeader.setTextColor(0xFF00A86B);
+            trainInfoHeader.setTextSize(15);
+            trainInfoHeader.setTypeface(null, Typeface.BOLD);
+            trainInfoHeader.setPadding(0, 0, 0, dpToPx(4));
+            container.addView(trainInfoHeader);
+        }
 
         // Statut global du train
         TextView statusHeader = new TextView(requireContext());
@@ -408,7 +431,16 @@ public class TrainFragment extends Fragment {
     }
 
     private void showFallbackDialog(TrainSchedule schedule) {
-        String message = schedule.estimatePosition()
+        StringBuilder trainId = new StringBuilder();
+        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
+            trainId.append("Train ").append(schedule.getTrainNumber());
+        }
+        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
+            if (trainId.length() > 0) trainId.append(" \u2022 ");
+            trainId.append(schedule.getMissionName());
+        }
+        String message = (trainId.length() > 0 ? trainId + "\n\n" : "")
+                + schedule.estimatePosition()
                 + "\n\nStatut : " + schedule.getStatusEmoji() + " " + schedule.getStatusLabel()
                 + "\nDépart : " + schedule.getAimedDepartureTime();
         if (schedule.isDelayed() && !schedule.getExpectedDepartureTime().isEmpty()) {
@@ -477,6 +509,8 @@ public class TrainFragment extends Fragment {
         List<LineMapView.TrainOnMap> result = new ArrayList<>();
         long now = System.currentTimeMillis();
 
+        Log.i(TAG, "buildTrainsOnMap: journeyStopsCache contient " + journeyStopsCache.size() + " trajets");
+
         for (Map.Entry<String, List<TrainStop>> entry : journeyStopsCache.entrySet()) {
             String journeyRef = entry.getKey();
             List<TrainStop> stops = entry.getValue();
@@ -534,13 +568,14 @@ public class TrainFragment extends Fragment {
                 }
             }
 
-            // Train pas encore parti
-            if (currentStop == null && firstTime > 0 && now < firstTime) {
+            // Train pas encore parti ou toutes les gares sont UPCOMING
+            if (currentStop == null) {
                 currentStop = firstStop.getStopName();
+                if (stops.size() > 1) {
+                    nextStop = stops.get(1).getStopName();
+                }
                 progress = 0f;
             }
-
-            if (currentStop == null) continue;
 
             // Déterminer le statut du train
             String destination = lastStop.getStopName();
@@ -570,10 +605,22 @@ public class TrainFragment extends Fragment {
             // Label court pour le train
             String label = shortenDestination(destination);
 
+            // Récupérer numéro de train et nom de mission
+            String trainNumber = journeyTrainNumberCache.get(journeyRef);
+            String missionName = journeyMissionNameCache.get(journeyRef);
+            if (trainNumber == null) trainNumber = "";
+            if (missionName == null) missionName = "";
+
+            Log.d(TAG, "buildTrainsOnMap: AJOUTÉ " + journeyRef
+                    + " currentStop=" + currentStop + " nextStop=" + nextStop
+                    + " progress=" + progress + " dest=" + destination
+                    + " train=" + trainNumber + " mission=" + missionName);
+
             result.add(new LineMapView.TrainOnMap(
                     journeyRef, destination,
                     currentStop, nextStop, progress,
-                    onTime, delayed, cancelled, delayMinutes, label));
+                    onTime, delayed, cancelled, delayMinutes, label,
+                    trainNumber, missionName));
         }
 
         return result;
@@ -910,6 +957,39 @@ public class TrainFragment extends Fragment {
                         }
                     }
 
+                    // Numéro de train (TrainNumbers ou VehicleRef)
+                    raw.trainNumber = "";
+                    JSONObject trainNumbers = journey.optJSONObject("TrainNumbers");
+                    if (trainNumbers != null) {
+                        JSONArray trainNumArray = trainNumbers.optJSONArray("TrainNumberRef");
+                        if (trainNumArray != null && trainNumArray.length() > 0) {
+                            JSONObject tnObj = trainNumArray.optJSONObject(0);
+                            if (tnObj != null) {
+                                raw.trainNumber = tnObj.optString("value", "");
+                            } else {
+                                raw.trainNumber = trainNumArray.optString(0, "");
+                            }
+                        }
+                    }
+                    if (raw.trainNumber.isEmpty()) {
+                        JSONObject vehicleRef = journey.optJSONObject("VehicleRef");
+                        if (vehicleRef != null) {
+                            raw.trainNumber = vehicleRef.optString("value", "");
+                        }
+                    }
+
+                    // Nom de mission (VehicleJourneyName, ex: "MOPI")
+                    raw.missionName = "";
+                    JSONArray vjNames = journey.optJSONArray("VehicleJourneyName");
+                    if (vjNames != null && vjNames.length() > 0) {
+                        raw.missionName = vjNames.getJSONObject(0).optString("value", "");
+                    } else {
+                        JSONObject vjName = journey.optJSONObject("VehicleJourneyName");
+                        if (vjName != null) {
+                            raw.missionName = vjName.optString("value", "");
+                        }
+                    }
+
                     visits.put(journeyRef, raw);
                 } catch (Exception e) {
                     parseErrors++;
@@ -1027,6 +1107,9 @@ public class TrainFragment extends Fragment {
 
             String originStation = "Aller".equals(directionLabel) ? "Clamart" : "Villepreux";
 
+            String trainNum = origin.trainNumber != null ? origin.trainNumber : "";
+            String missionNm = origin.missionName != null ? origin.missionName : "";
+
             schedules.add(new TrainSchedule(
                     origin.destination,
                     aimedTimeStr,
@@ -1038,8 +1121,18 @@ public class TrainFragment extends Fragment {
                     journeyRef,
                     origin.aimedDeparture.getTime(),
                     arrivalMillis,
-                    originStation
+                    originStation,
+                    trainNum,
+                    missionNm
             ));
+
+            // Stocker numéro de train et nom de mission pour l'affichage sur le plan
+            if (!trainNum.isEmpty()) {
+                journeyTrainNumberCache.put(journeyRef, trainNum);
+            }
+            if (!missionNm.isEmpty()) {
+                journeyMissionNameCache.put(journeyRef, missionNm);
+            }
         }
 
         Collections.sort(schedules, (a, b) ->
@@ -1286,6 +1379,44 @@ public class TrainFragment extends Fragment {
                             journeyStopsCache.put(journeyRef, stops);
                             totalJourneys++;
                             totalStops += stops.size();
+
+                            // Extraire numéro de train et nom de mission
+                            String trainNum = "";
+                            JSONObject trainNumbers = journey.optJSONObject("TrainNumbers");
+                            if (trainNumbers != null) {
+                                JSONArray trainNumArray = trainNumbers.optJSONArray("TrainNumberRef");
+                                if (trainNumArray != null && trainNumArray.length() > 0) {
+                                    JSONObject tnObj = trainNumArray.optJSONObject(0);
+                                    if (tnObj != null) {
+                                        trainNum = tnObj.optString("value", "");
+                                    } else {
+                                        trainNum = trainNumArray.optString(0, "");
+                                    }
+                                }
+                            }
+                            if (trainNum.isEmpty()) {
+                                JSONObject vehicleRef = journey.optJSONObject("VehicleRef");
+                                if (vehicleRef != null) {
+                                    trainNum = vehicleRef.optString("value", "");
+                                }
+                            }
+                            if (!trainNum.isEmpty()) {
+                                journeyTrainNumberCache.put(journeyRef, trainNum);
+                            }
+
+                            String missionName = "";
+                            JSONArray vjNames = journey.optJSONArray("VehicleJourneyName");
+                            if (vjNames != null && vjNames.length() > 0) {
+                                missionName = vjNames.getJSONObject(0).optString("value", "");
+                            } else {
+                                JSONObject vjName = journey.optJSONObject("VehicleJourneyName");
+                                if (vjName != null) {
+                                    missionName = vjName.optString("value", "");
+                                }
+                            }
+                            if (!missionName.isEmpty()) {
+                                journeyMissionNameCache.put(journeyRef, missionName);
+                            }
                         }
                     } catch (Exception e) {
                         Log.e(TAG, "parseEstimatedTimetable: erreur journey #" + j, e);

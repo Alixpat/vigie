@@ -28,11 +28,8 @@ import java.util.Map;
  */
 public class LineMapView extends View {
 
-    // Couleurs des branches
-    private static final int COLOR_TRUNK = 0xFF1565C0;       // Bleu primaire
-    private static final int COLOR_RAMBOUILLET = 0xFF4CAF50;  // Vert
-    private static final int COLOR_MANTES = 0xFFFF6F00;       // Orange
-    private static final int COLOR_DREUX = 0xFF9C27B0;        // Violet
+    // Couleur officielle de la Ligne N (vert Transilien)
+    private static final int COLOR_LINE_N = 0xFF00A86B;
     private static final int COLOR_STOP_FILL = 0xFFFFFFFF;
     private static final int COLOR_STOP_STROKE = 0xFF424242;
     private static final int COLOR_TEXT = 0xFF212121;
@@ -40,7 +37,7 @@ public class LineMapView extends View {
     private static final int COLOR_TRAIN_ON_TIME = 0xFF4CAF50;
     private static final int COLOR_TRAIN_DELAYED = 0xFFFF9800;
     private static final int COLOR_TRAIN_CANCELLED = 0xFFF44336;
-    private static final int COLOR_JUNCTION = 0xFF1565C0;
+    private static final int COLOR_JUNCTION = 0xFF00A86B;
     private static final int COLOR_BG_LEGEND = 0xFFF5F5F5;
 
     // Dimensions en dp (converties en px dans init)
@@ -92,12 +89,15 @@ public class LineMapView extends View {
         public final boolean cancelled;
         public final int delayMinutes;
         public final String label;
+        public final String trainNumber;
+        public final String missionName;
 
         public TrainOnMap(String journeyRef, String destination,
                           String currentStopName, String nextStopName,
                           float progressBetweenStops,
                           boolean onTime, boolean delayed, boolean cancelled,
-                          int delayMinutes, String label) {
+                          int delayMinutes, String label,
+                          String trainNumber, String missionName) {
             this.journeyRef = journeyRef;
             this.destination = destination;
             this.currentStopName = currentStopName;
@@ -108,6 +108,8 @@ public class LineMapView extends View {
             this.cancelled = cancelled;
             this.delayMinutes = delayMinutes;
             this.label = label;
+            this.trainNumber = trainNumber;
+            this.missionName = missionName;
         }
     }
 
@@ -227,14 +229,14 @@ public class LineMapView extends View {
         // Dessiner la ligne du tronc
         float trunkStartY = y;
         float trunkEndY = y + (trunk.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_TRUNK);
+        linePaint.setColor(COLOR_LINE_N);
         canvas.drawLine(colTrunk, trunkStartY, colTrunk, trunkEndY, linePaint);
 
         for (int i = 0; i < trunk.size(); i++) {
             LineNStation station = trunk.get(i);
             float sy = y + i * rowHeight;
             boolean isJunction = (i == trunk.size() - 1); // Saint-Cyr
-            drawStop(canvas, colTrunk, sy, station.getName(), isJunction, COLOR_TRUNK, width);
+            drawStop(canvas, colTrunk, sy, station.getName(), isJunction, COLOR_LINE_N, width);
             stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colTrunk, sy});
         }
 
@@ -245,14 +247,14 @@ public class LineMapView extends View {
         float colRamb = colTrunk;
         float rambStartY = junctionY + rowHeight;
 
-        linePaint.setColor(COLOR_RAMBOUILLET);
+        linePaint.setColor(COLOR_LINE_N);
         canvas.drawLine(colRamb, junctionY, colRamb, rambStartY + (branchRambouillet.size() - 1) * rowHeight, linePaint);
 
         for (int i = 0; i < branchRambouillet.size(); i++) {
             LineNStation station = branchRambouillet.get(i);
             float sy = rambStartY + i * rowHeight;
             boolean isTerminus = (i == branchRambouillet.size() - 1);
-            drawStop(canvas, colRamb, sy, station.getName(), isTerminus, COLOR_RAMBOUILLET, width);
+            drawStop(canvas, colRamb, sy, station.getName(), isTerminus, COLOR_LINE_N, width);
             stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colRamb, sy});
         }
 
@@ -261,11 +263,11 @@ public class LineMapView extends View {
 
         // Courbe de raccordement Saint-Cyr → Fontenay
         float mantesStartY = junctionY + rowHeight;
-        drawBranchCurve(canvas, colTrunk, junctionY, colMantes, mantesStartY, COLOR_MANTES);
+        drawBranchCurve(canvas, colTrunk, junctionY, colMantes, mantesStartY, COLOR_LINE_N);
 
         // Ligne verticale branche Mantes
         float mantesEndY = mantesStartY + (branchMantes.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_MANTES);
+        linePaint.setColor(COLOR_LINE_N);
         canvas.drawLine(colMantes, mantesStartY, colMantes, mantesEndY, linePaint);
 
         // Point de bifurcation Plaisir-Grignon (index 3 dans branche Mantes)
@@ -276,7 +278,7 @@ public class LineMapView extends View {
             float sy = mantesStartY + i * rowHeight;
             boolean isJunction = (i == 3); // Plaisir-Grignon
             boolean isTerminus = (i == branchMantes.size() - 1);
-            drawStop(canvas, colMantes, sy, station.getName(), isJunction || isTerminus, COLOR_MANTES, width);
+            drawStop(canvas, colMantes, sy, station.getName(), isJunction || isTerminus, COLOR_LINE_N, width);
             stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colMantes, sy});
         }
 
@@ -285,18 +287,18 @@ public class LineMapView extends View {
         float dreuxStartY = plaisirGrignonY + rowHeight;
 
         // Courbe de raccordement Plaisir-Grignon → Montfort
-        drawBranchCurve(canvas, colMantes, plaisirGrignonY, colDreux, dreuxStartY, COLOR_DREUX);
+        drawBranchCurve(canvas, colMantes, plaisirGrignonY, colDreux, dreuxStartY, COLOR_LINE_N);
 
         // Ligne verticale branche Dreux
         float dreuxEndY = dreuxStartY + (branchDreux.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_DREUX);
+        linePaint.setColor(COLOR_LINE_N);
         canvas.drawLine(colDreux, dreuxStartY, colDreux, dreuxEndY, linePaint);
 
         for (int i = 0; i < branchDreux.size(); i++) {
             LineNStation station = branchDreux.get(i);
             float sy = dreuxStartY + i * rowHeight;
             boolean isTerminus = (i == branchDreux.size() - 1);
-            drawStop(canvas, colDreux, sy, station.getName(), isTerminus, COLOR_DREUX, width);
+            drawStop(canvas, colDreux, sy, station.getName(), isTerminus, COLOR_LINE_N, width);
             stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colDreux, sy});
         }
 
@@ -326,16 +328,13 @@ public class LineMapView extends View {
         legendTextPaint.setTextSize(textSizeSmall);
         ly += textSizeLegend + 10 * density;
 
-        // Légende des branches
-        int[][] legendItems = {
-                {COLOR_TRUNK}, {COLOR_RAMBOUILLET}, {COLOR_MANTES}, {COLOR_DREUX}
-        };
+        // Légende des branches (même couleur Ligne N)
         String[] legendLabels = {
                 "Tronc commun", "→ Rambouillet", "→ Mantes", "→ Dreux"
         };
 
-        for (int i = 0; i < legendItems.length; i++) {
-            trainPaint.setColor(legendItems[i][0]);
+        for (int i = 0; i < legendLabels.length; i++) {
+            trainPaint.setColor(COLOR_LINE_N);
             canvas.drawCircle(lx + dotR, ly + dotR, dotR, trainPaint);
             legendTextPaint.setColor(COLOR_TEXT);
             canvas.drawText(legendLabels[i], lx + dotR * 2 + spacing, ly + dotR + textSizeSmall / 3, legendTextPaint);
@@ -450,12 +449,24 @@ public class LineMapView extends View {
         canvas.drawPath(path, trainPaint);
         canvas.drawPath(path, trainStrokePaint);
 
-        // Label du train (destination abrégée)
-        if (train.label != null && !train.label.isEmpty()) {
+        // Label du train : numéro + nom de mission (ex: "123456 MOPI")
+        StringBuilder trainLabel = new StringBuilder();
+        if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
+            trainLabel.append(train.trainNumber);
+        }
+        if (train.missionName != null && !train.missionName.isEmpty()) {
+            if (trainLabel.length() > 0) trainLabel.append(" ");
+            trainLabel.append(train.missionName);
+        }
+        if (trainLabel.length() == 0 && train.label != null && !train.label.isEmpty()) {
+            trainLabel.append(train.label);
+        }
+
+        if (trainLabel.length() > 0) {
             textSecondaryPaint.setTypeface(Typeface.DEFAULT_BOLD);
             textSecondaryPaint.setColor(color);
-            float labelX = tx - trainSize * 0.7f - textSecondaryPaint.measureText(train.label) - 4 * density;
-            canvas.drawText(train.label, labelX, ty, textSecondaryPaint);
+            float labelX = tx - trainSize * 0.7f - textSecondaryPaint.measureText(trainLabel.toString()) - 4 * density;
+            canvas.drawText(trainLabel.toString(), labelX, ty, textSecondaryPaint);
             textSecondaryPaint.setTypeface(Typeface.DEFAULT);
             textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
         }
