@@ -624,6 +624,16 @@ public class TrainFragment extends Fragment {
                     onTime = schedule.isOnTime();
                     delayMinutes = schedule.getDelayMinutes();
                     destination = schedule.getDestination();
+                    // Corréler l'ID du dernier arrêt avec le nom de destination
+                    String lastStopRaw = lastStop.getStopName();
+                    if (lastStopRaw != null && lastStopRaw.startsWith("Arrêt ")
+                            && destination != null && !destination.isEmpty()) {
+                        String id = lastStopRaw.substring(6).trim();
+                        if (!stopPointNameCache.containsKey(id)) {
+                            stopPointNameCache.put(id, destination);
+                            Log.d(TAG, "buildTrainsOnMap: cache enrichi " + id + "=" + destination);
+                        }
+                    }
                     break;
                 }
             }
@@ -1244,49 +1254,62 @@ public class TrainFragment extends Fragment {
     }
 
     private void fetchAndParseStopPointNames(String token) {
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URL(STOP_POINTS_DISCOVERY_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
+        // Essayer l'URL principale, puis un fallback avec le format IDFM
+        String[] urls = {
+                STOP_POINTS_DISCOVERY_URL,
+                "https://prim.iledefrance-mobilites.fr/marketplace/stop-points-discovery"
+                        + "?LineRef=IDFM:Line::C01736:"
+        };
+        for (String urlStr : urls) {
+            HttpURLConnection connection = null;
+            try {
+                URL url = new URL(urlStr);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setRequestProperty("apikey", token);
+                connection.setRequestProperty("Accept", "application/json");
+                connection.setConnectTimeout(15000);
+                connection.setReadTimeout(15000);
 
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchStopPointNames: HTTP " + responseCode);
+                int responseCode = connection.getResponseCode();
+                Log.d(TAG, "fetchStopPointNames: URL=" + urlStr + " HTTP " + responseCode);
 
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-                parseStopPointNames(response.toString());
-            } else {
-                Log.e(TAG, "fetchStopPointNames: ERREUR HTTP " + responseCode);
-                try {
-                    BufferedReader errReader = new BufferedReader(
-                            new InputStreamReader(connection.getErrorStream()));
-                    StringBuilder errBody = new StringBuilder();
-                    String errLine;
-                    while ((errLine = errReader.readLine()) != null) {
-                        errBody.append(errLine);
-                        if (errBody.length() > 500) break;
+                if (responseCode == HttpURLConnection.HTTP_OK) {
+                    BufferedReader reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream()));
+                    StringBuilder response = new StringBuilder();
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        response.append(line);
                     }
-                    errReader.close();
-                    Log.e(TAG, "fetchStopPointNames: body=" + errBody);
-                } catch (Exception ignored) {}
+                    reader.close();
+                    parseStopPointNames(response.toString());
+                    if (!stopPointNameCache.isEmpty()) {
+                        Log.i(TAG, "fetchStopPointNames: succès avec " + urlStr);
+                        return; // Succès, pas besoin d'essayer les fallbacks
+                    }
+                } else {
+                    Log.e(TAG, "fetchStopPointNames: ERREUR HTTP " + responseCode + " pour " + urlStr);
+                    try {
+                        BufferedReader errReader = new BufferedReader(
+                                new InputStreamReader(connection.getErrorStream()));
+                        StringBuilder errBody = new StringBuilder();
+                        String errLine;
+                        while ((errLine = errReader.readLine()) != null) {
+                            errBody.append(errLine);
+                            if (errBody.length() > 500) break;
+                        }
+                        errReader.close();
+                        Log.e(TAG, "fetchStopPointNames: body=" + errBody);
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "fetchStopPointNames: exception pour " + urlStr, e);
+            } finally {
+                if (connection != null) connection.disconnect();
             }
-        } catch (Exception e) {
-            Log.e(TAG, "fetchStopPointNames: exception", e);
-        } finally {
-            if (connection != null) connection.disconnect();
         }
+        Log.w(TAG, "fetchStopPointNames: toutes les URLs ont échoué, utilisation du mapping statique");
     }
 
     private void parseStopPointNames(String jsonStr) {
@@ -1395,31 +1418,40 @@ public class TrainFragment extends Fragment {
      */
     private void enrichCacheFromDestination(JSONObject journey) {
         try {
-            String destRef = "";
-            JSONObject destRefObj = journey.optJSONObject("DestinationRef");
-            if (destRefObj != null) {
-                destRef = destRefObj.optString("value", "");
-            } else {
-                destRef = journey.optString("DestinationRef", "");
-            }
-            String destName = "";
-            JSONArray destNames = journey.optJSONArray("DestinationName");
-            if (destNames != null && destNames.length() > 0) {
-                destName = destNames.getJSONObject(0).optString("value", "");
-            } else {
-                JSONObject destNameObj = journey.optJSONObject("DestinationName");
-                if (destNameObj != null) {
-                    destName = destNameObj.optString("value", "");
-                }
-            }
-            if (!destRef.isEmpty() && !destName.isEmpty()) {
-                String numericId = extractNumericId(destRef);
-                if (!numericId.isEmpty() && !stopPointNameCache.containsKey(numericId)) {
-                    stopPointNameCache.put(numericId, destName);
-                }
-            }
+            // DestinationRef + DestinationName
+            extractAndCacheRef(journey, "DestinationRef", "DestinationName");
+            // OriginRef + OriginName
+            extractAndCacheRef(journey, "OriginRef", "OriginName");
         } catch (Exception e) {
             // Ignorer silencieusement
+        }
+    }
+
+    private void extractAndCacheRef(JSONObject journey, String refKey, String nameKey) {
+        String ref = "";
+        JSONObject refObj = journey.optJSONObject(refKey);
+        if (refObj != null) {
+            ref = refObj.optString("value", "");
+        } else {
+            ref = journey.optString(refKey, "");
+        }
+        String name = "";
+        JSONArray names = journey.optJSONArray(nameKey);
+        if (names != null && names.length() > 0) {
+            name = names.optJSONObject(0) != null
+                    ? names.getJSONObject(0).optString("value", "") : "";
+        } else {
+            JSONObject nameObj = journey.optJSONObject(nameKey);
+            if (nameObj != null) {
+                name = nameObj.optString("value", "");
+            }
+        }
+        if (!ref.isEmpty() && !name.isEmpty()) {
+            String numericId = extractNumericId(ref);
+            if (!numericId.isEmpty() && !stopPointNameCache.containsKey(numericId)) {
+                stopPointNameCache.put(numericId, name);
+                Log.d(TAG, "enrichCache: " + numericId + "=" + name + " (from " + refKey + ")");
+            }
         }
     }
 
