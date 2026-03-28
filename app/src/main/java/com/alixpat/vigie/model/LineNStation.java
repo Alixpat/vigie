@@ -3,7 +3,9 @@ package com.alixpat.vigie.model;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Données statiques de toutes les gares de la ligne N du Transilien,
@@ -122,6 +124,31 @@ public class LineNStation {
                 .replace(" - ", " ").replace("-", " ")
                 .replace("gare de ", "").replace("gare du ", "")
                 .trim();
+    }
+
+    /**
+     * Mapping statique des IDs numériques STIF (StopArea:SP / StopPoint:Q)
+     * vers les noms de stations de la ligne N.
+     * Fallback utilisé quand l'API stop-points-discovery ne répond pas.
+     */
+    private static Map<String, String> stopIdMapping;
+
+    public static Map<String, String> getStopIdToNameMapping() {
+        if (stopIdMapping != null) return stopIdMapping;
+        Map<String, String> m = new HashMap<>();
+        // Tronc commun : Paris Montparnasse → Saint-Cyr
+        m.put("43088", "Meudon");
+        m.put("43108", "Sèvres Rive Gauche");
+        m.put("43111", "Clamart");
+        m.put("43162", "Viroflay Rive Gauche");
+        m.put("43195", "Bellevue");
+        m.put("43214", "Saint-Cyr");
+        m.put("43238", "Versailles Chantiers");
+        m.put("462388", "Chaville Rive Gauche");
+        // Branche Mantes
+        m.put("43221", "Villepreux - Les Clayes");
+        stopIdMapping = Collections.unmodifiableMap(m);
+        return stopIdMapping;
     }
 
     /**

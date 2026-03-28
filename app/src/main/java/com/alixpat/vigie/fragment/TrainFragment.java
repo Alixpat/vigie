@@ -942,6 +942,9 @@ public class TrainFragment extends Fragment {
                         continue;
                     }
 
+                    // Enrichir le cache de noms d'arrêts depuis DestinationRef
+                    enrichCacheFromDestination(journey);
+
                     RawStopVisit raw = new RawStopVisit();
                     raw.journeyRef = journeyRef;
 
@@ -1264,6 +1267,20 @@ public class TrainFragment extends Fragment {
                 }
                 reader.close();
                 parseStopPointNames(response.toString());
+            } else {
+                Log.e(TAG, "fetchStopPointNames: ERREUR HTTP " + responseCode);
+                try {
+                    BufferedReader errReader = new BufferedReader(
+                            new InputStreamReader(connection.getErrorStream()));
+                    StringBuilder errBody = new StringBuilder();
+                    String errLine;
+                    while ((errLine = errReader.readLine()) != null) {
+                        errBody.append(errLine);
+                        if (errBody.length() > 500) break;
+                    }
+                    errReader.close();
+                    Log.e(TAG, "fetchStopPointNames: body=" + errBody);
+                } catch (Exception ignored) {}
             }
         } catch (Exception e) {
             Log.e(TAG, "fetchStopPointNames: exception", e);
@@ -1335,15 +1352,23 @@ public class TrainFragment extends Fragment {
     }
 
     /**
-     * Résout un nom d'arrêt "Arrêt XXXXX" en nom réel depuis le cache.
-     * Si le nom n'est pas un ID ou si le cache ne contient pas l'ID, retourne le nom original.
+     * Résout un nom d'arrêt "Arrêt XXXXX" en nom réel depuis le cache,
+     * puis depuis le mapping statique de la ligne N en fallback.
      */
     private String resolveStopName(String name) {
         if (name == null || !name.startsWith("Arrêt ")) return name;
         String numericId = name.substring(6).trim(); // "Arrêt 43219" → "43219"
+        // 1. Cache dynamique (stop-points-discovery ou DestinationRef)
         String cached = stopPointNameCache.get(numericId);
         if (cached != null && !cached.isEmpty()) {
             return cached;
+        }
+        // 2. Mapping statique de la ligne N en fallback
+        String staticName = LineNStation.getStopIdToNameMapping().get(numericId);
+        if (staticName != null && !staticName.isEmpty()) {
+            // Mémoriser pour éviter de chercher à chaque fois
+            stopPointNameCache.put(numericId, staticName);
+            return staticName;
         }
         return name;
     }
@@ -1362,6 +1387,40 @@ public class TrainFragment extends Fragment {
             }
         }
         return "";
+    }
+
+    /**
+     * Extrait DestinationRef + DestinationName d'un EstimatedVehicleJourney
+     * et les ajoute au cache de noms d'arrêts.
+     */
+    private void enrichCacheFromDestination(JSONObject journey) {
+        try {
+            String destRef = "";
+            JSONObject destRefObj = journey.optJSONObject("DestinationRef");
+            if (destRefObj != null) {
+                destRef = destRefObj.optString("value", "");
+            } else {
+                destRef = journey.optString("DestinationRef", "");
+            }
+            String destName = "";
+            JSONArray destNames = journey.optJSONArray("DestinationName");
+            if (destNames != null && destNames.length() > 0) {
+                destName = destNames.getJSONObject(0).optString("value", "");
+            } else {
+                JSONObject destNameObj = journey.optJSONObject("DestinationName");
+                if (destNameObj != null) {
+                    destName = destNameObj.optString("value", "");
+                }
+            }
+            if (!destRef.isEmpty() && !destName.isEmpty()) {
+                String numericId = extractNumericId(destRef);
+                if (!numericId.isEmpty() && !stopPointNameCache.containsKey(numericId)) {
+                    stopPointNameCache.put(numericId, destName);
+                }
+            }
+        } catch (Exception e) {
+            // Ignorer silencieusement
+        }
     }
 
     // ==================== ESTIMATED TIMETABLE (tous les arrêts) ====================
@@ -1506,6 +1565,9 @@ public class TrainFragment extends Fragment {
                             continue;
                         }
 
+                        // Extraire DestinationRef + DestinationName pour enrichir le cache
+                        enrichCacheFromDestination(journey);
+
                         List<TrainStop> stops = new ArrayList<>();
 
                         // EstimatedCalls
@@ -1544,7 +1606,15 @@ public class TrainFragment extends Fragment {
                         }
 
                         if (!stops.isEmpty()) {
-                            // Marquer premier et dernier
+                            // Trier les arrêts par horaire pour garantir l'ordre chronologique
+                            Collections.sort(stops, (a, b) -> {
+                                long ta = a.getBestTimeMillis();
+                                long tb = b.getBestTimeMillis();
+                                if (ta == 0 && tb == 0) return 0;
+                                if (ta == 0) return 1;
+                                if (tb == 0) return -1;
+                                return Long.compare(ta, tb);
+                            });
                             journeyStopsCache.put(journeyRef, stops);
                             totalJourneys++;
                             totalStops += stops.size();
