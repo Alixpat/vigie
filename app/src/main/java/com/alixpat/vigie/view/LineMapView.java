@@ -144,9 +144,9 @@ public class LineMapView extends View {
         textSizeLegend = 11 * density;
         rowHeight = 36 * density;
         branchOffsetX = 100 * density;
-        startX = 24 * density;
+        startX = 90 * density;
         startY = 60 * density;
-        legendHeight = 34 * density;
+        legendHeight = 52 * density;
 
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(lineWidth);
@@ -339,7 +339,7 @@ public class LineMapView extends View {
         legendTextPaint.setTextSize(textSizeSmall);
         ly += textSizeLegend + 10 * density;
 
-        // Légende trains (statuts uniquement)
+        // Légende trains (statuts)
         lx = startX;
         int[] trainColors = {COLOR_TRAIN_ON_TIME, COLOR_TRAIN_DELAYED, COLOR_TRAIN_CANCELLED};
         String[] trainLabels = {"À l'heure", "Retardé", "Supprimé"};
@@ -357,6 +357,30 @@ public class LineMapView extends View {
             canvas.drawText(trainLabels[i], triX + 18 * density, triY + 9 * density, legendTextPaint);
             lx += textPaint.measureText(trainLabels[i]) + 36 * density;
         }
+
+        // Légende sens (deux voies)
+        ly += 16 * density;
+        lx = startX;
+        trainPaint.setColor(COLOR_LINE_N);
+        // ▲ Vers Paris
+        Path upTri = new Path();
+        upTri.moveTo(lx + 8 * density, ly);
+        upTri.lineTo(lx, ly + 10 * density);
+        upTri.lineTo(lx + 16 * density, ly + 10 * density);
+        upTri.close();
+        canvas.drawPath(upTri, trainPaint);
+        legendTextPaint.setColor(COLOR_TEXT);
+        canvas.drawText("Vers Paris (droite)", lx + 18 * density, ly + 9 * density, legendTextPaint);
+        lx += legendTextPaint.measureText("Vers Paris (droite)") + 36 * density;
+        // ▼ Vers banlieue
+        Path downTri = new Path();
+        downTri.moveTo(lx + 8 * density, ly + 10 * density);
+        downTri.lineTo(lx, ly);
+        downTri.lineTo(lx + 16 * density, ly);
+        downTri.close();
+        canvas.drawPath(downTri, trainPaint);
+        legendTextPaint.setColor(COLOR_TEXT);
+        canvas.drawText("Vers banlieue (gauche)", lx + 18 * density, ly + 9 * density, legendTextPaint);
     }
 
     private void drawBranchCurve(Canvas canvas, float fromX, float fromY,
@@ -378,8 +402,8 @@ public class LineMapView extends View {
         canvas.drawCircle(x, y, radius, stopFillPaint);
         canvas.drawCircle(x, y, radius, stopStrokePaint);
 
-        // Nom de la gare
-        float textX = x + radius + 8 * getResources().getDisplayMetrics().density;
+        // Nom de la gare (décalé pour laisser la voie montante à droite)
+        float textX = x + radius + trainSize + 16 * getResources().getDisplayMetrics().density;
         float textY = y + textSize / 3;
 
         if (isJunction) {
@@ -411,7 +435,6 @@ public class LineMapView extends View {
         float tx, ty;
 
         if (posFrom != null && posTo != null) {
-            // Interpoler entre les deux gares
             float progress = Math.max(0, Math.min(1, train.progressBetweenStops));
             tx = posFrom[0] + (posTo[0] - posFrom[0]) * progress;
             ty = posFrom[1] + (posTo[1] - posFrom[1]) * progress;
@@ -424,12 +447,26 @@ public class LineMapView extends View {
         } else {
             Log.w(TAG, "drawTrain: AUCUNE position trouvée pour train mission=" + train.missionName
                     + " current='" + train.currentStopName + "' next='" + train.nextStopName + "' → TRAIN NON DESSINÉ");
-            return; // Pas de position trouvée
+            return;
         }
 
-        // Décaler le train à gauche de la ligne pour ne pas couvrir les gares
         float density = getResources().getDisplayMetrics().density;
-        tx -= trainSize + 4 * density;
+
+        // Déterminer le sens : montant (vers Paris, Y décroissant) ou descendant
+        boolean goingUp = false;
+        if (posFrom != null && posTo != null) {
+            goingUp = posTo[1] < posFrom[1];
+        } else {
+            String destLower = train.destination != null ? train.destination.toLowerCase(Locale.FRENCH) : "";
+            goingUp = destLower.contains("paris") || destLower.contains("montparnasse");
+        }
+
+        // Deux voies : montants à droite, descendants à gauche
+        if (goingUp) {
+            tx += trainSize + 4 * density;
+        } else {
+            tx -= trainSize + 4 * density;
+        }
 
         // Couleur selon le statut
         int color;
@@ -440,19 +477,24 @@ public class LineMapView extends View {
         } else {
             color = COLOR_TRAIN_ON_TIME;
         }
-
         trainPaint.setColor(color);
 
-        // Dessiner un triangle pointant vers le bas (direction du train)
+        // Triangle : ▲ montant vers Paris, ▼ descendant vers banlieue
         Path path = new Path();
-        path.moveTo(tx, ty - trainSize);
-        path.lineTo(tx - trainSize * 0.7f, ty + trainSize * 0.5f);
-        path.lineTo(tx + trainSize * 0.7f, ty + trainSize * 0.5f);
+        if (goingUp) {
+            path.moveTo(tx, ty - trainSize);
+            path.lineTo(tx - trainSize * 0.7f, ty + trainSize * 0.5f);
+            path.lineTo(tx + trainSize * 0.7f, ty + trainSize * 0.5f);
+        } else {
+            path.moveTo(tx, ty + trainSize);
+            path.lineTo(tx - trainSize * 0.7f, ty - trainSize * 0.5f);
+            path.lineTo(tx + trainSize * 0.7f, ty - trainSize * 0.5f);
+        }
         path.close();
         canvas.drawPath(path, trainPaint);
         canvas.drawPath(path, trainStrokePaint);
 
-        // Label du train : numéro + nom de mission (ex: "123456 MOPI")
+        // Label : numéro + mission + retard éventuel
         StringBuilder trainLabel = new StringBuilder();
         if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
             trainLabel.append(train.trainNumber);
@@ -464,21 +506,29 @@ public class LineMapView extends View {
         if (trainLabel.length() == 0 && train.label != null && !train.label.isEmpty()) {
             trainLabel.append(train.label);
         }
+        if (train.delayed && train.delayMinutes > 0) {
+            trainLabel.append(" +").append(train.delayMinutes).append("min");
+        }
 
         if (trainLabel.length() > 0) {
             textSecondaryPaint.setTypeface(Typeface.DEFAULT_BOLD);
             textSecondaryPaint.setColor(color);
-            float labelX = tx - trainSize * 0.7f - textSecondaryPaint.measureText(trainLabel.toString()) - 4 * density;
-            canvas.drawText(trainLabel.toString(), labelX, ty, textSecondaryPaint);
-            textSecondaryPaint.setTypeface(Typeface.DEFAULT);
-            textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
-        }
+            float textWidth = textSecondaryPaint.measureText(trainLabel.toString());
+            float labelX, labelY;
 
-        // Retard affiché
-        if (train.delayed && train.delayMinutes > 0) {
-            String delayText = "+" + train.delayMinutes + "min";
-            textSecondaryPaint.setColor(COLOR_TRAIN_DELAYED);
-            canvas.drawText(delayText, tx + trainSize + 2 * density, ty, textSecondaryPaint);
+            if (goingUp) {
+                // Voie droite : label au-dessus du triangle
+                labelX = tx - textWidth / 2;
+                labelY = ty - trainSize - 4 * density;
+            } else {
+                // Voie gauche : label à gauche du triangle
+                labelX = tx - trainSize * 0.7f - textWidth - 4 * density;
+                labelY = ty;
+            }
+            labelX = Math.max(2 * density, labelX);
+
+            canvas.drawText(trainLabel.toString(), labelX, labelY, textSecondaryPaint);
+            textSecondaryPaint.setTypeface(Typeface.DEFAULT);
             textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
         }
     }
