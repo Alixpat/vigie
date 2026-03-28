@@ -10,10 +10,10 @@
     <!-- Light beams -->
     <path
         android:fillColor="#90CAF9"
-        android:pathData="M47,36.5 L34.5,31 L37,42 Z" />
+        android:pathData="M47,36.5 L34,31 L34,42 Z" />
     <path
         android:fillColor="#90CAF9"
-        android:pathData="M61,36.5 L73.5,31 L71,42 Z" />
+        android:pathData="M61,36.5 L74,31 L74,42 Z" />
 
     <!-- Lighthouse silhouette -->
     <path
