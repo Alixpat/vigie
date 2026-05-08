@@ -21,7 +21,12 @@ JDK 17, Android Gradle Plugin 8.2.2, Java source/target 1.8. Use the wrapper:
 ./gradlew clean
 ```
 
-The only tests so far live in `app/src/test/java/com/alixpat/vigie/model/` and cover the four MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent. There is no `src/androidTest` source set yet. CI runs `testDebugUnitTest` before `assembleRelease`, so a failing test blocks the APK build and uploads the HTML report as a `test-report` artifact.
+JVM unit tests live in `app/src/test/java/com/alixpat/vigie/`:
+
+- **`model/`** — covers the four MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent.
+- **`train/`** — covers the three pure helpers extracted from `TrainFragment` (`IncidentClassifier`, `LineNDirection`, `IdfmClient`). Touching keyword arrays, direction matching, or URL construction without running tests is asking for a regression.
+
+There is no `src/androidTest` source set yet. CI runs `testDebugUnitTest` before `assembleRelease`, so a failing test blocks the APK build and uploads the HTML report as a `test-report` artifact.
 
 Release signing is driven by env vars (see `app/build.gradle` `signingConfigs.release`):
 `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. CI (`.github/workflows/build-apk.yml`) decodes a base64 keystore from `secrets.KEYSTORE_BASE64` on push to `main` or tag `v*`, runs `assembleRelease`, and publishes a GitHub Release with the APK. Pushes to `main` create a `dev-<sha>` prerelease tag; semver tags create stable releases.
@@ -58,9 +63,15 @@ Despite the name, `BrokerConfig` (`SharedPreferences("vigie_prefs")`) holds **al
 
 ### Train tab specifics
 
-`TrainFragment` is the largest file in the app (~2k lines) and orchestrates five IDFM PRIM endpoints: `general-message`, `stop-monitoring`, `estimated-timetable`, Navitia v2 `stop_points` discovery, and Navitia v2 `line_reports` (added in commit `65219c6` for richer perturbation data). Direction routing (Aller / Retour) is determined by string-matching destination names against `DESTINATIONS_VERS_VILLEPREUX` / `DESTINATIONS_VERS_PARIS`. Incident classification (perturbation vs. travaux vs. blocking) is keyword-based. The custom `LineMapView` renders the line schematic; train detail dialogs combine `estimated-timetable` data with on-demand `stop-monitoring` calls for `OnwardCalls`.
+`TrainFragment` orchestrates five IDFM PRIM endpoints: `general-message`, `stop-monitoring`, `estimated-timetable`, Navitia v2 `stop_points` discovery, and Navitia v2 `line_reports`. The pure logic has been extracted into `com.alixpat.vigie.train.*` — **add new train logic there, not in the fragment**:
 
-All HTTP calls in train/weather/voiture are plain `HttpURLConnection` on a single-thread `ExecutorService`, results posted back via a main-`Handler`. There is no Retrofit/OkHttp/coroutine layer; match the existing pattern when adding endpoints.
+- **`IdfmClient`** — HTTP layer. Constructor takes `(lineRef, navitiaLineId)`; the five `fetchXxx(token, ...)` methods return raw JSON strings and throw `IdfmClient.HttpException` (extends `IOException`) on non-200 responses. `HttpException.isServerError()` drives the `stop-monitoring` retry loop. Adding an endpoint = a new method here, not a sixth copy of HttpURLConnection boilerplate.
+- **`LineNDirection`** — two static instances (`ALLER`, `RETOUR`) bundling origin/destination stop refs, human names, and destination keywords. `matchesDestination(String)` is the case-insensitive substring matcher used by `buildCrossReferencedSchedules`.
+- **`IncidentClassifier`** — keyword-based classification of perturbation / travaux / blocking. Used by both the `general-message` parser (entirely via `classifyMessage(text, channel)`) and the `line_reports` parser (via the three `hasXxxKeyword` helpers).
+
+The custom `LineMapView` renders the line schematic; train detail dialogs still live in the fragment and combine `estimated-timetable` data with on-demand `stop-monitoring` calls for `OnwardCalls`.
+
+`WeatherFragment` and `VoitureFragment` still use plain `HttpURLConnection` on a single-thread `ExecutorService` — they have not been refactored onto an HTTP helper yet. There is no Retrofit/OkHttp/coroutine layer.
 
 ## Conventions worth following
 
