@@ -24,6 +24,7 @@ import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
 import com.alixpat.vigie.train.IncidentClassifier;
+import com.alixpat.vigie.train.LineNDirection;
 import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
 
@@ -75,16 +76,6 @@ public class TrainFragment extends Fragment {
             "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/line_reports";
     private static final String STOP_POINTS_DISCOVERY_URL =
             "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/stop_points?count=100";
-    private static final String CLAMART_STOP_REF = "STIF:StopArea:SP:43111:";
-    private static final String VILLEPREUX_STOP_REF = "STIF:StopArea:SP:43221:";
-
-    private static final String[] DESTINATIONS_VERS_VILLEPREUX = {
-            "villepreux", "plaisir", "dreux", "mantes"
-    };
-    private static final String[] DESTINATIONS_VERS_PARIS = {
-            "paris", "montparnasse", "clamart", "meudon", "chaville",
-            "viroflay", "versailles", "sèvres", "sevres"
-    };
 
     private MaterialCardView lineStatusCard;
     private View lineStatusStripe;
@@ -916,19 +907,21 @@ public class TrainFragment extends Fragment {
         }
 
         executor.execute(() -> {
-            Log.d(TAG, "fetchSchedules: requête Clamart, stop=" + CLAMART_STOP_REF);
-            Map<String, RawStopVisit> clamartData = fetchAndParseRaw(token, CLAMART_STOP_REF, "Clamart");
+            Log.d(TAG, "fetchSchedules: requête Clamart, stop=" + LineNDirection.ALLER.getOriginStopRef());
+            Map<String, RawStopVisit> clamartData = fetchAndParseRaw(
+                    token, LineNDirection.ALLER.getOriginStopRef(), LineNDirection.ALLER.getOriginName());
 
-            Log.d(TAG, "fetchSchedules: requête Villepreux, stop=" + VILLEPREUX_STOP_REF);
-            Map<String, RawStopVisit> villepreuxData = fetchAndParseRaw(token, VILLEPREUX_STOP_REF, "Villepreux");
+            Log.d(TAG, "fetchSchedules: requête Villepreux, stop=" + LineNDirection.ALLER.getDestinationStopRef());
+            Map<String, RawStopVisit> villepreuxData = fetchAndParseRaw(
+                    token, LineNDirection.ALLER.getDestinationStopRef(), LineNDirection.ALLER.getDestinationName());
 
             List<TrainSchedule> allerSchedules = buildCrossReferencedSchedules(
                     clamartData, villepreuxData,
-                    DESTINATIONS_VERS_VILLEPREUX, now, windowEnd, "Aller");
+                    LineNDirection.ALLER, now, windowEnd);
 
             List<TrainSchedule> retourSchedules = buildCrossReferencedSchedules(
                     villepreuxData, clamartData,
-                    DESTINATIONS_VERS_PARIS, now, windowEnd, "Retour");
+                    LineNDirection.RETOUR, now, windowEnd);
 
             Log.i(TAG, "fetchSchedules: résultats Aller=" + (allerSchedules != null ? allerSchedules.size() : "null")
                     + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null"));
@@ -1170,14 +1163,13 @@ public class TrainFragment extends Fragment {
     private List<TrainSchedule> buildCrossReferencedSchedules(
             Map<String, RawStopVisit> originData,
             Map<String, RawStopVisit> destinationData,
-            String[] destinationFilter,
-            Date windowStart, Date windowEnd,
-            String directionLabel) {
+            LineNDirection direction,
+            Date windowStart, Date windowEnd) {
 
         List<TrainSchedule> schedules = new ArrayList<>();
 
         if (originData == null || originData.isEmpty()) {
-            Log.e(TAG, "buildCrossReferenced [" + directionLabel + "]: originData est null ou vide");
+            Log.e(TAG, "buildCrossReferenced [" + direction.getLabel() + "]: originData est null ou vide");
             return null;
         }
 
@@ -1192,19 +1184,9 @@ public class TrainFragment extends Fragment {
             String journeyRef = entry.getKey();
             RawStopVisit origin = entry.getValue();
 
-            if (destinationFilter != null && destinationFilter.length > 0) {
-                String destLower = origin.destination.toLowerCase(Locale.FRENCH);
-                boolean matchesFilter = false;
-                for (String keyword : destinationFilter) {
-                    if (destLower.contains(keyword)) {
-                        matchesFilter = true;
-                        break;
-                    }
-                }
-                if (!matchesFilter) {
-                    filteredByDest++;
-                    continue;
-                }
+            if (!direction.matchesDestination(origin.destination)) {
+                filteredByDest++;
+                continue;
             }
 
             if (origin.aimedDeparture == null) {
@@ -1245,7 +1227,7 @@ public class TrainFragment extends Fragment {
 
             String aimedTimeStr = timeFmt.format(origin.aimedDeparture);
 
-            Log.d(TAG, "buildCrossReferenced [" + directionLabel + "]: GARDÉ "
+            Log.d(TAG, "buildCrossReferenced [" + direction.getLabel() + "]: GARDÉ "
                     + journeyRef
                     + " départ=" + aimedTimeStr
                     + " arrivée=" + arrivalTimeStr
@@ -1263,7 +1245,7 @@ public class TrainFragment extends Fragment {
                 }
             }
 
-            String originStation = "Aller".equals(directionLabel) ? "Clamart" : "Villepreux";
+            String originStation = direction.getOriginName();
 
             String trainNum = origin.trainNumber != null ? origin.trainNumber : "";
             String missionNm = origin.missionName != null ? origin.missionName : "";
@@ -1296,7 +1278,7 @@ public class TrainFragment extends Fragment {
         Collections.sort(schedules, (a, b) ->
                 Long.compare(a.getAimedDepartureMillis(), b.getAimedDepartureMillis()));
 
-        Log.i(TAG, "buildCrossReferenced [" + directionLabel + "]: RÉSUMÉ"
+        Log.i(TAG, "buildCrossReferenced [" + direction.getLabel() + "]: RÉSUMÉ"
                 + " total_origine=" + originData.size()
                 + " gardés=" + schedules.size()
                 + " filtrés(destination)=" + filteredByDest
