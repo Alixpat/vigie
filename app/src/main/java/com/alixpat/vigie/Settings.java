@@ -3,7 +3,13 @@ package com.alixpat.vigie;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-public class BrokerConfig {
+/**
+ * Single SharedPreferences-backed settings store for the whole app.
+ * Holds broker (IP/port/credentials) plus integration tokens (IDFM, TomTom).
+ * Historically named {@code BrokerConfig} but it has long since outgrown that.
+ * The underlying prefs file remains {@code vigie_prefs} — no data migration.
+ */
+public class Settings {
 
     private static final String PREFS_NAME = "vigie_prefs";
     private static final String KEY_BROKER_IP = "broker_ip";
@@ -18,7 +24,7 @@ public class BrokerConfig {
 
     private final SharedPreferences prefs;
 
-    public BrokerConfig(Context context) {
+    public Settings(Context context) {
         prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
     }
 

@@ -15,7 +15,7 @@ import androidx.fragment.app.Fragment;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
-import com.alixpat.vigie.BrokerConfig;
+import com.alixpat.vigie.Settings;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
@@ -208,7 +208,7 @@ public class TrainFragment extends Fragment {
             // Pas de données d'arrêts, on tente un fetch à la demande
             Log.i(TAG, "showTrainDetailDialog: pas de stops en cache pour " + journeyRef
                     + ", cache contient " + journeyStopsCache.size() + " trajets, fetch en cours...");
-            BrokerConfig config = new BrokerConfig(requireContext());
+            Settings config = new Settings(requireContext());
             if (config.hasIdfmToken()) {
                 executor.execute(() -> {
                     // Vérifier le cache d'abord (un fetch précédent a pu le remplir pendant l'attente dans la queue)
@@ -870,7 +870,7 @@ public class TrainFragment extends Fragment {
     // ==================== SCHEDULES ====================
 
     private void fetchSchedules() {
-        BrokerConfig config = new BrokerConfig(requireContext());
+        Settings config = new Settings(requireContext());
         if (!config.hasIdfmToken()) {
             Log.w(TAG, "fetchSchedules: Token IDFM non configuré");
             showMessage(scheduleEmptyAller, scheduleRecyclerViewAller,
@@ -1294,7 +1294,7 @@ public class TrainFragment extends Fragment {
 
     private void fetchStopPointNames() {
         if (!stopPointNameCache.isEmpty()) return; // Déjà chargé
-        BrokerConfig config = new BrokerConfig(requireContext());
+        Settings config = new Settings(requireContext());
         if (!config.hasIdfmToken()) return;
 
         String token = config.getIdfmToken();
@@ -1375,7 +1375,7 @@ public class TrainFragment extends Fragment {
     // ==================== ESTIMATED TIMETABLE (tous les arrêts) ====================
 
     private void fetchEstimatedTimetable() {
-        BrokerConfig config = new BrokerConfig(requireContext());
+        Settings config = new Settings(requireContext());
         if (!config.hasIdfmToken()) return;
 
         String token = config.getIdfmToken();
@@ -1683,7 +1683,7 @@ public class TrainFragment extends Fragment {
     // ==================== INCIDENTS ====================
 
     private void fetchIncidents() {
-        BrokerConfig config = new BrokerConfig(requireContext());
+        Settings config = new Settings(requireContext());
         if (!config.hasIdfmToken()) {
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {

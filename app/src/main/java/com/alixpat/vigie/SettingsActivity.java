@@ -38,7 +38,7 @@ public class SettingsActivity extends AppCompatActivity {
         Button saveButton = findViewById(R.id.saveButton);
 
         // Charger les valeurs actuelles
-        BrokerConfig config = new BrokerConfig(this);
+        Settings config = new Settings(this);
         ipField.setText(config.getBrokerIp());
         portField.setText(String.valueOf(config.getBrokerPort()));
         usernameField.setText(config.getUsername());
@@ -75,7 +75,7 @@ public class SettingsActivity extends AppCompatActivity {
         String idfmToken = idfmTokenField.getText().toString().trim();
         String tomtomApiKey = tomtomApiKeyField.getText().toString().trim();
 
-        BrokerConfig config = new BrokerConfig(this);
+        Settings config = new Settings(this);
         config.save(ip, port, username, password);
         config.saveIdfmToken(idfmToken);
         config.saveTomTomApiKey(tomtomApiKey);

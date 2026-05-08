@@ -102,7 +102,7 @@ public class MqttService extends Service {
     private MqttClient mqttClient;
     private MqttConnectOptions connectOptions;
     private NotificationHelper notificationHelper;
-    private BrokerConfig brokerConfig;
+    private Settings settings;
     private ConnectivityManager connectivityManager;
     private ConnectivityManager.NetworkCallback networkCallback;
     private PowerManager.WakeLock wakeLock;
@@ -113,7 +113,7 @@ public class MqttService extends Service {
     public void onCreate() {
         super.onCreate();
         notificationHelper = new NotificationHelper(this);
-        brokerConfig = new BrokerConfig(this);
+        settings = new Settings(this);
         connectivityManager = getSystemService(ConnectivityManager.class);
 
         // WakeLock pour maintenir la connexion en arrière-plan
@@ -146,7 +146,7 @@ public class MqttService extends Service {
         cleanupClient();
 
         try {
-            String brokerUri = brokerConfig.getBrokerUri();
+            String brokerUri = settings.getBrokerUri();
             String clientId = "vigie-android-" + System.currentTimeMillis();
             mqttClient = new MqttClient(brokerUri, clientId, new MemoryPersistence());
 
@@ -157,9 +157,9 @@ public class MqttService extends Service {
             connectOptions.setKeepAliveInterval(60);
             connectOptions.setMaxInflight(100);
 
-            if (brokerConfig.hasCredentials()) {
-                connectOptions.setUserName(brokerConfig.getUsername());
-                connectOptions.setPassword(brokerConfig.getPassword().toCharArray());
+            if (settings.hasCredentials()) {
+                connectOptions.setUserName(settings.getUsername());
+                connectOptions.setPassword(settings.getPassword().toCharArray());
             }
 
             mqttClient.setCallback(new MqttCallbackExtended() {

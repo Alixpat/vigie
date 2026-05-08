@@ -14,7 +14,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
 
-import com.alixpat.vigie.BrokerConfig;
+import com.alixpat.vigie.Settings;
 import com.alixpat.vigie.R;
 import androidx.core.content.ContextCompat;
 
@@ -116,7 +116,7 @@ public class VoitureFragment extends Fragment {
     }
 
     private void fetchDrivingTimes() {
-        BrokerConfig config = new BrokerConfig(requireContext());
+        Settings config = new Settings(requireContext());
         if (!config.hasTomTomApiKey()) {
             Log.w(TAG, "fetchDrivingTimes: Clé API TomTom non configurée");
             if (getActivity() != null) {
