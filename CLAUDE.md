@@ -17,10 +17,11 @@ JDK 17, Android Gradle Plugin 8.2.2, Java source/target 1.8. Use the wrapper:
 ./gradlew assembleRelease        # signed release (needs keystore env vars below)
 ./gradlew installDebug           # install to attached device/emulator
 ./gradlew lint                   # Android lint
+./gradlew testDebugUnitTest      # JVM unit tests (src/test)
 ./gradlew clean
 ```
 
-There are **no unit/instrumentation tests** in the repo (no `src/test` or `src/androidTest` source sets). Don't claim test coverage that doesn't exist.
+The only tests so far live in `app/src/test/java/com/alixpat/vigie/model/` and cover the four MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent. There is no `src/androidTest` source set yet. CI does not run tests yet (`build-apk.yml` only calls `assembleRelease`).
 
 Release signing is driven by env vars (see `app/build.gradle` `signingConfigs.release`):
 `KEYSTORE_PATH`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`. CI (`.github/workflows/build-apk.yml`) decodes a base64 keystore from `secrets.KEYSTORE_BASE64` on push to `main` or tag `v*`, runs `assembleRelease`, and publishes a GitHub Release with the APK. Pushes to `main` create a `dev-<sha>` prerelease tag; semver tags create stable releases.

@@ -48,4 +48,7 @@ dependencies {
 
     // JSON parsing
     implementation 'com.google.code.gson:gson:2.10.1'
+
+    // Tests JVM (modèles : aucun framework Android requis)
+    testImplementation 'junit:junit:4.13.2'
 }
