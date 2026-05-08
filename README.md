@@ -1,18 +1,23 @@
 # Vigie
 
-Application Android de surveillance connectée à un broker MQTT. Elle reçoit des messages et génère des notifications en temps réel.
+Application Android de surveillance personnelle. Elle combine une connexion MQTT persistante (notifications domotiques, statut LAN, sauvegardes, qualité internet) avec plusieurs onglets de supervision externes (météo, transports, trafic routier).
 
 ## Fonctionnalités
 
 - Connexion persistante à un broker MQTT (Mosquitto) via un **foreground service**
-- Abonnement au topic `vigie/#`
-- Réception de messages au format **JSON**
-- Affichage de **notifications Android** en fonction des messages reçus
-- **Navigation par onglets** : Messages et LAN (extensible)
-- **Onglet LAN** : supervision en temps réel des machines du réseau (up/down)
-- **Écran de configuration** : adresse IP du broker, port, login et mot de passe
-- **Statut de connexion en temps réel** (connexion en cours, connecté, erreur, déconnecté)
-- Fonctionne en arrière-plan (la connexion reste active même si l'app est fermée)
+- Abonnement au topic `vigie/#` (reconnexion automatique, conservation en arrière-plan)
+- Réception de messages au format **JSON** et **notifications Android**
+- **Navigation par onglets** (5) : Messages, Infra, Météo, Train, Voiture
+- **Statut de connexion en temps réel** (déconnecté, connexion, connecté, erreur)
+- **Onglet Messages** : historique complet des notifications reçues
+- **Onglet Infra** : trois sections alimentées par MQTT
+  - Internet : statut up/down, latence, dernière coupure
+  - LAN : grille des machines du réseau (up/down)
+  - Backup : statut des jobs de sauvegarde (success / failed / missing)
+- **Onglet Météo** : conditions courantes via [Open-Meteo](https://open-meteo.com/) (sans clé API)
+- **Onglet Train** : passages, perturbations et travaux de la ligne SNCF N via l'API [IDFM PRIM](https://prim.iledefrance-mobilites.fr/) (token requis)
+- **Onglet Voiture** : temps de trajet domicile-travail via l'API [TomTom Routing](https://developer.tomtom.com/) (clé API requise), avec moyenne glissante sur 30 min
+- **Écran de configuration** : broker MQTT (IP, port, identifiants) + tokens IDFM et TomTom
 
 ## Stack technique
 
@@ -20,43 +25,80 @@ Application Android de surveillance connectée à un broker MQTT. Elle reçoit d
 |---------|-------|
 | Langage | Java |
 | IDE | Android Studio |
-| minSdk | API 26 (Android 8.0) |
+| minSdk / targetSdk | 26 (Android 8.0) / 34 |
+| Java source/target | 1.8 |
+| Build | Gradle Wrapper, AGP 8.2.2, JDK 17 |
 | Bibliothèque MQTT | Eclipse Paho Android Service |
 | Broker | Mosquitto (authentifié) |
-| Format des messages | JSON |
+| Météo | Open-Meteo (sans clé) |
+| Transport | IDFM PRIM (token) |
+| Trafic routier | TomTom Routing API (clé) |
 
 ## Architecture
 
 ```
 app/
 ├── src/main/java/com/alixpat/vigie/
-│   ├── MainActivity.java            # Navigation par onglets (TabLayout + ViewPager2)
-│   ├── MqttService.java             # Foreground service MQTT
-│   ├── NotificationHelper.java      # Gestion des notifications
-│   ├── SettingsActivity.java        # Écran de configuration broker
-│   ├── BrokerConfig.java            # Stockage des paramètres (SharedPreferences)
+│   ├── MainActivity.java            # ViewPager2 + TabLayout (5 onglets), statut MQTT
+│   ├── MqttService.java             # Foreground service Paho, caches statiques + broadcasts
+│   ├── NotificationHelper.java      # Notifications (canal foreground + canal messages)
+│   ├── SettingsActivity.java        # Configuration broker + tokens (IDFM, TomTom)
+│   ├── BrokerConfig.java            # SharedPreferences : broker, IDFM, TomTom
 │   ├── adapter/
-│   │   ├── ViewPagerAdapter.java    # Adaptateur des onglets
-│   │   └── LanHostAdapter.java      # Adaptateur grille LAN
+│   │   ├── ViewPagerAdapter.java
+│   │   ├── MessageAdapter.java
+│   │   ├── LanHostAdapter.java
+│   │   ├── BackupJobAdapter.java
+│   │   ├── InternetAdapter.java
+│   │   ├── WeatherAdapter.java
+│   │   ├── TrainScheduleAdapter.java
+│   │   └── TrainIncidentAdapter.java
 │   ├── fragment/
-│   │   ├── MessagesFragment.java    # Onglet Messages (start/stop, statut, dernier message)
-│   │   └── LanFragment.java         # Onglet LAN (grille des machines)
+│   │   ├── MessagesFragment.java    # Historique des messages MQTT
+│   │   ├── InfraFragment.java       # Internet + LAN + Backup (sections)
+│   │   ├── WeatherFragment.java     # Open-Meteo (rafraîchi toutes les 10 min)
+│   │   ├── TrainFragment.java       # IDFM : 5 endpoints (general-message, stop-monitoring,
+│   │   │                            #         estimated-timetable, stop_points, line_reports)
+│   │   └── VoitureFragment.java     # TomTom routing aller/retour + moyenne 30 min
+│   ├── view/
+│   │   └── LineMapView.java         # Vue custom : schéma de la ligne N
 │   └── model/
-│       ├── VigieMessage.java        # Modèle de message notification
-│       └── LanHost.java             # Modèle de statut machine LAN
-├── src/main/res/
-│   └── layout/
-│       ├── activity_main.xml        # Layout principal (tabs + viewpager)
-│       ├── activity_settings.xml
-│       ├── fragment_messages.xml     # Layout onglet Messages
-│       ├── fragment_lan.xml          # Layout onglet LAN
-│       └── item_lan_host.xml        # Carte machine LAN
+│       ├── VigieMessage.java
+│       ├── LanHost.java
+│       ├── BackupJob.java
+│       ├── InternetStatus.java
+│       ├── WeatherData.java
+│       ├── LineNStation.java
+│       ├── TrainSchedule.java
+│       ├── TrainStop.java
+│       └── TrainIncident.java
+├── src/main/res/layout/
+│   ├── activity_main.xml
+│   ├── activity_settings.xml
+│   ├── fragment_messages.xml
+│   ├── fragment_infra.xml
+│   ├── fragment_weather.xml
+│   ├── fragment_train.xml
+│   ├── fragment_voiture.xml
+│   ├── dialog_line_map.xml
+│   ├── dialog_train_detail.xml
+│   ├── item_message.xml
+│   ├── item_lan_host.xml
+│   ├── item_internet.xml
+│   ├── item_backup_job.xml
+│   ├── item_weather_city.xml
+│   ├── item_train_schedule.xml
+│   └── item_train_incident.xml
 └── src/main/AndroidManifest.xml
 ```
 
+Le `MqttService` est la source de vérité : il maintient la connexion via `WAKE_LOCK`, expose des caches statiques (`messageHistory`, `lanHostsCache`, `backupJobsCache`, `internetCache`, `currentStatus`) que les fragments consomment au resume, et diffuse les mises à jour live par broadcasts package-scoped (`MqttService.ACTION_STATUS`, `InfraFragment.ACTION_LAN_STATUS` / `ACTION_BACKUP_STATUS` / `ACTION_INTERNET_STATUS`, `com.alixpat.vigie.MESSAGE_RECEIVED`). La reconnexion est doublée : auto-reconnect Paho + `ConnectivityManager.NetworkCallback` qui relance la connexion au retour du réseau.
+
 ## Format des messages MQTT
 
-### Notifications (topic `vigie/*`)
+Tous les messages sont publiés sur le topic `vigie/#` (sous-topic libre). Le routage côté app se fait par le champ `type` du JSON, dans cet ordre : `lan_status` → `backup_status` → `internet_status` → autres (notification générique).
+
+### Notification générique (`vigie/*`)
 
 ```json
 {
@@ -74,7 +116,7 @@ app/
 | `message` | string | Corps du message |
 | `priority` | string | Priorité : `high`, `normal`, `low` |
 
-### Statut LAN (topic `vigie/lan`)
+### Statut LAN
 
 ```json
 {
@@ -85,20 +127,72 @@ app/
 }
 ```
 
+Une entrée par machine. Clé de cache : `ip`.
+
+### Statut Internet
+
+```json
+{
+  "type": "internet_status",
+  "name": "Wan principal",
+  "host": "8.8.8.8",
+  "status": "up",
+  "latency_ms": 12.4,
+  "last_downtime_start": "2024-03-12T08:14:03Z",
+  "last_downtime_end": "2024-03-12T08:15:42Z",
+  "last_downtime_duration_minutes": 1.65
+}
+```
+
 | Champ | Type | Description |
 |-------|------|-------------|
-| `type` | string | Toujours `lan_status` |
-| `hostname` | string | Nom de la machine |
-| `ip` | string | Adresse IP |
+| `type` | string | Toujours `internet_status` |
+| `name` | string | Nom affiché (clé de cache) |
+| `host` | string | Hôte testé (ex. `8.8.8.8`) |
 | `status` | string | `up` ou `down` |
+| `latency_ms` | number | Latence en millisecondes |
+| `last_downtime_*` | string/number | Dernière coupure (début ISO 8601, fin, durée en minutes) |
 
-Un message par machine. L'app met à jour la grille à chaque message reçu.
+### Statut Backup
+
+```json
+{
+  "type": "backup_status",
+  "job": "nas-photos",
+  "status": "success",
+  "detail": "12.3 GiB transférés en 14m",
+  "last_run": "2024-03-12T03:00:00Z"
+}
+```
+
+| Champ | Type | Description |
+|-------|------|-------------|
+| `type` | string | Toujours `backup_status` |
+| `job` | string | Nom du job (clé de cache) |
+| `status` | string | `success`, `failed`, `missing` |
+| `detail` | string | Texte libre (résumé / erreur) |
+| `last_run` | string | Date ISO 8601 de la dernière exécution |
 
 ## Configuration
 
-L'adresse du broker, le port et les identifiants se configurent directement dans l'app via le bouton **Configuration** sur l'onglet Messages.
+Tous les paramètres se configurent dans l'app via le bouton **Configuration** (icône engrenage dans la toolbar). Ils sont sauvegardés dans `SharedPreferences` via `BrokerConfig`.
 
-Les paramètres sont sauvegardés localement (SharedPreferences). Le topic par défaut est `vigie/#`.
+| Paramètre | Onglet concerné | Obligatoire |
+|-----------|-----------------|-------------|
+| Adresse IP / port du broker | Messages, Infra | Oui pour MQTT |
+| Identifiants broker | Messages, Infra | Selon broker |
+| Token IDFM (`apikey`) | Train | Oui (sinon onglet vide) |
+| Clé API TomTom | Voiture | Oui (sinon onglet vide) |
+
+Le topic MQTT par défaut est `vigie/#`. Les coordonnées des villes (Météo) et des points de départ/arrivée (Voiture) sont actuellement codées en dur dans les fragments.
+
+### Obtenir un token IDFM
+
+Inscription gratuite sur [prim.iledefrance-mobilites.fr](https://prim.iledefrance-mobilites.fr/), puis souscrire aux APIs SIRI (`general-message`, `stop-monitoring`, `estimated-timetable`) et Navitia (`stop_points`, `line_reports`).
+
+### Obtenir une clé TomTom
+
+Inscription gratuite sur [developer.tomtom.com](https://developer.tomtom.com/) (quota gratuit suffisant pour un usage personnel).
 
 ## Tester avec Mosquitto
 
@@ -114,7 +208,7 @@ brew install mosquitto
 
 > Dans tous les exemples ci-dessous, remplacer `192.168.1.100`, `mon_user` et `mon_password` par vos valeurs.
 
-### Envoyer une notification de test
+### Notifications
 
 ```bash
 # Alerte haute priorité
@@ -127,37 +221,57 @@ mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie
 mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/warning" -m '{"type":"warning","title":"Batterie faible","message":"Capteur B2 à 15%","priority":"normal"}'
 ```
 
-### Envoyer des statuts LAN
+### Statuts LAN
 
 ```bash
-# Machine up
 mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/lan" -m '{"type":"lan_status","hostname":"pc-bureau","ip":"192.168.1.10","status":"up"}'
-
-# Machine down
 mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/lan" -m '{"type":"lan_status","hostname":"nas-synology","ip":"192.168.1.20","status":"down"}'
+```
 
-# Plusieurs machines d'un coup
-mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/lan" -m '{"type":"lan_status","hostname":"serveur-web","ip":"192.168.1.30","status":"up"}'
-mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/lan" -m '{"type":"lan_status","hostname":"imprimante","ip":"192.168.1.40","status":"up"}'
-mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/lan" -m '{"type":"lan_status","hostname":"camera-garage","ip":"192.168.1.50","status":"down"}'
+### Statuts Internet
+
+```bash
+mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/internet" -m '{"type":"internet_status","name":"Wan principal","host":"8.8.8.8","status":"up","latency_ms":12.4}'
+mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/internet" -m '{"type":"internet_status","name":"Wan principal","host":"8.8.8.8","status":"down","last_downtime_start":"2024-03-12T08:14:03Z"}'
+```
+
+### Statuts Backup
+
+```bash
+mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/backup" -m '{"type":"backup_status","job":"nas-photos","status":"success","detail":"12.3 GiB transférés en 14m","last_run":"2024-03-12T03:00:00Z"}'
+mosquitto_pub -h 192.168.1.100 -p 1883 -u "mon_user" -P "mon_password" -t "vigie/backup" -m '{"type":"backup_status","job":"db-postgres","status":"failed","detail":"timeout connexion","last_run":"2024-03-12T03:00:00Z"}'
 ```
 
 ## Dépendances principales
 
 ```gradle
 dependencies {
+    implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.11.0'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
+    implementation 'androidx.viewpager2:viewpager2:1.0.0'
+
+    // MQTT - Eclipse Paho
     implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
     implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
+
+    // JSON
     implementation 'com.google.code.gson:gson:2.10.1'
-    implementation 'androidx.viewpager2:viewpager2:1.0.0'
+
+    // Requis par Paho Android Service
+    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
+    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
 }
 ```
 
+Les appels HTTP (Météo, Train, Voiture) utilisent `HttpURLConnection` sur un `ExecutorService` mono-thread, sans Retrofit/OkHttp.
+
 ## Prérequis
 
-- Android Studio (dernière version stable)
-- Un broker Mosquitto authentifié accessible sur le réseau
+- Android Studio (dernière version stable) ou JDK 17 + Android SDK
+- Un broker Mosquitto authentifié accessible sur le réseau (pour Messages/Infra)
 - Un appareil ou émulateur Android (API 26+)
+- Optionnel : token IDFM (Train), clé TomTom (Voiture)
 
 ## Installation
 
@@ -165,13 +279,37 @@ dependencies {
    ```bash
    git clone https://github.com/Alixpat/vigie.git
    ```
-2. Ouvrir le projet dans Android Studio
-3. Build & Run sur un appareil/émulateur
-4. Configurer l'adresse du broker via le bouton **Configuration** dans l'app
+2. Ouvrir le projet dans Android Studio (ou builder en CLI : `./gradlew assembleDebug`).
+3. Build & Run sur un appareil/émulateur.
+4. Configurer le broker et les tokens via le bouton **Configuration**.
+
+### APK release signé
+
+Le build release est signé via des variables d'environnement (voir `app/build.gradle`) :
+
+```bash
+export KEYSTORE_PATH=/chemin/vers/vigie-release.jks
+export KEYSTORE_PASSWORD=...
+export KEY_ALIAS=vigie
+export KEY_PASSWORD=...
+./gradlew assembleRelease
+# -> app/build/outputs/apk/release/app-release.apk
+```
+
+## CI / Releases
+
+Le workflow `.github/workflows/build-apk.yml` construit l'APK release et publie automatiquement une release GitHub avec l'APK :
+
+- **Push sur `main`** → tag `dev-<sha>` + prerelease (workflow utilisé en pratique)
+- **Tag `v*`** → release stable (jamais utilisé à ce jour)
+- **`workflow_dispatch`** → lancement manuel depuis l'onglet Actions
+
+Secrets GitHub requis : `KEYSTORE_BASE64`, `KEYSTORE_PASSWORD`, `KEY_ALIAS`, `KEY_PASSWORD`.
 
 ## Évolutions prévues
 
 - [ ] Topics MQTT configurables
 - [ ] Actions personnalisées (sons, vibrations, lancement d'apps)
-- [ ] Historique des messages reçus
 - [ ] Filtrage et règles de notification
+- [ ] Coordonnées Météo / Voiture configurables depuis l'app
+- [ ] Choix de la ligne SNCF/RATP dans l'onglet Train
