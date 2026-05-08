@@ -23,6 +23,7 @@ import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
+import com.alixpat.vigie.train.IdfmClient;
 import com.alixpat.vigie.train.IncidentClassifier;
 import com.alixpat.vigie.train.LineNDirection;
 import com.alixpat.vigie.view.LineMapView;
@@ -39,11 +40,6 @@ import android.widget.ScrollView;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.net.URLEncoder;
 import android.util.Log;
 
 import java.text.SimpleDateFormat;
@@ -63,19 +59,11 @@ public class TrainFragment extends Fragment {
     private static final String TAG = "TrainFragment";
     private static final long REFRESH_INTERVAL_MS = 5 * 60 * 1000;
     private static final long SCHEDULE_WINDOW_MS = 2 * 60 * 60 * 1000;
-    private static final String LINE_REF = "STIF:Line::C01736:";
-    private static final String GENERAL_MESSAGE_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/general-message"
-                    + "?LineRef=" + LINE_REF;
-    private static final String STOP_MONITORING_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/stop-monitoring";
-    private static final String ESTIMATED_TIMETABLE_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/estimated-timetable"
-                    + "?LineRef=" + LINE_REF;
-    private static final String LINE_REPORTS_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/line_reports";
-    private static final String STOP_POINTS_DISCOVERY_URL =
-            "https://prim.iledefrance-mobilites.fr/marketplace/v2/navitia/lines/line%3AIDFM%3AC01736/stop_points?count=100";
+
+    private final IdfmClient idfmClient = new IdfmClient(
+            "STIF:Line::C01736:",   // Ligne N (SIRI LineRef)
+            "line:IDFM:C01736"       // Ligne N (Navitia line ID)
+    );
 
     private MaterialCardView lineStatusCard;
     private View lineStatusStripe;
@@ -946,67 +934,28 @@ public class TrainFragment extends Fragment {
     private Map<String, RawStopVisit> fetchAndParseRaw(String token, String stopRef, String stationLabel) {
         int maxRetries = 2;
         for (int attempt = 0; attempt <= maxRetries; attempt++) {
-            HttpURLConnection connection = null;
             try {
                 if (attempt > 0) {
                     Log.i(TAG, "fetchAndParseRaw [" + stationLabel + "]: tentative " + (attempt + 1));
                     Thread.sleep(1000L * attempt);
                 }
 
-                String apiUrl = STOP_MONITORING_URL
-                        + "?MonitoringRef=" + URLEncoder.encode(stopRef, "UTF-8")
-                        + "&LineRef=" + URLEncoder.encode(LINE_REF, "UTF-8");
+                String body = idfmClient.fetchStopMonitoring(token, stopRef);
+                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: réponse reçue, taille="
+                        + body.length() + " chars");
+                return parseRawStopVisits(body, stationLabel);
 
-                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: URL=" + apiUrl);
-
-                URL url = new URL(apiUrl);
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
-                connection.setRequestProperty("apikey", token);
-                connection.setRequestProperty("Accept", "application/json");
-                connection.setConnectTimeout(15000);
-                connection.setReadTimeout(15000);
-
-                int responseCode = connection.getResponseCode();
-                Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: HTTP " + responseCode);
-
-                if (responseCode == HttpURLConnection.HTTP_OK) {
-                    BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(connection.getInputStream()));
-                    StringBuilder response = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        response.append(line);
-                    }
-                    reader.close();
-
-                    Log.d(TAG, "fetchAndParseRaw [" + stationLabel + "]: réponse reçue, taille=" + response.length() + " chars");
-                    return parseRawStopVisits(response.toString(), stationLabel);
-                } else {
-                    String errorBody = "";
-                    try {
-                        BufferedReader errReader = new BufferedReader(
-                                new InputStreamReader(connection.getErrorStream()));
-                        StringBuilder errResponse = new StringBuilder();
-                        String errLine;
-                        while ((errLine = errReader.readLine()) != null) {
-                            errResponse.append(errLine);
-                        }
-                        errReader.close();
-                        errorBody = errResponse.toString();
-                    } catch (Exception ignored) {}
-                    Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: ERREUR HTTP " + responseCode + " body=" + errorBody);
-                    if (responseCode >= 500 && attempt < maxRetries) continue;
-                }
+            } catch (IdfmClient.HttpException e) {
+                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: ERREUR HTTP " + e.code
+                        + " body=" + e.body);
+                if (e.isServerError() && attempt < maxRetries) continue;
+                break;
             } catch (Exception e) {
-                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: exception (tentative " + (attempt + 1) + ")", e);
+                Log.e(TAG, "fetchAndParseRaw [" + stationLabel + "]: exception (tentative "
+                        + (attempt + 1) + ")", e);
                 if (attempt < maxRetries) continue;
-            } finally {
-                if (connection != null) {
-                    connection.disconnect();
-                }
+                break;
             }
-            break;
         }
         return null;
     }
@@ -1353,34 +1302,13 @@ public class TrainFragment extends Fragment {
     }
 
     private void fetchAndParseStopPointNames(String token) {
-        HttpURLConnection connection = null;
         try {
-            URL url = new URL(STOP_POINTS_DISCOVERY_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchStopPointNames: HTTP " + responseCode);
-
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-                parseStopPointNames(response.toString());
-            }
+            String body = idfmClient.fetchStopPointsDiscovery(token);
+            parseStopPointNames(body);
+        } catch (IdfmClient.HttpException e) {
+            Log.e(TAG, "fetchStopPointNames: HTTP " + e.code, e);
         } catch (Exception e) {
             Log.e(TAG, "fetchStopPointNames: exception", e);
-        } finally {
-            if (connection != null) connection.disconnect();
         }
     }
 
@@ -1461,37 +1389,14 @@ public class TrainFragment extends Fragment {
             fetchAndParseStopPointNames(token);
             Log.i(TAG, "fetchAndParseEstimatedTimetable: cache chargé avec " + stopPointNameCache.size() + " entrées");
         }
-        HttpURLConnection connection = null;
         try {
-            URL url = new URL(ESTIMATED_TIMETABLE_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(20000);
-            connection.setReadTimeout(20000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchEstimatedTimetable: HTTP " + responseCode);
-
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-                Log.d(TAG, "fetchEstimatedTimetable: réponse reçue, taille=" + response.length());
-                parseEstimatedTimetable(response.toString());
-            } else {
-                Log.e(TAG, "fetchEstimatedTimetable: ERREUR HTTP " + responseCode);
-            }
+            String body = idfmClient.fetchEstimatedTimetable(token);
+            Log.d(TAG, "fetchEstimatedTimetable: réponse reçue, taille=" + body.length());
+            parseEstimatedTimetable(body);
+        } catch (IdfmClient.HttpException e) {
+            Log.e(TAG, "fetchEstimatedTimetable: ERREUR HTTP " + e.code, e);
         } catch (Exception e) {
             Log.e(TAG, "fetchEstimatedTimetable: exception", e);
-        } finally {
-            if (connection != null) connection.disconnect();
         }
     }
 
@@ -1858,40 +1763,15 @@ public class TrainFragment extends Fragment {
     }
 
     private List<TrainIncident> fetchLineReportsFromApi(String token) {
-        HttpURLConnection connection = null;
         try {
-            URL url = new URL(LINE_REPORTS_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchLineReportsFromApi: response code " + responseCode);
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-
-                List<TrainIncident> result = parseLineReportsResponse(response.toString());
-                Log.i(TAG, "fetchLineReportsFromApi: parsed " + result.size() + " disruptions");
-                return result;
-            } else {
-                Log.w(TAG, "fetchLineReportsFromApi: HTTP error " + responseCode);
-            }
+            String body = idfmClient.fetchLineReports(token);
+            List<TrainIncident> result = parseLineReportsResponse(body);
+            Log.i(TAG, "fetchLineReportsFromApi: parsed " + result.size() + " disruptions");
+            return result;
+        } catch (IdfmClient.HttpException e) {
+            Log.w(TAG, "fetchLineReportsFromApi: HTTP error " + e.code);
         } catch (Exception e) {
             Log.e(TAG, "fetchLineReportsFromApi: network error", e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
         }
         return null;
     }
@@ -2027,40 +1907,15 @@ public class TrainFragment extends Fragment {
     }
 
     private List<TrainIncident> fetchIncidentsFromApi(String token) {
-        HttpURLConnection connection = null;
         try {
-            URL url = new URL(GENERAL_MESSAGE_URL);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("apikey", token);
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setConnectTimeout(15000);
-            connection.setReadTimeout(15000);
-
-            int responseCode = connection.getResponseCode();
-            Log.d(TAG, "fetchIncidentsFromApi: response code " + responseCode);
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream()));
-                StringBuilder response = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    response.append(line);
-                }
-                reader.close();
-
-                List<TrainIncident> result = parseIncidentResponse(response.toString());
-                Log.i(TAG, "fetchIncidentsFromApi: parsed " + result.size() + " incidents");
-                return result;
-            } else {
-                Log.w(TAG, "fetchIncidentsFromApi: HTTP error " + responseCode);
-            }
+            String body = idfmClient.fetchGeneralMessage(token);
+            List<TrainIncident> result = parseIncidentResponse(body);
+            Log.i(TAG, "fetchIncidentsFromApi: parsed " + result.size() + " incidents");
+            return result;
+        } catch (IdfmClient.HttpException e) {
+            Log.w(TAG, "fetchIncidentsFromApi: HTTP error " + e.code);
         } catch (Exception e) {
             Log.e(TAG, "fetchIncidentsFromApi: network error", e);
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
         }
         return null;
     }
