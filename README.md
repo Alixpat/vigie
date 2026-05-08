@@ -28,7 +28,7 @@ Application Android de surveillance personnelle. Elle combine une connexion MQTT
 | minSdk / targetSdk | 26 (Android 8.0) / 34 |
 | Java source/target | 1.8 |
 | Build | Gradle Wrapper, AGP 8.2.2, JDK 17 |
-| Bibliothèque MQTT | Eclipse Paho Android Service |
+| Bibliothèque MQTT | Eclipse Paho (client Java synchrone) |
 | Broker | Mosquitto (authentifié) |
 | Météo | Open-Meteo (sans clé) |
 | Transport | IDFM PRIM (token) |
@@ -251,16 +251,11 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
     implementation 'androidx.viewpager2:viewpager2:1.0.0'
 
-    // MQTT - Eclipse Paho
+    // MQTT - Eclipse Paho (client Java synchrone, utilisé directement dans MqttService)
     implementation 'org.eclipse.paho:org.eclipse.paho.client.mqttv3:1.2.5'
-    implementation 'org.eclipse.paho:org.eclipse.paho.android.service:1.1.1'
 
     // JSON
     implementation 'com.google.code.gson:gson:2.10.1'
-
-    // Requis par Paho Android Service
-    implementation 'androidx.legacy:legacy-support-v4:1.0.0'
-    implementation 'androidx.localbroadcastmanager:localbroadcastmanager:1.1.0'
 }
 ```
 
