@@ -23,6 +23,7 @@ import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.TrainIncident;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
+import com.alixpat.vigie.train.IncidentClassifier;
 import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
 
@@ -83,17 +84,6 @@ public class TrainFragment extends Fragment {
     private static final String[] DESTINATIONS_VERS_PARIS = {
             "paris", "montparnasse", "clamart", "meudon", "chaville",
             "viroflay", "versailles", "sèvres", "sevres"
-    };
-    private static final String[] TRAVAUX_KEYWORDS = {
-            "travaux", "chantier", "maintenance", "planifi",
-            "programme", "prévu"
-    };
-    private static final String[] PERTURBATION_KEYWORDS = {
-            "interrompu", "perturbé", "ralenti", "supprimé",
-            "retard", "allongement", "dévié", "régulation"
-    };
-    private static final String[] BLOCKING_KEYWORDS = {
-            "interrompu", "supprimé", "immobilis"
     };
 
     private MaterialCardView lineStatusCard;
@@ -1989,8 +1979,6 @@ public class TrainFragment extends Fragment {
                 // Classifier
                 String type;
                 String severity;
-                String textLower = text.toLowerCase(Locale.FRENCH);
-                String causeLower = cause.toLowerCase(Locale.FRENCH);
 
                 boolean isBlocking = "NO_SERVICE".equalsIgnoreCase(severityEffect)
                         || "SIGNIFICANT_DELAYS".equalsIgnoreCase(severityEffect)
@@ -2000,14 +1988,8 @@ public class TrainFragment extends Fragment {
                         || "OTHER_EFFECT".equalsIgnoreCase(severityEffect)
                         || severityPriority <= 3;
 
-                // Détection travaux
-                boolean isTravaux = false;
-                for (String keyword : TRAVAUX_KEYWORDS) {
-                    if (textLower.contains(keyword) || causeLower.contains(keyword)) {
-                        isTravaux = true;
-                        break;
-                    }
-                }
+                boolean isTravaux = IncidentClassifier.hasTravauxKeyword(text)
+                        || IncidentClassifier.hasTravauxKeyword(cause);
 
                 if (isTravaux && !isBlocking) {
                     type = TrainIncident.TYPE_TRAVAUX;
@@ -2018,22 +2000,12 @@ public class TrainFragment extends Fragment {
                 } else if (isDisturbed) {
                     type = TrainIncident.TYPE_PERTURBATION;
                     severity = "delays";
+                } else if (IncidentClassifier.hasPerturbationKeyword(text)) {
+                    type = TrainIncident.TYPE_PERTURBATION;
+                    severity = "delays";
                 } else {
-                    // Vérifier les mots-clés de perturbation dans le texte
-                    boolean hasPerturbKeyword = false;
-                    for (String keyword : PERTURBATION_KEYWORDS) {
-                        if (textLower.contains(keyword)) {
-                            hasPerturbKeyword = true;
-                            break;
-                        }
-                    }
-                    if (hasPerturbKeyword) {
-                        type = TrainIncident.TYPE_PERTURBATION;
-                        severity = "delays";
-                    } else {
-                        type = TrainIncident.TYPE_INFORMATION;
-                        severity = "information";
-                    }
+                    type = TrainIncident.TYPE_INFORMATION;
+                    severity = "information";
                 }
 
                 String title;
@@ -2176,42 +2148,10 @@ public class TrainFragment extends Fragment {
                     channel = msg.optString("InfoChannelRef", "");
                 }
 
-                String severity;
-                String type;
-                String textLower = text.toLowerCase(Locale.FRENCH);
-                boolean isPerturbationChannel = channel.toLowerCase(Locale.FRENCH).contains("perturbation");
-
-                // Detect perturbation keywords in text regardless of channel
-                boolean hasPerturbationKeywords = false;
-                for (String keyword : PERTURBATION_KEYWORDS) {
-                    if (textLower.contains(keyword)) {
-                        hasPerturbationKeywords = true;
-                        break;
-                    }
-                }
-
-                if (isPerturbationChannel || hasPerturbationKeywords) {
-                    type = TrainIncident.TYPE_PERTURBATION;
-                    // Determine actual severity from message content
-                    boolean isBlocking = false;
-                    for (String keyword : BLOCKING_KEYWORDS) {
-                        if (textLower.contains(keyword)) {
-                            isBlocking = true;
-                            break;
-                        }
-                    }
-                    severity = isBlocking ? "blocking" : "delays";
-                } else {
-                    severity = "information";
-                    boolean isTravauxMessage = false;
-                    for (String keyword : TRAVAUX_KEYWORDS) {
-                        if (textLower.contains(keyword)) {
-                            isTravauxMessage = true;
-                            break;
-                        }
-                    }
-                    type = isTravauxMessage ? TrainIncident.TYPE_TRAVAUX : TrainIncident.TYPE_INFORMATION;
-                }
+                IncidentClassifier.Classification classification =
+                        IncidentClassifier.classifyMessage(text, channel);
+                String type = classification.type;
+                String severity = classification.severity;
 
                 String recordedAt = formatDateTime(msg.optString("RecordedAtTime", ""));
                 String validUntil = formatDateTime(msg.optString("ValidUntilTime", ""));
