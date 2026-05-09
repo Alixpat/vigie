@@ -1688,6 +1688,10 @@ public class TrainFragment extends Fragment {
                             }
                         }
 
+                        Log.i(TAG, "incidents counts: total=" + allIncidents.size()
+                                + " perturbations=" + perturbations.size()
+                                + " travaux=" + travaux.size());
+
                         updateLineStatusBanner(perturbations, travaux);
                     }
                 });

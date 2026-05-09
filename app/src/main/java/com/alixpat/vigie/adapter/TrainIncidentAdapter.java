@@ -1,6 +1,8 @@
 package com.alixpat.vigie.adapter;
 
 import android.graphics.drawable.GradientDrawable;
+import android.text.Html;
+import android.text.Spanned;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -61,8 +63,10 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
             holder.title.setVisibility(View.GONE);
         }
 
-        // Message intégral, pas de troncage
-        holder.message.setText(incident.getMessage());
+        // Message intégral, pas de troncage. Le texte arrive de Navitia avec
+        // du HTML (<br>, <strong>, &eacute;…) → on le rend en Spanned pour
+        // décoder les entités, conserver les retours à la ligne et le gras.
+        holder.message.setText(renderHtml(incident.getMessage()));
 
         // Période discrète en bas
         StringBuilder period = new StringBuilder();
@@ -84,6 +88,17 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
     @Override
     public int getItemCount() {
         return incidents.size();
+    }
+
+    private static CharSequence renderHtml(String raw) {
+        if (raw == null || raw.isEmpty()) return "";
+        Spanned spanned = Html.fromHtml(raw, Html.FROM_HTML_MODE_COMPACT);
+        // Trim les \n traînants ajoutés par fromHtml en fin de bloc
+        int end = spanned.length();
+        while (end > 0 && (spanned.charAt(end - 1) == '\n' || spanned.charAt(end - 1) == ' ')) {
+            end--;
+        }
+        return end == spanned.length() ? spanned : spanned.subSequence(0, end);
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
