@@ -1,5 +1,6 @@
 package com.alixpat.vigie.adapter;
 
+import android.graphics.drawable.GradientDrawable;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -36,11 +37,20 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TrainIncident incident = incidents.get(position);
 
+        // Badge sévérité : fond coloré + texte blanc
         holder.severity.setText(incident.getSeverityLabel());
-        holder.severity.setTextColor(incident.getSeverityColor());
-        holder.stripe.setBackgroundColor(incident.getSeverityColor());
+        GradientDrawable badge = (GradientDrawable) holder.severity.getBackground();
+        badge.setColor(incident.getSeverityColor());
 
-        // Title: hide if same as severity label or generic
+        // Cause à droite (1 ligne max, ellipsis si trop long)
+        if (incident.getCause() != null && !incident.getCause().isEmpty()) {
+            holder.cause.setText(incident.getCause());
+            holder.cause.setVisibility(View.VISIBLE);
+        } else {
+            holder.cause.setVisibility(View.GONE);
+        }
+
+        // Titre : caché si générique ou identique au badge
         String title = incident.getTitle();
         if (title != null && !title.isEmpty()
                 && !title.equals("Perturbation Ligne N")
@@ -51,24 +61,20 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
             holder.title.setVisibility(View.GONE);
         }
 
+        // Message intégral, pas de troncage
         holder.message.setText(incident.getMessage());
 
-        if (incident.getCause() != null && !incident.getCause().isEmpty()) {
-            holder.cause.setText(incident.getCause());
-            holder.cause.setVisibility(View.VISIBLE);
-        } else {
-            holder.cause.setVisibility(View.GONE);
-        }
-
-        String period = "";
+        // Période discrète en bas
+        StringBuilder period = new StringBuilder();
         if (incident.getStartTime() != null && !incident.getStartTime().isEmpty()) {
-            period = "Depuis " + incident.getStartTime();
+            period.append("Depuis ").append(incident.getStartTime());
         }
         if (incident.getEndTime() != null && !incident.getEndTime().isEmpty()) {
-            period += " \u2014 Fin pr\u00e9vue " + incident.getEndTime();
+            if (period.length() > 0) period.append(" — ");
+            period.append("Fin prévue ").append(incident.getEndTime());
         }
-        if (!period.isEmpty()) {
-            holder.period.setText(period);
+        if (period.length() > 0) {
+            holder.period.setText(period.toString());
             holder.period.setVisibility(View.VISIBLE);
         } else {
             holder.period.setVisibility(View.GONE);
@@ -81,7 +87,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        final View stripe;
         final TextView severity;
         final TextView cause;
         final TextView title;
@@ -90,7 +95,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<TrainIncidentAdap
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
-            stripe = itemView.findViewById(R.id.incidentStripe);
             severity = itemView.findViewById(R.id.incidentSeverity);
             cause = itemView.findViewById(R.id.incidentCause);
             title = itemView.findViewById(R.id.incidentTitle);

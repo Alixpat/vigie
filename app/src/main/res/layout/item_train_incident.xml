@@ -7,79 +7,83 @@
     android:layout_height="wrap_content"
     android:layout_marginStart="4dp"
     android:layout_marginEnd="4dp"
-    android:layout_marginTop="3dp"
-    android:layout_marginBottom="3dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
     app:cardElevation="1dp"
     app:cardCornerRadius="6dp">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:orientation="vertical"
+        android:padding="12dp">
 
-        <!-- Gauche: Sévérité -->
-        <TextView
-            android:id="@+id/incidentSeverity"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:gravity="center"
-            android:minWidth="56dp"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <!-- Centre: Message + Période -->
+        <!-- Ligne 1 : badge sévérité (gauche) + cause (droite) -->
         <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:layout_marginStart="12dp">
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:baselineAligned="false">
 
             <TextView
-                android:id="@+id/incidentTitle"
+                android:id="@+id/incidentSeverity"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary"
-                android:visibility="gone" />
+                android:background="@drawable/bg_severity_badge"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:paddingTop="3dp"
+                android:paddingBottom="3dp"
+                android:textColor="#FFFFFF"
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/incidentMessage"
-                android:layout_width="wrap_content"
+                android:id="@+id/incidentCause"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:textColor="@color/text_primary"
-                android:maxLines="3"
-                android:ellipsize="end" />
-
-            <TextView
-                android:id="@+id/incidentPeriod"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:gravity="end"
                 android:textSize="12sp"
+                android:textStyle="bold"
                 android:textColor="@color/text_hint"
-                android:visibility="gone" />
+                android:maxLines="1"
+                android:ellipsize="end" />
         </LinearLayout>
 
-        <!-- Droite: Cause -->
+        <!-- Titre (caché si générique ou identique au badge) -->
         <TextView
-            android:id="@+id/incidentCause"
-            android:layout_width="wrap_content"
+            android:id="@+id/incidentTitle"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
+            android:layout_marginTop="6dp"
+            android:textSize="14sp"
             android:textStyle="bold"
-            android:textColor="@color/text_hint" />
+            android:textColor="@color/text_primary"
+            android:visibility="gone" />
+
+        <!-- Message intégral, pas de troncage -->
+        <TextView
+            android:id="@+id/incidentMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="14sp"
+            android:textColor="@color/text_primary"
+            android:lineSpacingExtra="2dp" />
+
+        <!-- Période discrète en bas -->
+        <TextView
+            android:id="@+id/incidentPeriod"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textSize="12sp"
+            android:textColor="@color/text_hint"
+            android:visibility="gone" />
 
     </LinearLayout>
-
-    <!-- Stripe en bas -->
-    <View
-        android:id="@+id/incidentStripe"
-        android:layout_width="match_parent"
-        android:layout_height="3dp"
-        android:layout_gravity="bottom" />
 
 </com.google.android.material.card.MaterialCardView>
