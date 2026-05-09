@@ -13,8 +13,10 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -47,6 +49,8 @@ public class MainActivity extends AppCompatActivity {
     private View statusDot;
     private TextView statusText;
     private LinearLayout statusToggle;
+    private ImageView alarmToggle;
+    private Settings settings;
     private ViewPager2 viewPager;
     private boolean serviceRunning = false;
 
@@ -73,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
         statusDot = findViewById(R.id.statusDot);
         statusText = findViewById(R.id.statusText);
         statusToggle = findViewById(R.id.statusToggle);
+        alarmToggle = findViewById(R.id.alarmToggle);
+        settings = new Settings(this);
 
         statusToggle.setOnClickListener(v -> {
             if (serviceRunning) {
@@ -80,6 +86,16 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 startMqttService();
             }
+        });
+
+        updateAlarmToggleUI();
+        alarmToggle.setOnClickListener(v -> {
+            boolean newState = !settings.isAlarmEnabled();
+            settings.setAlarmEnabled(newState);
+            updateAlarmToggleUI();
+            Toast.makeText(this,
+                    newState ? "Alarme activée" : "Alarme désactivée",
+                    Toast.LENGTH_SHORT).show();
         });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -155,6 +171,12 @@ public class MainActivity extends AppCompatActivity {
                 .edit()
                 .putInt(PREF_LAST_TAB, viewPager.getCurrentItem())
                 .apply();
+    }
+
+    private void updateAlarmToggleUI() {
+        boolean enabled = settings.isAlarmEnabled();
+        alarmToggle.setAlpha(enabled ? 1.0f : 0.4f);
+        alarmToggle.setContentDescription(enabled ? "Alarme activée" : "Alarme désactivée");
     }
 
     private void updateStatusUI(String status, String errorMsg) {

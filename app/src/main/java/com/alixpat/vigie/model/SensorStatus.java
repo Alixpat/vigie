@@ -11,6 +11,7 @@ public class SensorStatus {
     private String emetteur;
     private String name;
     private String kind;
+    private boolean alarm;
     private String device_id;
     private Map<String, Object> decoded;
     private Integer rssi;
@@ -36,6 +37,10 @@ public class SensorStatus {
 
     public String getKind() {
         return kind;
+    }
+
+    public boolean isAlarm() {
+        return alarm;
     }
 
     public String getDeviceId() {

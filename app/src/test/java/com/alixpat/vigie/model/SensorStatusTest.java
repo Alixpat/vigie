@@ -1,6 +1,7 @@
 package com.alixpat.vigie.model;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -43,6 +44,23 @@ public class SensorStatusTest {
         SensorStatus s = SensorStatus.fromJson(json);
         assertNotNull(s);
         assertNull(s.getKind());
+    }
+
+    @Test
+    public void alarmIsParsedWhenTrue() {
+        String json = "{\"type\":\"sensor_status\",\"name\":\"x\",\"alarm\":true}";
+        SensorStatus s = SensorStatus.fromJson(json);
+        assertNotNull(s);
+        assertTrue(s.isAlarm());
+    }
+
+    @Test
+    public void alarmDefaultsToFalseWhenAbsent() {
+        // Rétrocompat avec les anciens payloads (capteurs émis avant l'ajout du champ)
+        String json = "{\"type\":\"sensor_status\",\"name\":\"x\"}";
+        SensorStatus s = SensorStatus.fromJson(json);
+        assertNotNull(s);
+        assertFalse(s.isAlarm());
     }
 
     @Test

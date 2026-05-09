@@ -56,6 +56,8 @@ Reconnection has two layers: Paho's `automaticReconnect`, plus a `ConnectivityMa
 | 4 | Voiture | TomTom Routing API | Needs `tomtomApiKey` in `BrokerConfig`; rolling 30-min average history in SharedPreferences `vigie_driving_history` |
 | 5 | Capteurs | MQTT (`vigie/sensors/*`, `SensorStatus`) | TTN/LoRaWAN sensors relayed by the `capteur-ttn` bridge. Per-`kind` rendering in `SensorAdapter` (currently `door`; generic key:value fallback otherwise). Adding a new sensor type = a new branch in `SensorAdapter.renderFor`. |
 
+The toolbar exposes an **alarm toggle** (bell icon, dimmed when off, opaque when on) backed by `Settings.isAlarmEnabled()` (pref `alarm_enabled`, default false). When the toggle is on, `MqttService` watches every incoming `SensorStatus` whose payload-level `alarm` flag is true: on a transition into the kind-specific alert state (`door` → `DOOR_OPEN_STATUS=1`, `motion` → `Occupy=1`), it synthesises a high-priority `VigieMessage` ("Alarme — \<name\>", "Porte ouverte" / "Présence détectée") and pushes it through the standard pipeline (history + system notif via `NotificationHelper` + `MESSAGE_RECEIVED` broadcast). The alert state is derived in `MqttService.isInAlertState`; new kinds need a new branch there. The `alarm` flag itself comes from the per-device config in `capteur-ttn/config.json` (`{"name": "...", "kind": "...", "alarm": true}`).
+
 `MainActivity` persists the last selected tab in SharedPreferences `vigie_prefs` / `last_tab_position`.
 
 ### `BrokerConfig` is the single settings store

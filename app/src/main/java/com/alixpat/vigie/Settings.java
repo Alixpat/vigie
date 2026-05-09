@@ -18,6 +18,7 @@ public class Settings {
     private static final String KEY_PASSWORD = "password";
     private static final String KEY_IDFM_TOKEN = "idfm_token";
     private static final String KEY_TOMTOM_API_KEY = "tomtom_api_key";
+    private static final String KEY_ALARM_ENABLED = "alarm_enabled";
 
     private static final String DEFAULT_IP = "192.168.1.100";
     private static final int DEFAULT_PORT = 1883;
@@ -89,6 +90,16 @@ public class Settings {
     public void saveTomTomApiKey(String apiKey) {
         prefs.edit()
                 .putString(KEY_TOMTOM_API_KEY, apiKey)
+                .apply();
+    }
+
+    public boolean isAlarmEnabled() {
+        return prefs.getBoolean(KEY_ALARM_ENABLED, false);
+    }
+
+    public void setAlarmEnabled(boolean enabled) {
+        prefs.edit()
+                .putBoolean(KEY_ALARM_ENABLED, enabled)
                 .apply();
     }
 }

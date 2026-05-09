@@ -27,6 +27,7 @@ import com.alixpat.vigie.model.InternetStatus;
 import com.alixpat.vigie.model.LanHost;
 import com.alixpat.vigie.model.SensorStatus;
 import com.alixpat.vigie.model.VigieMessage;
+import com.google.gson.JsonObject;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -235,6 +236,12 @@ public class MqttService extends Service {
                     if (sensor != null) {
                         String key = sensor.getName() != null ? sensor.getName() : sensor.getDeviceId();
                         if (key != null) {
+                            SensorStatus previous = sensorsCache.get(key);
+                            if (settings.isAlarmEnabled()
+                                    && sensor.isAlarm()
+                                    && enteredAlertState(previous, sensor)) {
+                                triggerAlarm(sensor);
+                            }
                             sensorsCache.put(key, sensor);
                         }
                         Intent broadcast = new Intent(CapteursFragment.ACTION_SENSOR_STATUS);
@@ -357,6 +364,66 @@ public class MqttService extends Service {
         }
 
         super.onDestroy();
+    }
+
+    /** Détecte la transition vers l'état d'alerte (was-not-alerting AND now-alerting). */
+    private static boolean enteredAlertState(SensorStatus previous, SensorStatus current) {
+        boolean wasAlerting = previous != null && isInAlertState(previous);
+        boolean isAlerting = isInAlertState(current);
+        return !wasAlerting && isAlerting;
+    }
+
+    /** L'état d'alerte est dérivé du `kind` :
+     *  door → DOOR_OPEN_STATUS=1, motion → Occupy=1, sinon false. */
+    private static boolean isInAlertState(SensorStatus s) {
+        Map<String, Object> decoded = s.getDecoded();
+        if (decoded == null) return false;
+        String kind = s.getKind();
+        if ("door".equals(kind)) {
+            Number v = asNumber(decoded.get("DOOR_OPEN_STATUS"));
+            return v != null && v.intValue() == 1;
+        }
+        if ("motion".equals(kind)) {
+            Number v = asNumber(decoded.get("Occupy"));
+            return v != null && v.intValue() == 1;
+        }
+        return false;
+    }
+
+    private static Number asNumber(Object v) {
+        return v instanceof Number ? (Number) v : null;
+    }
+
+    /** Synthétise un VigieMessage d'alarme et le pousse dans le pipeline standard
+     *  (messageHistory + notif système + broadcast vers MessagesFragment). */
+    private void triggerAlarm(SensorStatus sensor) {
+        String name = sensor.getName() != null ? sensor.getName() : sensor.getDeviceId();
+        String text;
+        if ("door".equals(sensor.getKind())) {
+            text = "Porte ouverte";
+        } else if ("motion".equals(sensor.getKind())) {
+            text = "Présence détectée";
+        } else {
+            text = "Capteur déclenché";
+        }
+
+        JsonObject obj = new JsonObject();
+        obj.addProperty("type", "alert");
+        obj.addProperty("title", "Alarme — " + name);
+        obj.addProperty("message", text);
+        obj.addProperty("priority", "high");
+        String alertJson = obj.toString();
+
+        VigieMessage alert = VigieMessage.fromJson(alertJson);
+        if (alert == null) return;
+        messageHistory.add(alert);
+        notificationHelper.showMessageNotification(alert);
+        Log.i(TAG, "ALARME: " + name + " — " + text);
+
+        Intent broadcast = new Intent("com.alixpat.vigie.MESSAGE_RECEIVED");
+        broadcast.putExtra("payload", alertJson);
+        broadcast.setPackage(getPackageName());
+        sendBroadcast(broadcast);
     }
 
     private void broadcastStatus(String status, String errorMsg) {
