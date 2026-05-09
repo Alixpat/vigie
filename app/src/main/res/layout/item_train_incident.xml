@@ -16,7 +16,10 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp">
+        android:padding="12dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:background="?attr/selectableItemBackground">
 
         <!-- Ligne 1 : badge sévérité (gauche) + cause (droite) -->
         <LinearLayout
@@ -51,6 +54,15 @@
                 android:textColor="@color/text_hint"
                 android:maxLines="1"
                 android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/incidentChevron"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:text="▼"
+                android:textSize="11sp"
+                android:textColor="@color/text_hint" />
         </LinearLayout>
 
         <!-- Titre (caché si générique ou identique au badge) -->
@@ -64,7 +76,7 @@
             android:textColor="@color/text_primary"
             android:visibility="gone" />
 
-        <!-- Message intégral, pas de troncage -->
+        <!-- Message : tronqué à 2 lignes par défaut, illimité quand expandé -->
         <TextView
             android:id="@+id/incidentMessage"
             android:layout_width="match_parent"
