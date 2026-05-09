@@ -9,8 +9,8 @@ import org.junit.Test;
 /**
  * Vérifie l'invariant de routage utilisé dans MqttService.messageArrived :
  * pour un payload entrant, EXACTEMENT UN parser typé doit l'accepter
- * (LanHost OU BackupJob OU InternetStatus), et le fallback VigieMessage
- * doit prendre le relais pour tout le reste.
+ * (LanHost OU BackupJob OU InternetStatus OU SensorStatus), et le fallback
+ * VigieMessage doit prendre le relais pour tout le reste.
  *
  * Si un de ces tests casse, le bug est silencieux en prod : un message MQTT
  * sera mal-classé et atterrira dans le mauvais cache / la mauvaise UI.
@@ -22,6 +22,7 @@ public class RoutingCascadeTest {
         if (LanHost.fromJson(json) != null) n++;
         if (BackupJob.fromJson(json) != null) n++;
         if (InternetStatus.fromJson(json) != null) n++;
+        if (SensorStatus.fromJson(json) != null) n++;
         return n;
     }
 
@@ -44,6 +45,14 @@ public class RoutingCascadeTest {
         String json = "{\"type\":\"internet_status\",\"name\":\"wan\",\"host\":\"1.1.1.1\",\"status\":\"up\"}";
         assertEquals(1, countTypedAccepts(json));
         assertNotNull(InternetStatus.fromJson(json));
+    }
+
+    @Test
+    public void sensorStatusIsAcceptedByExactlyOneTypedParser() {
+        String json = "{\"type\":\"sensor_status\",\"name\":\"porte-entree\","
+                + "\"kind\":\"door\",\"decoded\":{\"DOOR_OPEN_STATUS\":1}}";
+        assertEquals(1, countTypedAccepts(json));
+        assertNotNull(SensorStatus.fromJson(json));
     }
 
     @Test

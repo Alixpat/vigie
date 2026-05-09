@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Vigie is an Android (Java, minSdk 26) surveillance app. It keeps a persistent MQTT connection through an Android foreground service and exposes five tabs that mix MQTT-driven data with external HTTP APIs.
 
-The current app has **5 tabs**: Messages, **Infra** (LAN + Internet + Backup), Météo, Train, Voiture — note that the original LAN tab was merged into a unified Infra tab (commit `d8e3c98`).
+The current app has **6 tabs**: Messages, **Infra** (LAN + Internet + Backup), Météo, Train, Voiture, Capteurs (TTN/LoRaWAN sensors via the `capteur-ttn` bridge) — note that the original LAN tab was merged into a unified Infra tab (commit `d8e3c98`).
 
 ## Build / run
 
@@ -23,7 +23,7 @@ JDK 17, Android Gradle Plugin 8.2.2, Java source/target 1.8. Use the wrapper:
 
 JVM unit tests live in `app/src/test/java/com/alixpat/vigie/`:
 
-- **`model/`** — covers the four MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent.
+- **`model/`** — covers the five MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `SensorStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent.
 - **`train/`** — covers the three pure helpers extracted from `TrainFragment` (`IncidentClassifier`, `LineNDirection`, `IdfmClient`). Touching keyword arrays, direction matching, or URL construction without running tests is asking for a regression.
 
 There is no `src/androidTest` source set yet. CI runs `testDebugUnitTest` before `assembleRelease`, so a failing test blocks the APK build and uploads the HTML report as a `test-report` artifact.
@@ -38,14 +38,14 @@ Release signing is driven by env vars (see `app/build.gradle` `signingConfigs.re
 `MqttService` (in `app/src/main/java/com/alixpat/vigie/MqttService.java`) is a `START_STICKY` foreground service holding a `PARTIAL_WAKE_LOCK`. It owns the Paho `MqttClient`, subscribes to `vigie/#`, and stays alive when the activity is gone. Three patterns to know:
 
 1. **Static caches on `MqttService`** (`messageHistory`, `lanHostsCache`, `backupJobsCache`, `internetCache`, `currentStatus`) bridge the service to fragments. Fragments hydrate from these statics on resume rather than via binder/IPC. When adding new MQTT-driven state, follow the same pattern: a `volatile`/`Collections.synchronized*` static plus a `getXxx()` accessor.
-2. **Package-scoped broadcasts** (`setPackage(getPackageName())`) push live updates: `MqttService.ACTION_STATUS` for connection status; `InfraFragment.ACTION_LAN_STATUS` / `ACTION_BACKUP_STATUS` / `ACTION_INTERNET_STATUS` and `com.alixpat.vigie.MESSAGE_RECEIVED` for payloads. Receivers must register with `RECEIVER_NOT_EXPORTED` on Tiramisu+ (see `MainActivity.onResume`).
-3. **Routing of incoming MQTT messages** is by JSON-shape detection in `messageArrived`. Order matters — each `fromJson` only returns non-null when the JSON's `type` field matches: `LanHost` (`lan_status`) → `BackupJob` (`backup_status`) → `InternetStatus` (`internet_status`) → `VigieMessage` (anything else). Adding a new message type means adding another model with a `type`-checking `fromJson` plus a dispatch branch.
+2. **Package-scoped broadcasts** (`setPackage(getPackageName())`) push live updates: `MqttService.ACTION_STATUS` for connection status; `InfraFragment.ACTION_LAN_STATUS` / `ACTION_BACKUP_STATUS` / `ACTION_INTERNET_STATUS`, `CapteursFragment.ACTION_SENSOR_STATUS` and `com.alixpat.vigie.MESSAGE_RECEIVED` for payloads. Receivers must register with `RECEIVER_NOT_EXPORTED` on Tiramisu+ (see `MainActivity.onResume`).
+3. **Routing of incoming MQTT messages** is by JSON-shape detection in `messageArrived`. Order matters — each `fromJson` only returns non-null when the JSON's `type` field matches: `LanHost` (`lan_status`) → `BackupJob` (`backup_status`) → `InternetStatus` (`internet_status`) → `SensorStatus` (`sensor_status`) → `VigieMessage` (anything else). Adding a new message type means adding another model with a `type`-checking `fromJson` plus a dispatch branch.
 
 Reconnection has two layers: Paho's `automaticReconnect`, plus a `ConnectivityManager.NetworkCallback` that calls `mqttClient.reconnect()` (or recreates the client) when the network returns. Don't disable either without understanding the other.
 
 ### Tabs and data flows
 
-`MainActivity` is a `ViewPager2` + `TabLayout`. `ViewPagerAdapter` (positions 0..4) maps to fragments:
+`MainActivity` is a `ViewPager2` + `TabLayout`. `ViewPagerAdapter` (positions 0..5) maps to fragments:
 
 | # | Tab | Source | Notes |
 |---|---|---|---|
@@ -54,6 +54,7 @@ Reconnection has two layers: Paho's `automaticReconnect`, plus a `ConnectivityMa
 | 2 | Météo | HTTP `api.open-meteo.com` (no key) | Hardcoded city coords in `WeatherFragment.CITIES` |
 | 3 | Train | IDFM PRIM REST API (5 endpoints) | Needs `idfmToken` in `BrokerConfig`; line hardcoded to SNCF Ligne N (`STIF:Line::C01736:`) |
 | 4 | Voiture | TomTom Routing API | Needs `tomtomApiKey` in `BrokerConfig`; rolling 30-min average history in SharedPreferences `vigie_driving_history` |
+| 5 | Capteurs | MQTT (`vigie/sensors/*`, `SensorStatus`) | TTN/LoRaWAN sensors relayed by the `capteur-ttn` bridge. Per-`kind` rendering in `SensorAdapter` (currently `door`; generic key:value fallback otherwise). Adding a new sensor type = a new branch in `SensorAdapter.renderFor`. |
 
 `MainActivity` persists the last selected tab in SharedPreferences `vigie_prefs` / `last_tab_position`.
 

@@ -5,6 +5,7 @@ import androidx.fragment.app.Fragment;
 import androidx.fragment.app.FragmentActivity;
 import androidx.viewpager2.adapter.FragmentStateAdapter;
 
+import com.alixpat.vigie.fragment.CapteursFragment;
 import com.alixpat.vigie.fragment.InfraFragment;
 import com.alixpat.vigie.fragment.MessagesFragment;
 import com.alixpat.vigie.fragment.TrainFragment;
@@ -29,6 +30,8 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
                 return new TrainFragment();
             case 4:
                 return new VoitureFragment();
+            case 5:
+                return new CapteursFragment();
             default:
                 return new MessagesFragment();
         }
@@ -36,6 +39,6 @@ public class ViewPagerAdapter extends FragmentStateAdapter {
 
     @Override
     public int getItemCount() {
-        return 5;
+        return 6;
     }
 }

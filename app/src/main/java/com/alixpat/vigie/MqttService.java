@@ -20,10 +20,12 @@ import org.eclipse.paho.client.mqttv3.MqttException;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
+import com.alixpat.vigie.fragment.CapteursFragment;
 import com.alixpat.vigie.fragment.InfraFragment;
 import com.alixpat.vigie.model.BackupJob;
 import com.alixpat.vigie.model.InternetStatus;
 import com.alixpat.vigie.model.LanHost;
+import com.alixpat.vigie.model.SensorStatus;
 import com.alixpat.vigie.model.VigieMessage;
 
 import java.util.ArrayList;
@@ -67,6 +69,10 @@ public class MqttService extends Service {
     private static final Map<String, InternetStatus> internetCache =
             Collections.synchronizedMap(new LinkedHashMap<>());
 
+    // Cache des capteurs TTN
+    private static final Map<String, SensorStatus> sensorsCache =
+            Collections.synchronizedMap(new LinkedHashMap<>());
+
     public static String getCurrentStatus() {
         return currentStatus;
     }
@@ -96,6 +102,12 @@ public class MqttService extends Service {
     public static Map<String, InternetStatus> getInternetCache() {
         synchronized (internetCache) {
             return new LinkedHashMap<>(internetCache);
+        }
+    }
+
+    public static Map<String, SensorStatus> getSensorsCache() {
+        synchronized (sensorsCache) {
+            return new LinkedHashMap<>(sensorsCache);
         }
     }
 
@@ -213,6 +225,19 @@ public class MqttService extends Service {
                     if (internetStatus != null) {
                         internetCache.put(internetStatus.getName(), internetStatus);
                         Intent broadcast = new Intent(InfraFragment.ACTION_INTERNET_STATUS);
+                        broadcast.putExtra("payload", payload);
+                        broadcast.setPackage(getPackageName());
+                        sendBroadcast(broadcast);
+                        return;
+                    }
+
+                    SensorStatus sensor = SensorStatus.fromJson(payload);
+                    if (sensor != null) {
+                        String key = sensor.getName() != null ? sensor.getName() : sensor.getDeviceId();
+                        if (key != null) {
+                            sensorsCache.put(key, sensor);
+                        }
+                        Intent broadcast = new Intent(CapteursFragment.ACTION_SENSOR_STATUS);
                         broadcast.putExtra("payload", payload);
                         broadcast.setPackage(getPackageName());
                         sendBroadcast(broadcast);
