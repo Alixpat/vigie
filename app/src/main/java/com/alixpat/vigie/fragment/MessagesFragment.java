@@ -36,7 +36,7 @@ public class MessagesFragment extends Fragment {
                 VigieMessage msg = VigieMessage.fromJson(payload);
                 if (msg != null) {
                     messageAdapter.addMessage(msg);
-                    messagesRecyclerView.scrollToPosition(messageAdapter.getItemCount() - 1);
+                    messagesRecyclerView.scrollToPosition(0);
                 }
             }
         }
@@ -58,6 +58,11 @@ public class MessagesFragment extends Fragment {
         messageAdapter = new MessageAdapter();
         messagesRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         messagesRecyclerView.setAdapter(messageAdapter);
+
+        view.findViewById(R.id.clearMessagesButton).setOnClickListener(v -> {
+            MqttService.clearMessageHistory();
+            messageAdapter.clear();
+        });
     }
 
     @Override
@@ -70,11 +75,11 @@ public class MessagesFragment extends Fragment {
             requireContext().registerReceiver(messageReceiver, messageFilter);
         }
 
-        // Synchroniser l'historique complet des messages
+        // Synchroniser l'historique complet des messages (le + récent en haut)
         List<VigieMessage> history = MqttService.getMessageHistory();
         messageAdapter.setMessages(history);
         if (!history.isEmpty()) {
-            messagesRecyclerView.scrollToPosition(history.size() - 1);
+            messagesRecyclerView.scrollToPosition(0);
         }
     }
 

@@ -13,7 +13,6 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -49,7 +48,6 @@ public class MainActivity extends AppCompatActivity {
     private View statusDot;
     private TextView statusText;
     private LinearLayout statusToggle;
-    private ImageView alarmToggle;
     private Settings settings;
     private ViewPager2 viewPager;
     private boolean serviceRunning = false;
@@ -77,7 +75,6 @@ public class MainActivity extends AppCompatActivity {
         statusDot = findViewById(R.id.statusDot);
         statusText = findViewById(R.id.statusText);
         statusToggle = findViewById(R.id.statusToggle);
-        alarmToggle = findViewById(R.id.alarmToggle);
         settings = new Settings(this);
 
         statusToggle.setOnClickListener(v -> {
@@ -86,16 +83,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 startMqttService();
             }
-        });
-
-        updateAlarmToggleUI();
-        alarmToggle.setOnClickListener(v -> {
-            boolean newState = !settings.isAlarmEnabled();
-            settings.setAlarmEnabled(newState);
-            updateAlarmToggleUI();
-            Toast.makeText(this,
-                    newState ? "Alarme activée" : "Alarme désactivée",
-                    Toast.LENGTH_SHORT).show();
         });
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -134,8 +121,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem alarm = menu.findItem(R.id.action_alarm);
+        if (alarm != null) {
+            boolean enabled = settings.isAlarmEnabled();
+            alarm.setIcon(enabled ? R.drawable.ic_alarm_bell : R.drawable.ic_alarm_bell_off);
+            alarm.setTitle(enabled ? "Alarme activée" : "Alarme désactivée");
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
-        if (item.getItemId() == R.id.action_settings) {
+        int id = item.getItemId();
+        if (id == R.id.action_alarm) {
+            boolean newState = !settings.isAlarmEnabled();
+            settings.setAlarmEnabled(newState);
+            invalidateOptionsMenu();
+            Toast.makeText(this,
+                    newState ? "Alarme activée" : "Alarme désactivée",
+                    Toast.LENGTH_SHORT).show();
+            return true;
+        }
+        if (id == R.id.action_settings) {
             startActivity(new Intent(this, SettingsActivity.class));
             return true;
         }
@@ -171,12 +179,6 @@ public class MainActivity extends AppCompatActivity {
                 .edit()
                 .putInt(PREF_LAST_TAB, viewPager.getCurrentItem())
                 .apply();
-    }
-
-    private void updateAlarmToggleUI() {
-        boolean enabled = settings.isAlarmEnabled();
-        alarmToggle.setAlpha(enabled ? 1.0f : 0.4f);
-        alarmToggle.setContentDescription(enabled ? "Alarme activée" : "Alarme désactivée");
     }
 
     private void updateStatusUI(String status, String errorMsg) {

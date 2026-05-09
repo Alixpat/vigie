@@ -17,54 +17,34 @@
         app:title="VIGIE">
 
         <LinearLayout
+            android:id="@+id/statusToggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:gravity="center_vertical"
-            android:layout_gravity="end">
+            android:layout_gravity="end"
+            android:paddingEnd="8dp"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless">
 
-            <ImageView
-                android:id="@+id/alarmToggle"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
-                android:padding="8dp"
-                android:src="@drawable/ic_alarm_bell"
-                android:contentDescription="Alarme"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:alpha="0.4" />
+            <View
+                android:id="@+id/statusDot"
+                android:layout_width="10dp"
+                android:layout_height="10dp"
+                android:background="@drawable/status_dot" />
 
-            <LinearLayout
-                android:id="@+id/statusToggle"
+            <TextView
+                android:id="@+id/statusText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical"
-                android:paddingEnd="8dp"
-                android:paddingStart="8dp"
-                android:paddingTop="4dp"
-                android:paddingBottom="4dp"
-                android:clickable="true"
-                android:focusable="true"
-                android:background="?attr/selectableItemBackgroundBorderless">
-
-                <View
-                    android:id="@+id/statusDot"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
-                    android:background="@drawable/status_dot" />
-
-                <TextView
-                    android:id="@+id/statusText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Déconnecté"
-                    android:textColor="?attr/colorOnPrimary"
-                    android:textSize="12sp"
-                    android:layout_marginStart="6dp" />
-
-            </LinearLayout>
+                android:text="Déconnecté"
+                android:textColor="?attr/colorOnPrimary"
+                android:textSize="12sp"
+                android:layout_marginStart="6dp" />
 
         </LinearLayout>
 

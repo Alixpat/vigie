@@ -88,6 +88,12 @@ public class MqttService extends Service {
         }
     }
 
+    public static void clearMessageHistory() {
+        synchronized (messageHistory) {
+            messageHistory.clear();
+        }
+    }
+
     public static Map<String, LanHost> getLanHostsCache() {
         synchronized (lanHostsCache) {
             return new LinkedHashMap<>(lanHostsCache);

@@ -15,22 +15,32 @@ import com.alixpat.vigie.model.VigieMessage;
 import com.alixpat.vigie.util.DateFormats;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 
 public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
 
+    // Stocké en ordre antéchronologique : index 0 = message le plus récent.
     private final List<VigieMessage> messages = new ArrayList<>();
 
     public void setMessages(List<VigieMessage> newMessages) {
         messages.clear();
         messages.addAll(newMessages);
+        Collections.reverse(messages);
         notifyDataSetChanged();
     }
 
     public void addMessage(VigieMessage message) {
-        messages.add(message);
-        notifyItemInserted(messages.size() - 1);
+        messages.add(0, message);
+        notifyItemInserted(0);
+    }
+
+    public void clear() {
+        int n = messages.size();
+        if (n == 0) return;
+        messages.clear();
+        notifyItemRangeRemoved(0, n);
     }
 
     @NonNull
