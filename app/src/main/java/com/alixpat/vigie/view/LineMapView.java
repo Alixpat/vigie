@@ -206,11 +206,22 @@ public class LineMapView extends View {
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        int width = MeasureSpec.getSize(widthMeasureSpec);
-        if (width == 0) width = (int) (400 * getResources().getDisplayMetrics().density);
+        float density = getResources().getDisplayMetrics().density;
 
-        // Calcul de la hauteur nécessaire
-        // Tronc : 10 gares, puis les 3 branches partent en parallèle
+        // Largeur nécessaire pour que les noms de gares tiennent à droite de
+        // la branche la plus à droite (Dreux). Sans ça, dans un
+        // HorizontalScrollView le View se mesure à ~400dp et les noms sont
+        // dessinés hors-canvas → invisibles.
+        float longestNameWidth = measureLongestStationName();
+        float maxX = startX + 2 * branchOffsetX; // colDreux
+        float textX = maxX + stopRadiusJunction + trainSize + 16 * density;
+        int neededWidth = (int) (textX + longestNameWidth + 16 * density);
+
+        int requestedWidth = MeasureSpec.getSize(widthMeasureSpec);
+        int width = Math.max(neededWidth, requestedWidth);
+        if (width == 0) width = neededWidth;
+
+        // Hauteur : tronc puis branches en parallèle.
         int trunkRows = trunk.size();
         int maxBranchRows = Math.max(branchRambouillet.size(),
                 Math.max(branchMantes.size() + 4, branchDreux.size() + 4));
@@ -219,7 +230,24 @@ public class LineMapView extends View {
         int totalRows = trunkRows + maxBranchRows + 2; // +2 pour espacement
         float totalHeight = startY + legendHeight + totalRows * rowHeight + rowHeight;
 
+        Log.d(TAG, "onMeasure: requested=" + requestedWidth + "px, needed=" + neededWidth
+                + "px (longestName=" + longestNameWidth + "px), final=" + width + "px");
+
         setMeasuredDimension(width, (int) totalHeight);
+    }
+
+    private float measureLongestStationName() {
+        Paint probe = new Paint(textPaint);
+        probe.setTypeface(Typeface.DEFAULT_BOLD); // junctions sont en bold (plus large)
+        float max = 0;
+        for (List<LineNStation> branch : new List[]{trunk, branchRambouillet, branchMantes, branchDreux}) {
+            if (branch == null) continue;
+            for (LineNStation s : branch) {
+                float w = probe.measureText(s.getName());
+                if (w > max) max = w;
+            }
+        }
+        return max;
     }
 
     @Override
