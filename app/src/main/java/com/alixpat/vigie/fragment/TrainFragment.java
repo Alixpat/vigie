@@ -70,6 +70,7 @@ public class TrainFragment extends Fragment {
     private TextView lineStatusTitle;
     private TextView lineStatusUpdate;
     private TextView lineStatusSummary;
+    private TextView lineStatusChevron;
 
     private View perturbationsSection;
     private RecyclerView perturbationsRecyclerView;
@@ -78,6 +79,11 @@ public class TrainFragment extends Fragment {
     private View travauxSection;
     private RecyclerView travauxRecyclerView;
     private TrainIncidentAdapter travauxAdapter;
+
+    // Liste actuelle des incidents (pour redessiner sur toggle sans refetch)
+    private final List<TrainIncident> lastPerturbations = new ArrayList<>();
+    private final List<TrainIncident> lastTravaux = new ArrayList<>();
+    private boolean incidentsListVisible = false;
 
     private RecyclerView scheduleRecyclerViewAller;
     private TextView scheduleEmptyAller;
@@ -135,6 +141,14 @@ public class TrainFragment extends Fragment {
         lineStatusTitle = view.findViewById(R.id.lineStatusTitle);
         lineStatusUpdate = view.findViewById(R.id.lineStatusUpdate);
         lineStatusSummary = view.findViewById(R.id.lineStatusSummary);
+        lineStatusChevron = view.findViewById(R.id.lineStatusChevron);
+
+        // Tap sur le bandeau de statut → toggle l'affichage des listes d'incidents
+        lineStatusCard.setOnClickListener(v -> {
+            if (lastPerturbations.isEmpty() && lastTravaux.isEmpty()) return;
+            incidentsListVisible = !incidentsListVisible;
+            updateIncidentsVisibility();
+        });
 
         perturbationsSection = view.findViewById(R.id.perturbationsSection);
         perturbationsRecyclerView = view.findViewById(R.id.trainRecyclerView);
@@ -847,16 +861,45 @@ public class TrainFragment extends Fragment {
         lineStatusTitle.setText("Ligne N");
         lineStatusSummary.setText(summary);
 
-        if (hasPerturbations) {
+        // Stocke les listes courantes ; l'affichage réel est conditionné par
+        // incidentsListVisible (toggle via tap sur le bandeau).
+        lastPerturbations.clear();
+        if (hasPerturbations) lastPerturbations.addAll(perturbations);
+        lastTravaux.clear();
+        if (hasTravaux) lastTravaux.addAll(travaux);
+
+        // Si on n'a plus aucun incident, on collapse automatiquement.
+        if (lastPerturbations.isEmpty() && lastTravaux.isEmpty()) {
+            incidentsListVisible = false;
+        }
+
+        updateIncidentsVisibility();
+    }
+
+    /** Applique la visibilité des sections perturbations/travaux + chevron en
+     *  fonction du flag {@code incidentsListVisible} et de la disponibilité de
+     *  données. */
+    private void updateIncidentsVisibility() {
+        boolean hasAny = !lastPerturbations.isEmpty() || !lastTravaux.isEmpty();
+
+        // Chevron : visible uniquement si on a quelque chose à montrer
+        if (lineStatusChevron != null) {
+            lineStatusChevron.setVisibility(hasAny ? View.VISIBLE : View.GONE);
+            lineStatusChevron.setText(incidentsListVisible ? "▲" : "▼");
+        }
+
+        boolean show = hasAny && incidentsListVisible;
+
+        if (show && !lastPerturbations.isEmpty()) {
+            perturbationsAdapter.updateIncidents(lastPerturbations);
             perturbationsSection.setVisibility(View.VISIBLE);
-            perturbationsAdapter.updateIncidents(perturbations);
         } else {
             perturbationsSection.setVisibility(View.GONE);
         }
 
-        if (hasTravaux) {
+        if (show && !lastTravaux.isEmpty()) {
+            travauxAdapter.updateIncidents(lastTravaux);
             travauxSection.setVisibility(View.VISIBLE);
-            travauxAdapter.updateIncidents(travaux);
         } else {
             travauxSection.setVisibility(View.GONE);
         }

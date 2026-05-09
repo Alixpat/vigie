@@ -12,12 +12,14 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Ligne N - Bandeau d'etat sobre -->
+        <!-- Ligne N - Bandeau d'etat sobre (cliquable pour expand la liste des incidents) -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/lineStatusCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="12dp"
+            android:clickable="true"
+            android:focusable="true"
             app:cardElevation="1dp"
             app:cardCornerRadius="8dp">
 
@@ -69,6 +71,17 @@
                             android:layout_height="wrap_content"
                             android:textSize="10sp"
                             android:textColor="@color/text_hint" />
+
+                        <TextView
+                            android:id="@+id/lineStatusChevron"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="▼"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_hint"
+                            android:paddingStart="8dp"
+                            android:paddingEnd="4dp"
+                            android:visibility="gone" />
 
                         <TextView
                             android:id="@+id/lineMapButton"
