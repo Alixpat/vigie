@@ -16,6 +16,7 @@ import androidx.fragment.app.Fragment;
 
 import com.alixpat.vigie.Settings;
 import com.alixpat.vigie.R;
+import com.alixpat.vigie.util.DateFormats;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.material.card.MaterialCardView;
@@ -28,7 +29,6 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
@@ -147,8 +147,7 @@ public class VoitureFragment extends Fragment {
                     drivingTimeCard.setVisibility(View.VISIBLE);
                     drivingTimeEmpty.setVisibility(View.GONE);
 
-                    SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-                    drivingTimeUpdate.setText("MAJ " + sdf.format(new Date()));
+                    drivingTimeUpdate.setText("MAJ " + DateFormats.formatHhmmss(new Date()));
 
                     drivingTimeAller.setText(allerSeconds >= 0 ? formatDuration(allerSeconds) : "--");
                     drivingTimeRetour.setText(retourSeconds >= 0 ? formatDuration(retourSeconds) : "--");

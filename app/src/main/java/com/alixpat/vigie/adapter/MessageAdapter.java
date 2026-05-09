@@ -12,12 +12,11 @@ import androidx.core.content.ContextCompat;
 
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.VigieMessage;
+import com.alixpat.vigie.util.DateFormats;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
 
@@ -52,8 +51,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
 
         holder.bodyText.setText(msg.getMessage() != null ? msg.getMessage() : "");
 
-        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM HH:mm:ss", Locale.getDefault());
-        holder.timeText.setText(sdf.format(new Date(msg.getReceivedAt())));
+        holder.timeText.setText(DateFormats.formatDdMmHhmmss(new Date(msg.getReceivedAt())));
 
         int colorRes = msg.isHighPriority() ? R.color.status_error : R.color.text_primary;
         holder.titleText.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), colorRes));

@@ -13,12 +13,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.BackupJob;
+import com.alixpat.vigie.util.DateFormats;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class BackupJobAdapter extends RecyclerView.Adapter<BackupJobAdapter.ViewHolder> {
 
@@ -58,8 +57,7 @@ public class BackupJobAdapter extends RecyclerView.Adapter<BackupJobAdapter.View
 
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 job.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        String exactTime = sdf.format(new Date(job.getLastUpdate()));
+        String exactTime = DateFormats.formatHhmmss(new Date(job.getLastUpdate()));
         holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
     }
 

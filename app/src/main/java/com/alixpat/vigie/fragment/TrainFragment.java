@@ -26,6 +26,7 @@ import com.alixpat.vigie.model.TrainStop;
 import com.alixpat.vigie.train.IdfmClient;
 import com.alixpat.vigie.train.IncidentClassifier;
 import com.alixpat.vigie.train.LineNDirection;
+import com.alixpat.vigie.util.DateFormats;
 import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
 
@@ -42,7 +43,6 @@ import org.json.JSONObject;
 
 import android.util.Log;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
@@ -50,7 +50,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.TimeZone;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -275,8 +274,6 @@ public class TrainFragment extends Fragment {
         statusHeader.setPadding(0, 0, 0, dpToPx(4));
         container.addView(statusHeader);
 
-        SimpleDateFormat timeFmtHm = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        SimpleDateFormat timeFmtSec = new SimpleDateFormat(":ss", Locale.getDefault());
         long now = System.currentTimeMillis();
 
         // Trouver l'arrêt actuel pour le marqueur
@@ -367,8 +364,8 @@ public class TrainFragment extends Fragment {
             long bestTime = stop.getBestArrivalMillis();
             if (bestTime > 0) {
                 Date bestDate = new Date(bestTime);
-                String main = timeFmtHm.format(bestDate);
-                String sec = timeFmtSec.format(bestDate);
+                String main = DateFormats.formatHhmm(bestDate);
+                String sec = DateFormats.formatColonSeconds(bestDate);
                 SpannableString span = new SpannableString(main + sec);
                 span.setSpan(new RelativeSizeSpan(0.7f), main.length(), main.length() + sec.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 timeView.setText(span);
@@ -786,10 +783,8 @@ public class TrainFragment extends Fragment {
      * Ex: "MAJ 14:32:05" avec ":05" en taille réduite (0.7x).
      */
     private static SpannableString formatTimeWithSmallSeconds(String prefix, Date date) {
-        SimpleDateFormat hhmm = new SimpleDateFormat("HH:mm", Locale.getDefault());
-        SimpleDateFormat ss = new SimpleDateFormat(":ss", Locale.getDefault());
-        String main = prefix + hhmm.format(date);
-        String seconds = ss.format(date);
+        String main = prefix + DateFormats.formatHhmm(date);
+        String seconds = DateFormats.formatColonSeconds(date);
         SpannableString span = new SpannableString(main + seconds);
         span.setSpan(new RelativeSizeSpan(0.7f), main.length(), main.length() + seconds.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         return span;
@@ -883,8 +878,9 @@ public class TrainFragment extends Fragment {
         String token = config.getIdfmToken();
         Date now = new Date();
         Date windowEnd = new Date(now.getTime() + SCHEDULE_WINDOW_MS);
-        SimpleDateFormat logFmt = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        Log.i(TAG, "fetchSchedules: fenêtre horaire = " + logFmt.format(now) + " → " + logFmt.format(windowEnd));
+        Log.i(TAG, "fetchSchedules: fenêtre horaire = "
+                + DateFormats.formatHhmmss(now) + " → "
+                + DateFormats.formatHhmmss(windowEnd));
 
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
@@ -978,10 +974,6 @@ public class TrainFragment extends Fragment {
             JSONArray visitArray = delivery.getJSONArray("MonitoredStopVisit");
             Log.i(TAG, "parseRawStopVisits [" + stationLabel + "]: " + visitArray.length() + " visites");
 
-            SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
-            SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-            isoFormatNoTz.setTimeZone(TimeZone.getDefault());
-
             int noJourneyRef = 0;
             int parseErrors = 0;
 
@@ -1034,13 +1026,13 @@ public class TrainFragment extends Fragment {
                     String aimedArrStr = call.optString("AimedArrivalTime", "");
 
                     if (!aimedDepStr.isEmpty()) {
-                        raw.aimedDeparture = parseIsoDateTime(aimedDepStr, isoFormat, isoFormatNoTz);
+                        raw.aimedDeparture = DateFormats.parseIsoDateTime(aimedDepStr);
                     }
                     if (!expectedDepStr.isEmpty()) {
-                        raw.expectedDeparture = parseIsoDateTime(expectedDepStr, isoFormat, isoFormatNoTz);
+                        raw.expectedDeparture = DateFormats.parseIsoDateTime(expectedDepStr);
                     }
                     if (!aimedArrStr.isEmpty()) {
-                        raw.aimedArrival = parseIsoDateTime(aimedArrStr, isoFormat, isoFormatNoTz);
+                        raw.aimedArrival = DateFormats.parseIsoDateTime(aimedArrStr);
                     }
 
                     raw.departureStatus = call.optString("DepartureStatus", "onTime");
@@ -1122,8 +1114,6 @@ public class TrainFragment extends Fragment {
             return null;
         }
 
-        SimpleDateFormat timeFmt = new SimpleDateFormat("HH:mm", Locale.getDefault());
-
         int filteredByDest = 0;
         int filteredByTime = 0;
         int filteredByNoStop = 0;
@@ -1153,9 +1143,9 @@ public class TrainFragment extends Fragment {
                 RawStopVisit destVisit = destinationData.get(journeyRef);
                 if (destVisit != null) {
                     if (destVisit.aimedArrival != null) {
-                        arrivalTimeStr = timeFmt.format(destVisit.aimedArrival);
+                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedArrival);
                     } else if (destVisit.aimedDeparture != null) {
-                        arrivalTimeStr = timeFmt.format(destVisit.aimedDeparture);
+                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedDeparture);
                     }
                 } else {
                     filteredByNoStop++;
@@ -1170,11 +1160,11 @@ public class TrainFragment extends Fragment {
                 delayMinutes = (int) (diffMs / 60000);
                 if (delayMinutes < 0) delayMinutes = 0;
                 if (delayMinutes > 0) {
-                    expectedTimeStr = timeFmt.format(origin.expectedDeparture);
+                    expectedTimeStr = DateFormats.formatHhmm(origin.expectedDeparture);
                 }
             }
 
-            String aimedTimeStr = timeFmt.format(origin.aimedDeparture);
+            String aimedTimeStr = DateFormats.formatHhmm(origin.aimedDeparture);
 
             Log.d(TAG, "buildCrossReferenced [" + direction.getLabel() + "]: GARDÉ "
                     + journeyRef
@@ -1252,43 +1242,6 @@ public class TrainFragment extends Fragment {
         }
     }
 
-    private static Date parseIsoDateTime(String isoStr, SimpleDateFormat withTz, SimpleDateFormat withoutTz) {
-        if (isoStr == null || isoStr.isEmpty()) return null;
-
-        try {
-            String cleaned = isoStr;
-            int dotIdx = cleaned.indexOf('.');
-            if (dotIdx > 0) {
-                int tzStart = cleaned.indexOf('+', dotIdx);
-                if (tzStart < 0) tzStart = cleaned.indexOf('Z', dotIdx);
-                if (tzStart < 0) tzStart = cleaned.indexOf('-', dotIdx + 1);
-                if (tzStart > 0) {
-                    cleaned = cleaned.substring(0, dotIdx) + cleaned.substring(tzStart);
-                } else {
-                    cleaned = cleaned.substring(0, dotIdx);
-                }
-            }
-
-            if (cleaned.contains("+") || cleaned.contains("Z") || cleaned.matches(".*-\\d{2}:\\d{2}$")) {
-                Date d = withTz.parse(cleaned);
-                if (d != null) return d;
-            }
-
-            String noTz = cleaned;
-            if (noTz.contains("+")) {
-                noTz = noTz.substring(0, noTz.lastIndexOf('+'));
-            } else if (noTz.endsWith("Z")) {
-                noTz = noTz.substring(0, noTz.length() - 1);
-            }
-            if (noTz.matches(".*-\\d{2}:\\d{2}$")) {
-                noTz = noTz.substring(0, noTz.length() - 6);
-            }
-            return withoutTz.parse(noTz);
-        } catch (Exception e) {
-            Log.e("TrainFragment", "parseIsoDateTime: impossible de parser '" + isoStr + "'", e);
-            return null;
-        }
-    }
 
     // ==================== STOP POINTS DISCOVERY (noms des arrêts) ====================
 
@@ -1401,10 +1354,6 @@ public class TrainFragment extends Fragment {
     }
 
     private void parseEstimatedTimetable(String jsonStr) {
-        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.getDefault());
-        SimpleDateFormat isoFormatNoTz = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault());
-        isoFormatNoTz.setTimeZone(TimeZone.getDefault());
-
         try {
             JSONObject root = new JSONObject(jsonStr);
             JSONObject serviceDelivery = root
@@ -1502,7 +1451,6 @@ public class TrainFragment extends Fragment {
                                 for (int c = 0; c < callCount; c++) {
                                     TrainStop stop = parseEstimatedCall(
                                             callArray.getJSONObject(c),
-                                            isoFormat, isoFormatNoTz,
                                             c == 0, c == callCount - 1);
                                     if (stop != null) stops.add(stop);
                                 }
@@ -1519,7 +1467,6 @@ public class TrainFragment extends Fragment {
                                     boolean isFirst = (c == 0 && stops.isEmpty());
                                     TrainStop stop = parseEstimatedCall(
                                             recArray.getJSONObject(c),
-                                            isoFormat, isoFormatNoTz,
                                             isFirst, false);
                                     if (stop != null) recorded.add(stop);
                                 }
@@ -1586,9 +1533,7 @@ public class TrainFragment extends Fragment {
         }
     }
 
-    private TrainStop parseEstimatedCall(JSONObject call, SimpleDateFormat isoFormat,
-                                          SimpleDateFormat isoFormatNoTz,
-                                          boolean isFirst, boolean isLast) {
+    private TrainStop parseEstimatedCall(JSONObject call, boolean isFirst, boolean isLast) {
         try {
             // Nom de l'arrêt
             String stopName = "";
@@ -1626,10 +1571,10 @@ public class TrainFragment extends Fragment {
             if (stopName.isEmpty()) return null;
 
             // Horaires
-            long aimedArr = parseToMillis(call.optString("AimedArrivalTime", ""), isoFormat, isoFormatNoTz);
-            long expectedArr = parseToMillis(call.optString("ExpectedArrivalTime", ""), isoFormat, isoFormatNoTz);
-            long aimedDep = parseToMillis(call.optString("AimedDepartureTime", ""), isoFormat, isoFormatNoTz);
-            long expectedDep = parseToMillis(call.optString("ExpectedDepartureTime", ""), isoFormat, isoFormatNoTz);
+            long aimedArr = DateFormats.parseIsoToMillis(call.optString("AimedArrivalTime", ""));
+            long expectedArr = DateFormats.parseIsoToMillis(call.optString("ExpectedArrivalTime", ""));
+            long aimedDep = DateFormats.parseIsoToMillis(call.optString("AimedDepartureTime", ""));
+            long expectedDep = DateFormats.parseIsoToMillis(call.optString("ExpectedDepartureTime", ""));
 
             // Voie
             String platform = "";
@@ -1646,12 +1591,6 @@ public class TrainFragment extends Fragment {
             Log.e(TAG, "parseEstimatedCall: erreur", e);
             return null;
         }
-    }
-
-    private long parseToMillis(String isoStr, SimpleDateFormat withTz, SimpleDateFormat withoutTz) {
-        if (isoStr == null || isoStr.isEmpty()) return 0;
-        Date d = parseIsoDateTime(isoStr, withTz, withoutTz);
-        return d != null ? d.getTime() : 0;
     }
 
     private String iteratorToString(java.util.Iterator<?> it) {

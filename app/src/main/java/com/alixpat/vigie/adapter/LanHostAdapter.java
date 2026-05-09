@@ -13,12 +13,11 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.LanHost;
+import com.alixpat.vigie.util.DateFormats;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 public class LanHostAdapter extends RecyclerView.Adapter<LanHostAdapter.ViewHolder> {
 
@@ -51,8 +50,7 @@ public class LanHostAdapter extends RecyclerView.Adapter<LanHostAdapter.ViewHold
 
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 host.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
-        SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.getDefault());
-        String exactTime = sdf.format(new Date(host.getLastUpdate()));
+        String exactTime = DateFormats.formatHhmmss(new Date(host.getLastUpdate()));
         holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
     }
 
