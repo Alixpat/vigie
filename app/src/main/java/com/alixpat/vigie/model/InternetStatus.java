@@ -6,6 +6,7 @@ import com.google.gson.JsonSyntaxException;
 public class InternetStatus {
 
     private String type;
+    private String emetteur;
     private String name;
     private String host;
     private String status;
@@ -19,6 +20,10 @@ public class InternetStatus {
 
     public String getType() {
         return type;
+    }
+
+    public String getEmetteur() {
+        return emetteur;
     }
 
     public String getName() {

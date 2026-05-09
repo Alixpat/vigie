@@ -6,6 +6,7 @@ import com.google.gson.JsonSyntaxException;
 public class LanHost {
 
     private String type;
+    private String emetteur;
     private String hostname;
     private String ip;
     private String status;
@@ -15,6 +16,10 @@ public class LanHost {
 
     public String getType() {
         return type;
+    }
+
+    public String getEmetteur() {
+        return emetteur;
     }
 
     public String getHostname() {

@@ -28,6 +28,16 @@ public class InternetStatusTest {
         assertEquals("2026-03-12T08:15:42Z", s.getLastDowntimeEnd());
         assertEquals(Double.valueOf(1.65), s.getLastDowntimeDurationMinutes());
         assertTrue(s.getLastUpdate() > 0);
+        assertNull(s.getEmetteur());
+    }
+
+    @Test
+    public void parsesEmetteurWhenPresent() {
+        String json = "{\"type\":\"internet_status\",\"emetteur\":\"zoe-laptop\","
+                + "\"name\":\"wan\",\"status\":\"up\"}";
+        InternetStatus s = InternetStatus.fromJson(json);
+        assertNotNull(s);
+        assertEquals("zoe-laptop", s.getEmetteur());
     }
 
     @Test

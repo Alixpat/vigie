@@ -21,6 +21,16 @@ public class LanHostTest {
         assertEquals("up", host.getStatus());
         assertTrue(host.isUp());
         assertTrue(host.getLastUpdate() > 0);
+        assertNull(host.getEmetteur());
+    }
+
+    @Test
+    public void parsesEmetteurWhenPresent() {
+        String json = "{\"type\":\"lan_status\",\"emetteur\":\"pidesk\","
+                + "\"hostname\":\"pc\",\"ip\":\"10.0.0.2\",\"status\":\"up\"}";
+        LanHost host = LanHost.fromJson(json);
+        assertNotNull(host);
+        assertEquals("pidesk", host.getEmetteur());
     }
 
     @Test

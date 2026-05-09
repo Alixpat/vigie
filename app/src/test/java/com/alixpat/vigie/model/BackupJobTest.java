@@ -25,6 +25,16 @@ public class BackupJobTest {
         assertFalse(job.isFailed());
         assertFalse(job.isMissing());
         assertTrue(job.getLastUpdate() > 0);
+        assertNull(job.getEmetteur());
+    }
+
+    @Test
+    public void parsesEmetteurWhenPresent() {
+        String json = "{\"type\":\"backup_status\",\"emetteur\":\"latitude\","
+                + "\"job\":\"nas\",\"status\":\"success\"}";
+        BackupJob job = BackupJob.fromJson(json);
+        assertNotNull(job);
+        assertEquals("latitude", job.getEmetteur());
     }
 
     @Test

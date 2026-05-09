@@ -58,7 +58,9 @@ public class BackupJobAdapter extends RecyclerView.Adapter<BackupJobAdapter.View
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 job.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
         String exactTime = DateFormats.formatHhmmss(new Date(job.getLastUpdate()));
-        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
+        String emetteur = job.getEmetteur();
+        String suffix = (emetteur != null && !emetteur.isEmpty()) ? " · " + emetteur : "";
+        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")" + suffix);
     }
 
     @Override

@@ -6,6 +6,7 @@ import com.google.gson.JsonSyntaxException;
 public class BackupJob {
 
     private String type;
+    private String emetteur;
     private String job;
     private String status;
     private String detail;
@@ -16,6 +17,10 @@ public class BackupJob {
 
     public String getType() {
         return type;
+    }
+
+    public String getEmetteur() {
+        return emetteur;
     }
 
     public String getJob() {

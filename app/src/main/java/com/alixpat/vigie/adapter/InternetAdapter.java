@@ -78,7 +78,9 @@ public class InternetAdapter extends RecyclerView.Adapter<InternetAdapter.ViewHo
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 item.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
         String exactTime = DateFormats.formatHhmmss(new Date(item.getLastUpdate()));
-        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
+        String emetteur = item.getEmetteur();
+        String suffix = (emetteur != null && !emetteur.isEmpty()) ? " · " + emetteur : "";
+        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")" + suffix);
     }
 
     @Override

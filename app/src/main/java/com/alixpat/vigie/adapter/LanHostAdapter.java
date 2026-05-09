@@ -51,7 +51,9 @@ public class LanHostAdapter extends RecyclerView.Adapter<LanHostAdapter.ViewHold
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 host.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);
         String exactTime = DateFormats.formatHhmmss(new Date(host.getLastUpdate()));
-        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")");
+        String emetteur = host.getEmetteur();
+        String suffix = (emetteur != null && !emetteur.isEmpty()) ? " · " + emetteur : "";
+        holder.lastUpdateText.setText(timeAgo + " (" + exactTime + ")" + suffix);
     }
 
     @Override
