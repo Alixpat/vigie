@@ -93,6 +93,8 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
 
     /** Plus petit = plus sévère = en haut. */
     private static int severityOrder(TrainIncident incident) {
+        // L'ascenseur est traité comme une info à part, juste après les travaux.
+        if ("ascenseur".equalsIgnoreCase(incident.getSeverity())) return 6;
         if (incident.isTravaux()) return 5;
         if (incident.isInformation()) return 4;
         String s = incident.getSeverity();

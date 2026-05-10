@@ -1825,40 +1825,41 @@ public class TrainFragment extends Fragment {
                 }
                 if (text.isEmpty()) continue;
 
-                // Distribution agrégée pour debug : (effect, priority, name)
-                String distKey = "effect=" + (severityEffect.isEmpty() ? "-" : severityEffect)
-                        + " priority=" + (severityPriority == 99 ? "-" : String.valueOf(severityPriority))
-                        + " name=" + (severityName.isEmpty() ? "-" : severityName);
+                // Tags : Navitia met "Ascenseur" pour signaler une panne d'ascenseur
+                // (vs perturbation trafic). C'est le seul vrai discriminant côté API
+                // car severity.effect/priority est uniforme ("SIGNIFICANT_DELAYS"/30)
+                // pour toutes les disruptions IDFM Ligne N.
+                List<String> tags = new ArrayList<>();
+                JSONArray tagsArr = disruption.optJSONArray("tags");
+                if (tagsArr != null) {
+                    for (int t = 0; t < tagsArr.length(); t++) {
+                        tags.add(tagsArr.optString(t, ""));
+                    }
+                }
+                boolean hasAscenseurTag = tags.contains("Ascenseur");
+
+                // Distribution agrégée pour debug : (cause, tags)
+                String distKey = "cause=" + (cause.isEmpty() ? "-" : cause)
+                        + " tags=" + (tags.isEmpty() ? "-" : tags.toString());
                 severityDistribution.merge(distKey, 1, Integer::sum);
 
-                boolean isTravaux = IncidentClassifier.hasTravauxKeyword(text)
-                        || IncidentClassifier.hasTravauxKeyword(cause);
-
-                // Classification selon la sémantique Navitia/IDFM :
-                //   priority 0  → trafic interrompu (blocking)
-                //   priority 1  → retards (delays)
-                //   priority 2  → service réduit (reduced_service)
-                //   priority 3+ → information
-                // Si priority absente (99) on retombe sur l'effect, puis sur les keywords.
+                // Classification basée sur cause + tags (le plus discriminant) :
+                //   - tag "Ascenseur"   → information ascenseur
+                //   - cause "travaux"   → travaux planifiés
+                //   - cause "perturbation" sans Ascenseur → vraie perturbation trafic
+                //   - sinon              → information générique
                 String severity;
                 String type;
-                if (severityPriority == 0 || "NO_SERVICE".equalsIgnoreCase(severityEffect)) {
-                    severity = "blocking";
-                    type = TrainIncident.TYPE_PERTURBATION;
-                } else if (severityPriority == 1 || "SIGNIFICANT_DELAYS".equalsIgnoreCase(severityEffect)) {
-                    severity = "delays";
-                    type = TrainIncident.TYPE_PERTURBATION;
-                } else if (severityPriority == 2
-                        || "REDUCED_SERVICE".equalsIgnoreCase(severityEffect)
-                        || "DETOUR".equalsIgnoreCase(severityEffect)) {
-                    severity = "reduced_service";
-                    type = TrainIncident.TYPE_PERTURBATION;
-                } else if (isTravaux) {
+                if (hasAscenseurTag) {
+                    severity = "ascenseur";
+                    type = TrainIncident.TYPE_INFORMATION;
+                } else if ("travaux".equalsIgnoreCase(cause)
+                        || IncidentClassifier.hasTravauxKeyword(text)) {
                     severity = "information";
                     type = TrainIncident.TYPE_TRAVAUX;
-                } else if (severityPriority >= 3 && severityPriority < 99) {
-                    severity = "information";
-                    type = TrainIncident.TYPE_INFORMATION;
+                } else if ("perturbation".equalsIgnoreCase(cause)) {
+                    severity = "NO_SERVICE".equalsIgnoreCase(severityEffect) ? "blocking" : "delays";
+                    type = TrainIncident.TYPE_PERTURBATION;
                 } else if (IncidentClassifier.hasPerturbationKeyword(text)) {
                     severity = "delays";
                     type = TrainIncident.TYPE_PERTURBATION;
@@ -1872,6 +1873,8 @@ public class TrainFragment extends Fragment {
                     title = "Perturbation Ligne N";
                 } else if (TrainIncident.TYPE_TRAVAUX.equals(type)) {
                     title = "Travaux Ligne N";
+                } else if ("ascenseur".equals(severity)) {
+                    title = "Ascenseur Ligne N";
                 } else {
                     title = "Info Ligne N";
                 }

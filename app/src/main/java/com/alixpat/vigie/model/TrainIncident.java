@@ -64,6 +64,9 @@ public class TrainIncident {
     }
 
     public String getSeverityLabel() {
+        // "ascenseur" prime sur le type pour qu'on sache distinguer une panne
+        // d'ascenseur (info pratique) d'une vraie perturbation/travaux.
+        if ("ascenseur".equalsIgnoreCase(severity)) return "Ascenseur";
         if (isTravaux()) return "Travaux";
         if (isInformation()) return "Information";
         if (severity == null) return "Perturbation";
@@ -77,6 +80,7 @@ public class TrainIncident {
     }
 
     public int getSeverityColor() {
+        if ("ascenseur".equalsIgnoreCase(severity)) return 0xFF607D8B; // BlueGrey
         if (isTravaux()) return 0xFF9C27B0;
         if (isInformation()) return 0xFF2196F3;
         if (severity == null) return 0xFFFF9800;
