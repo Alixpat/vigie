@@ -42,12 +42,22 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
         notifyDataSetChanged();
     }
 
-    /** Trie par sévérité décroissante puis insère un Header au début de chaque groupe. */
+    /** Trie par sévérité décroissante (puis date la plus récente d'abord
+     *  dans chaque groupe) et insère un Header au début de chaque groupe. */
     private static List<Row> buildRows(List<TrainIncident> incidents) {
         if (incidents == null || incidents.isEmpty()) return Collections.emptyList();
 
         List<TrainIncident> sorted = new ArrayList<>(incidents);
-        Collections.sort(sorted, Comparator.comparingInt(TrainIncidentAdapter::severityOrder));
+        Collections.sort(sorted, (a, b) -> {
+            int c = Integer.compare(severityOrder(a), severityOrder(b));
+            if (c != 0) return c;
+            // Date la plus récente d'abord. Les formats utilisés
+            // ("YYYY-MM-DD HH:MM" et "YYYYMMDDTHHMMSS") sont tous deux
+            // triables lexicographiquement.
+            String da = a.getStartTime() == null ? "" : a.getStartTime();
+            String db = b.getStartTime() == null ? "" : b.getStartTime();
+            return db.compareTo(da);
+        });
 
         List<Row> out = new ArrayList<>();
         String currentLabel = null;
