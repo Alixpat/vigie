@@ -16,84 +16,83 @@ import com.alixpat.vigie.model.TrainIncident;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * Affiche les incidents groupés par sévérité (sections "INTERROMPU",
- * "RETARDS", "SERVICE RÉDUIT", "INFORMATION", "TRAVAUX") et collapsés par
- * défaut. Tap sur une carte = expand pour voir le message intégral + période.
+ * Liste à 2 niveaux d'accordéon :
+ *   - Headers de section (par sévérité) : tap pour montrer/cacher les items.
+ *     Tous fermés par défaut.
+ *   - Cards d'incident : tap pour montrer/cacher message + période.
+ *     Toutes fermées par défaut.
  */
 public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     private static final int VIEW_TYPE_HEADER = 0;
     private static final int VIEW_TYPE_INCIDENT = 1;
 
+    private final List<TrainIncident> allIncidents = new ArrayList<>();
+    private final Set<String> expandedSections = new HashSet<>();
+    private final Set<Integer> expandedItems = new HashSet<>();
     private final List<Row> rows = new ArrayList<>();
-    // Indices d'incident (dans la liste linéaire `rows`) actuellement expandés.
-    private final Set<Integer> expanded = new HashSet<>();
 
     public void updateIncidents(List<TrainIncident> newData) {
-        rows.clear();
-        expanded.clear();
-        rows.addAll(buildRows(newData));
-        notifyDataSetChanged();
+        allIncidents.clear();
+        if (newData != null) allIncidents.addAll(newData);
+        // Reset des états d'expand : les indices/labels précédents pourraient
+        // référencer des incidents qui ne sont plus là après refresh.
+        expandedSections.clear();
+        expandedItems.clear();
+        rebuildRows();
     }
 
-    /** Trie par sévérité décroissante (puis date la plus récente d'abord
-     *  dans chaque groupe) et insère un Header au début de chaque groupe. */
-    private static List<Row> buildRows(List<TrainIncident> incidents) {
-        if (incidents == null || incidents.isEmpty()) return Collections.emptyList();
+    /** Reconstruit la liste plate {@code rows} = headers + items des sections expandées. */
+    private void rebuildRows() {
+        rows.clear();
 
-        List<TrainIncident> sorted = new ArrayList<>(incidents);
+        if (allIncidents.isEmpty()) {
+            notifyDataSetChanged();
+            return;
+        }
+
+        // Trie par sévérité asc puis date desc
+        List<TrainIncident> sorted = new ArrayList<>(allIncidents);
         Collections.sort(sorted, (a, b) -> {
             int c = Integer.compare(severityOrder(a), severityOrder(b));
             if (c != 0) return c;
-            // Date la plus récente d'abord. Les formats utilisés
-            // ("YYYY-MM-DD HH:MM" et "YYYYMMDDTHHMMSS") sont tous deux
-            // triables lexicographiquement.
             String da = a.getStartTime() == null ? "" : a.getStartTime();
             String db = b.getStartTime() == null ? "" : b.getStartTime();
             return db.compareTo(da);
         });
 
-        List<Row> out = new ArrayList<>();
-        String currentLabel = null;
-        int currentColor = 0;
-        int currentCount = 0;
-        int currentHeaderIdx = -1;
-
+        // Groupe par label en préservant l'ordre d'apparition
+        LinkedHashMap<String, List<TrainIncident>> groups = new LinkedHashMap<>();
+        Map<String, Integer> groupColors = new LinkedHashMap<>();
         for (TrainIncident inc : sorted) {
             String label = inc.getSeverityLabel();
-            int color = inc.getSeverityColor();
-            if (!label.equals(currentLabel)) {
-                // Finalise le compteur du header précédent
-                if (currentHeaderIdx >= 0) {
-                    out.get(currentHeaderIdx).headerText =
-                            currentLabel.toUpperCase() + " (" + currentCount + ")";
+            groups.computeIfAbsent(label, k -> new ArrayList<>()).add(inc);
+            groupColors.putIfAbsent(label, inc.getSeverityColor());
+        }
+
+        for (Map.Entry<String, List<TrainIncident>> entry : groups.entrySet()) {
+            String label = entry.getKey();
+            int count = entry.getValue().size();
+            int color = groupColors.get(label);
+            boolean sectionOpen = expandedSections.contains(label);
+            rows.add(Row.header(label, color, count, sectionOpen));
+            if (sectionOpen) {
+                for (TrainIncident inc : entry.getValue()) {
+                    rows.add(Row.incident(inc));
                 }
-                currentLabel = label;
-                currentColor = color;
-                currentCount = 0;
-                currentHeaderIdx = out.size();
-                out.add(Row.header("", color)); // texte rempli en fin de groupe
             }
-            currentCount++;
-            out.add(Row.incident(inc));
         }
-        // Dernier header
-        if (currentHeaderIdx >= 0) {
-            out.get(currentHeaderIdx).headerText =
-                    currentLabel.toUpperCase() + " (" + currentCount + ")";
-        }
-        return out;
+        notifyDataSetChanged();
     }
 
-    /** Plus petit = plus sévère = en haut. */
     private static int severityOrder(TrainIncident incident) {
-        // L'ascenseur est traité comme une info à part, juste après les travaux.
         if ("ascenseur".equalsIgnoreCase(incident.getSeverity())) return 6;
         if (incident.isTravaux()) return 5;
         if (incident.isInformation()) return 4;
@@ -129,24 +128,37 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
     public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
         Row row = rows.get(position);
         if (holder instanceof HeaderViewHolder) {
-            HeaderViewHolder h = (HeaderViewHolder) holder;
-            h.label.setText(row.headerText);
-            GradientDrawable dot = (GradientDrawable) h.colorDot.getBackground();
-            dot.setColor(row.headerColor);
-            return;
+            bindHeader((HeaderViewHolder) holder, row);
+        } else {
+            bindIncident((IncidentViewHolder) holder, row.incident, position);
         }
-        bindIncident((IncidentViewHolder) holder, row.incident, position);
+    }
+
+    private void bindHeader(HeaderViewHolder holder, Row row) {
+        holder.label.setText(row.headerLabel.toUpperCase() + " (" + row.headerCount + ")");
+        GradientDrawable dot = (GradientDrawable) holder.colorDot.getBackground();
+        dot.setColor(row.headerColor);
+        holder.chevron.setText(row.headerOpen ? "▲" : "▼");
+
+        holder.itemView.setOnClickListener(v -> {
+            if (expandedSections.contains(row.headerLabel)) {
+                expandedSections.remove(row.headerLabel);
+            } else {
+                expandedSections.add(row.headerLabel);
+            }
+            // Toggle d'une section invalide les indices d'items expanded
+            expandedItems.clear();
+            rebuildRows();
+        });
     }
 
     private void bindIncident(IncidentViewHolder holder, TrainIncident incident, int position) {
-        boolean isExpanded = expanded.contains(position);
+        boolean isExpanded = expandedItems.contains(position);
 
-        // Badge sévérité
         holder.severity.setText(incident.getSeverityLabel());
         GradientDrawable badge = (GradientDrawable) holder.severity.getBackground();
         badge.setColor(incident.getSeverityColor());
 
-        // Cause
         if (incident.getCause() != null && !incident.getCause().isEmpty()) {
             holder.cause.setText(incident.getCause());
             holder.cause.setVisibility(View.VISIBLE);
@@ -154,10 +166,8 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
             holder.cause.setVisibility(View.GONE);
         }
 
-        // Chevron
         holder.chevron.setText(isExpanded ? "▲" : "▼");
 
-        // Titre (caché si générique)
         String title = incident.getTitle();
         if (title != null && !title.isEmpty()
                 && !title.equals("Perturbation Ligne N")
@@ -168,7 +178,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
             holder.title.setVisibility(View.GONE);
         }
 
-        // Message : visible uniquement si expandé
         if (isExpanded) {
             holder.message.setText(renderHtml(incident.getMessage()));
             holder.message.setVisibility(View.VISIBLE);
@@ -176,7 +185,6 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
             holder.message.setVisibility(View.GONE);
         }
 
-        // Période : visible uniquement si expandé
         if (isExpanded) {
             StringBuilder period = new StringBuilder();
             if (incident.getStartTime() != null && !incident.getStartTime().isEmpty()) {
@@ -196,14 +204,13 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
             holder.period.setVisibility(View.GONE);
         }
 
-        // Toggle au clic
         holder.container.setOnClickListener(v -> {
             int adapterPos = holder.getAdapterPosition();
             if (adapterPos == RecyclerView.NO_POSITION) return;
-            if (expanded.contains(adapterPos)) {
-                expanded.remove(adapterPos);
+            if (expandedItems.contains(adapterPos)) {
+                expandedItems.remove(adapterPos);
             } else {
-                expanded.add(adapterPos);
+                expandedItems.add(adapterPos);
             }
             notifyItemChanged(adapterPos);
         });
@@ -224,18 +231,22 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
         return end == spanned.length() ? spanned : spanned.subSequence(0, end);
     }
 
-    /** Cellule de la liste : soit un header de groupe, soit un incident. */
+    /** Row de la liste : soit un header de section, soit un incident. */
     private static class Row {
-        String headerText;
+        String headerLabel;
         int headerColor;
+        int headerCount;
+        boolean headerOpen;
         TrainIncident incident;
 
         boolean isHeader() { return incident == null; }
 
-        static Row header(String text, int color) {
+        static Row header(String label, int color, int count, boolean open) {
             Row r = new Row();
-            r.headerText = text;
+            r.headerLabel = label;
             r.headerColor = color;
+            r.headerCount = count;
+            r.headerOpen = open;
             return r;
         }
 
@@ -249,11 +260,13 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
     static class HeaderViewHolder extends RecyclerView.ViewHolder {
         final View colorDot;
         final TextView label;
+        final TextView chevron;
 
         HeaderViewHolder(@NonNull View itemView) {
             super(itemView);
             colorDot = itemView.findViewById(R.id.headerColorDot);
             label = itemView.findViewById(R.id.headerLabel);
+            chevron = itemView.findViewById(R.id.headerChevron);
         }
     }
 
