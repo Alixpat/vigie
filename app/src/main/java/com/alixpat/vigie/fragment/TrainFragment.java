@@ -621,6 +621,7 @@ public class TrainFragment extends Fragment {
         // Construire la liste des trains sur le plan
         List<LineMapView.TrainOnMap> trainsOnMap = buildTrainsOnMap();
         lineMapView.setTrains(trainsOnMap);
+        lineMapView.setOnTrainClickListener(this::showTrainOnMapDialog);
 
         if (trainCountView != null) {
             int count = trainsOnMap.size();
@@ -635,6 +636,52 @@ public class TrainFragment extends Fragment {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
         }
+    }
+
+    private void showTrainOnMapDialog(LineMapView.TrainOnMap train) {
+        if (!isAdded() || getActivity() == null) return;
+
+        StringBuilder titleSb = new StringBuilder();
+        if (train.missionName != null && !train.missionName.isEmpty()) {
+            titleSb.append(train.missionName);
+        }
+        if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
+            if (titleSb.length() > 0) titleSb.append(" • ");
+            titleSb.append(train.trainNumber);
+        }
+        if (titleSb.length() == 0) titleSb.append("Train");
+
+        StringBuilder body = new StringBuilder();
+        if (train.destination != null && !train.destination.isEmpty()) {
+            body.append("Direction : ").append(train.destination).append("\n\n");
+        }
+        if (train.cancelled) {
+            body.append("⛔ Supprimé\n");
+        } else if (train.delayed && train.delayMinutes > 0) {
+            body.append("⏰ Retard +").append(train.delayMinutes).append(" min\n");
+        } else {
+            body.append("✅ À l'heure\n");
+        }
+        body.append("\nPosition : ");
+        if (train.currentStopName != null && !train.currentStopName.isEmpty()) {
+            body.append(train.currentStopName);
+        } else {
+            body.append("?");
+        }
+        if (train.nextStopName != null && !train.nextStopName.isEmpty()
+                && !train.nextStopName.equals(train.currentStopName)) {
+            body.append(" → ").append(train.nextStopName);
+        }
+        if (train.label != null && !train.label.isEmpty()
+                && !train.label.equals(train.missionName)) {
+            body.append("\n\n").append(train.label);
+        }
+
+        new AlertDialog.Builder(requireContext())
+                .setTitle(titleSb.toString())
+                .setMessage(body.toString())
+                .setPositiveButton("OK", null)
+                .show();
     }
 
     private List<LineMapView.TrainOnMap> buildTrainsOnMap() {

@@ -9,6 +9,7 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.util.AttributeSet;
+import android.view.MotionEvent;
 import android.view.View;
 
 import android.util.Log;
@@ -81,6 +82,27 @@ public class LineMapView extends View {
     // Trains à afficher
     private final List<TrainOnMap> trains = new ArrayList<>();
 
+    // Zones de tap pour chaque train (recalculées à chaque onDraw)
+    private final List<HitArea> trainHitAreas = new ArrayList<>();
+    private OnTrainClickListener trainClickListener;
+
+    public interface OnTrainClickListener {
+        void onTrainClicked(TrainOnMap train);
+    }
+
+    public void setOnTrainClickListener(OnTrainClickListener listener) {
+        this.trainClickListener = listener;
+    }
+
+    private static class HitArea {
+        final RectF rect;
+        final TrainOnMap train;
+        HitArea(RectF rect, TrainOnMap train) {
+            this.rect = rect;
+            this.train = train;
+        }
+    }
+
     public static class TrainOnMap {
         public final String journeyRef;
         public final String destination;
@@ -141,11 +163,11 @@ public class LineMapView extends View {
         textSize = 12 * density;
         textSizeSmall = 10 * density;
         textSizeLegend = 11 * density;
-        rowHeight = 44 * density;
-        branchOffsetX = 160 * density;
+        rowHeight = 48 * density;
+        branchOffsetX = 200 * density;
         startX = 90 * density;
         startY = 60 * density;
-        legendHeight = 52 * density;
+        legendHeight = 32 * density; // une seule ligne (statuts trains), pas Paris/Banlieue
 
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(lineWidth);
@@ -254,6 +276,7 @@ public class LineMapView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         stationPositions.clear();
+        trainHitAreas.clear();
 
         float width = getWidth();
 
@@ -395,29 +418,6 @@ public class LineMapView extends View {
             lx += textPaint.measureText(trainLabels[i]) + 36 * density;
         }
 
-        // Légende sens (deux voies)
-        ly += 16 * density;
-        lx = startX;
-        trainPaint.setColor(COLOR_LINE_N);
-        // ▲ Vers Paris
-        Path upTri = new Path();
-        upTri.moveTo(lx + 8 * density, ly);
-        upTri.lineTo(lx, ly + 10 * density);
-        upTri.lineTo(lx + 16 * density, ly + 10 * density);
-        upTri.close();
-        canvas.drawPath(upTri, trainPaint);
-        legendTextPaint.setColor(COLOR_TEXT);
-        canvas.drawText("Vers Paris (droite)", lx + 18 * density, ly + 9 * density, legendTextPaint);
-        lx += legendTextPaint.measureText("Vers Paris (droite)") + 36 * density;
-        // ▼ Vers banlieue
-        Path downTri = new Path();
-        downTri.moveTo(lx + 8 * density, ly + 10 * density);
-        downTri.lineTo(lx, ly);
-        downTri.lineTo(lx + 16 * density, ly);
-        downTri.close();
-        canvas.drawPath(downTri, trainPaint);
-        legendTextPaint.setColor(COLOR_TEXT);
-        canvas.drawText("Vers banlieue (gauche)", lx + 18 * density, ly + 9 * density, legendTextPaint);
     }
 
     private void drawBranchCurve(Canvas canvas, float fromX, float fromY,
@@ -539,64 +539,39 @@ public class LineMapView extends View {
         canvas.drawPath(path, trainPaint);
         canvas.drawPath(path, trainStrokePaint);
 
-        // Label : mission + → destination courte + retard éventuel
-        // (le numéro de train SNCF type "ABCD12345" est moins parlant que la
-        //  destination ; on le garde uniquement si pas de mission/destination)
-        StringBuilder trainLabel = new StringBuilder();
-        if (train.missionName != null && !train.missionName.isEmpty()) {
-            trainLabel.append(train.missionName);
-        } else if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
-            trainLabel.append(train.trainNumber);
-        } else if (train.label != null && !train.label.isEmpty()) {
-            trainLabel.append(train.label);
-        }
-        String shortDest = shortDestination(train.destination);
-        if (!shortDest.isEmpty()) {
-            if (trainLabel.length() > 0) trainLabel.append(" → ");
-            trainLabel.append(shortDest);
-        }
-        if (train.delayed && train.delayMinutes > 0) {
-            trainLabel.append(" +").append(train.delayMinutes).append("min");
-        } else if (train.cancelled) {
-            trainLabel.append(" SUPPR");
-        }
-
-        if (trainLabel.length() > 0) {
-            textSecondaryPaint.setTypeface(Typeface.DEFAULT_BOLD);
-            textSecondaryPaint.setColor(color);
-            float textWidth = textSecondaryPaint.measureText(trainLabel.toString());
-            float labelX, labelY;
-
-            if (goingUp) {
-                // Voie droite : label au-dessus du triangle
-                labelX = tx - textWidth / 2;
-                labelY = ty - trainSize - 4 * density;
-            } else {
-                // Voie gauche : label à gauche du triangle
-                labelX = tx - trainSize * 0.7f - textWidth - 4 * density;
-                labelY = ty;
-            }
-            labelX = Math.max(2 * density, labelX);
-
-            canvas.drawText(trainLabel.toString(), labelX, labelY, textSecondaryPaint);
-            textSecondaryPaint.setTypeface(Typeface.DEFAULT);
-            textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
-        }
+        // Pas de label sur le plan : trop d'encombrement avec 30+ trains.
+        // L'info détaillée est accessible au tap (hit-test enregistré ci-dessous).
+        float pad = 4 * density;
+        trainHitAreas.add(new HitArea(
+                new RectF(tx - trainSize - pad, ty - trainSize - pad,
+                          tx + trainSize + pad, ty + trainSize + pad),
+                train));
     }
 
-    /** Tronque "Mantes-la-Jolie" → "Mantes", "Saint-Cyr" → "St-Cyr", etc.
-     *  Sinon retourne les ~10 premiers caractères. Vide si destination null. */
-    private static String shortDestination(String dest) {
-        if (dest == null || dest.isEmpty()) return "";
-        String d = dest.replace("Saint-", "St-");
-        // Coupe au 1er '-' ou ' ' si ça donne un mot d'au moins 3 chars
-        int dash = d.indexOf('-');
-        int space = d.indexOf(' ');
-        int cut = -1;
-        if (dash >= 3) cut = dash;
-        if (space >= 3 && (cut < 0 || space < cut)) cut = space;
-        if (cut > 0) return d.substring(0, cut);
-        return d.length() > 12 ? d.substring(0, 12) : d;
+    @Override
+    public boolean onTouchEvent(MotionEvent event) {
+        if (event.getAction() == MotionEvent.ACTION_UP) {
+            float x = event.getX();
+            float y = event.getY();
+            // Parcours en sens inverse pour préférer le triangle dessiné en
+            // dernier (= au-dessus) en cas de chevauchement résiduel.
+            for (int i = trainHitAreas.size() - 1; i >= 0; i--) {
+                HitArea area = trainHitAreas.get(i);
+                if (area.rect.contains(x, y)) {
+                    if (trainClickListener != null) {
+                        trainClickListener.onTrainClicked(area.train);
+                    }
+                    performClick();
+                    return true;
+                }
+            }
+        }
+        return super.onTouchEvent(event);
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 
     private float[] findStationPos(String stopName) {
