@@ -550,21 +550,33 @@ public class LineMapView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() == MotionEvent.ACTION_UP) {
-            float x = event.getX();
-            float y = event.getY();
-            // Parcours en sens inverse pour préférer le triangle dessiné en
-            // dernier (= au-dessus) en cas de chevauchement résiduel.
-            for (int i = trainHitAreas.size() - 1; i >= 0; i--) {
-                HitArea area = trainHitAreas.get(i);
-                if (area.rect.contains(x, y)) {
-                    if (trainClickListener != null) {
-                        trainClickListener.onTrainClicked(area.train);
+        switch (event.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+                // Si le DOWN tombe sur un train, on intercepte ET on bloque le
+                // HorizontalScrollView parent. Sinon on laisse le scroll vivre.
+                for (HitArea area : trainHitAreas) {
+                    if (area.rect.contains(event.getX(), event.getY())) {
+                        if (getParent() != null) {
+                            getParent().requestDisallowInterceptTouchEvent(true);
+                        }
+                        return true; // garantit qu'on recevra ACTION_UP
                     }
-                    performClick();
-                    return true;
                 }
-            }
+                return false;
+            case MotionEvent.ACTION_UP:
+                // Parcours en sens inverse : le triangle dessiné en dernier
+                // (= au-dessus) gagne en cas de chevauchement.
+                for (int i = trainHitAreas.size() - 1; i >= 0; i--) {
+                    HitArea area = trainHitAreas.get(i);
+                    if (area.rect.contains(event.getX(), event.getY())) {
+                        if (trainClickListener != null) {
+                            trainClickListener.onTrainClicked(area.train);
+                        }
+                        performClick();
+                        return true;
+                    }
+                }
+                return false;
         }
         return super.onTouchEvent(event);
     }
