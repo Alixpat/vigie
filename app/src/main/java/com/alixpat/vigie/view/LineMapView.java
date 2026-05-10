@@ -141,8 +141,8 @@ public class LineMapView extends View {
         textSize = 12 * density;
         textSizeSmall = 10 * density;
         textSizeLegend = 11 * density;
-        rowHeight = 36 * density;
-        branchOffsetX = 100 * density;
+        rowHeight = 44 * density;
+        branchOffsetX = 160 * density;
         startX = 90 * density;
         startY = 60 * density;
         legendHeight = 52 * density;
@@ -342,9 +342,19 @@ public class LineMapView extends View {
         }
 
         // ====== TRAINS ======
+        // Cluster par (currentStop, nextStop) pour éviter que plusieurs trains
+        // au même segment se dessinent les uns sur les autres.
         Log.i(TAG, "onDraw: " + stationPositions.size() + " stations positionnées, " + trains.size() + " trains à dessiner");
+        Map<String, List<TrainOnMap>> clusters = new java.util.LinkedHashMap<>();
         for (TrainOnMap train : trains) {
-            drawTrain(canvas, train);
+            String key = (train.currentStopName == null ? "" : train.currentStopName)
+                    + "→" + (train.nextStopName == null ? "" : train.nextStopName);
+            clusters.computeIfAbsent(key, k -> new ArrayList<>()).add(train);
+        }
+        for (List<TrainOnMap> cluster : clusters.values()) {
+            for (int i = 0; i < cluster.size(); i++) {
+                drawTrain(canvas, cluster.get(i), i, cluster.size());
+            }
         }
     }
 
@@ -451,7 +461,7 @@ public class LineMapView extends View {
         canvas.drawText(displayName, textX, textY, textPaint);
     }
 
-    private void drawTrain(Canvas canvas, TrainOnMap train) {
+    private void drawTrain(Canvas canvas, TrainOnMap train, int clusterIndex, int clusterSize) {
         float[] posFrom = findStationPos(train.currentStopName);
         float[] posTo = findStationPos(train.nextStopName);
 
@@ -478,6 +488,14 @@ public class LineMapView extends View {
         }
 
         float density = getResources().getDisplayMetrics().density;
+
+        // Décale verticalement les trains du même cluster pour qu'ils ne se
+        // superposent pas (centré autour de la position d'origine).
+        if (clusterSize > 1) {
+            float spacing = trainSize * 2.4f;
+            float offset = (clusterIndex - (clusterSize - 1) / 2.0f) * spacing;
+            ty += offset;
+        }
 
         // Déterminer le sens : montant (vers Paris, Y décroissant) ou descendant
         boolean goingUp = false;
@@ -521,20 +539,26 @@ public class LineMapView extends View {
         canvas.drawPath(path, trainPaint);
         canvas.drawPath(path, trainStrokePaint);
 
-        // Label : numéro + mission + retard éventuel
+        // Label : mission + → destination courte + retard éventuel
+        // (le numéro de train SNCF type "ABCD12345" est moins parlant que la
+        //  destination ; on le garde uniquement si pas de mission/destination)
         StringBuilder trainLabel = new StringBuilder();
-        if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
-            trainLabel.append(train.trainNumber);
-        }
         if (train.missionName != null && !train.missionName.isEmpty()) {
-            if (trainLabel.length() > 0) trainLabel.append(" ");
             trainLabel.append(train.missionName);
-        }
-        if (trainLabel.length() == 0 && train.label != null && !train.label.isEmpty()) {
+        } else if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
+            trainLabel.append(train.trainNumber);
+        } else if (train.label != null && !train.label.isEmpty()) {
             trainLabel.append(train.label);
+        }
+        String shortDest = shortDestination(train.destination);
+        if (!shortDest.isEmpty()) {
+            if (trainLabel.length() > 0) trainLabel.append(" → ");
+            trainLabel.append(shortDest);
         }
         if (train.delayed && train.delayMinutes > 0) {
             trainLabel.append(" +").append(train.delayMinutes).append("min");
+        } else if (train.cancelled) {
+            trainLabel.append(" SUPPR");
         }
 
         if (trainLabel.length() > 0) {
@@ -558,6 +582,21 @@ public class LineMapView extends View {
             textSecondaryPaint.setTypeface(Typeface.DEFAULT);
             textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
         }
+    }
+
+    /** Tronque "Mantes-la-Jolie" → "Mantes", "Saint-Cyr" → "St-Cyr", etc.
+     *  Sinon retourne les ~10 premiers caractères. Vide si destination null. */
+    private static String shortDestination(String dest) {
+        if (dest == null || dest.isEmpty()) return "";
+        String d = dest.replace("Saint-", "St-");
+        // Coupe au 1er '-' ou ' ' si ça donne un mot d'au moins 3 chars
+        int dash = d.indexOf('-');
+        int space = d.indexOf(' ');
+        int cut = -1;
+        if (dash >= 3) cut = dash;
+        if (space >= 3 && (cut < 0 || space < cut)) cut = space;
+        if (cut > 0) return d.substring(0, cut);
+        return d.length() > 12 ? d.substring(0, 12) : d;
     }
 
     private float[] findStationPos(String stopName) {
