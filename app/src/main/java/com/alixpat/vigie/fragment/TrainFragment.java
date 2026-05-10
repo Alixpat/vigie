@@ -1764,6 +1764,7 @@ public class TrainFragment extends Fragment {
 
     private List<TrainIncident> parseLineReportsResponse(String jsonStr) {
         List<TrainIncident> incidents = new ArrayList<>();
+        Map<String, Integer> severityDistribution = new java.util.TreeMap<>();
         try {
             JSONObject root = new JSONObject(jsonStr);
             JSONArray disruptions = root.optJSONArray("disruptions");
@@ -1824,36 +1825,46 @@ public class TrainFragment extends Fragment {
                 }
                 if (text.isEmpty()) continue;
 
-                // Classifier
-                String type;
-                String severity;
-
-                boolean isBlocking = "NO_SERVICE".equalsIgnoreCase(severityEffect)
-                        || "SIGNIFICANT_DELAYS".equalsIgnoreCase(severityEffect)
-                        || severityPriority <= 1;
-                boolean isDisturbed = "REDUCED_SERVICE".equalsIgnoreCase(severityEffect)
-                        || "DETOUR".equalsIgnoreCase(severityEffect)
-                        || "OTHER_EFFECT".equalsIgnoreCase(severityEffect)
-                        || severityPriority <= 3;
+                // Distribution agrégée pour debug : (effect, priority, name)
+                String distKey = "effect=" + (severityEffect.isEmpty() ? "-" : severityEffect)
+                        + " priority=" + (severityPriority == 99 ? "-" : String.valueOf(severityPriority))
+                        + " name=" + (severityName.isEmpty() ? "-" : severityName);
+                severityDistribution.merge(distKey, 1, Integer::sum);
 
                 boolean isTravaux = IncidentClassifier.hasTravauxKeyword(text)
                         || IncidentClassifier.hasTravauxKeyword(cause);
 
-                if (isTravaux && !isBlocking) {
-                    type = TrainIncident.TYPE_TRAVAUX;
-                    severity = "information";
-                } else if (isBlocking) {
-                    type = TrainIncident.TYPE_PERTURBATION;
+                // Classification selon la sémantique Navitia/IDFM :
+                //   priority 0  → trafic interrompu (blocking)
+                //   priority 1  → retards (delays)
+                //   priority 2  → service réduit (reduced_service)
+                //   priority 3+ → information
+                // Si priority absente (99) on retombe sur l'effect, puis sur les keywords.
+                String severity;
+                String type;
+                if (severityPriority == 0 || "NO_SERVICE".equalsIgnoreCase(severityEffect)) {
                     severity = "blocking";
-                } else if (isDisturbed) {
                     type = TrainIncident.TYPE_PERTURBATION;
+                } else if (severityPriority == 1 || "SIGNIFICANT_DELAYS".equalsIgnoreCase(severityEffect)) {
                     severity = "delays";
-                } else if (IncidentClassifier.hasPerturbationKeyword(text)) {
                     type = TrainIncident.TYPE_PERTURBATION;
-                    severity = "delays";
-                } else {
-                    type = TrainIncident.TYPE_INFORMATION;
+                } else if (severityPriority == 2
+                        || "REDUCED_SERVICE".equalsIgnoreCase(severityEffect)
+                        || "DETOUR".equalsIgnoreCase(severityEffect)) {
+                    severity = "reduced_service";
+                    type = TrainIncident.TYPE_PERTURBATION;
+                } else if (isTravaux) {
                     severity = "information";
+                    type = TrainIncident.TYPE_TRAVAUX;
+                } else if (severityPriority >= 3 && severityPriority < 99) {
+                    severity = "information";
+                    type = TrainIncident.TYPE_INFORMATION;
+                } else if (IncidentClassifier.hasPerturbationKeyword(text)) {
+                    severity = "delays";
+                    type = TrainIncident.TYPE_PERTURBATION;
+                } else {
+                    severity = "information";
+                    type = TrainIncident.TYPE_INFORMATION;
                 }
 
                 String title;
@@ -1868,6 +1879,13 @@ public class TrainFragment extends Fragment {
                 incidents.add(new TrainIncident(
                         title, text, severity, cause, validFrom, validUntil, type
                 ));
+            }
+
+            if (!severityDistribution.isEmpty()) {
+                Log.i(TAG, "parseLineReportsResponse severity distribution:");
+                for (Map.Entry<String, Integer> e : severityDistribution.entrySet()) {
+                    Log.i(TAG, "  [" + e.getValue() + "] " + e.getKey());
+                }
             }
         } catch (Exception e) {
             Log.e(TAG, "parseLineReportsResponse: error parsing JSON", e);
