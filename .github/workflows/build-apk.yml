@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - main
+      # Branches de travail : produit un APK installable (prerelease dev-<sha>)
+      # avant merge, pour tester sur le téléphone sans passer par main.
+      - 'claude/**'
     tags:
       - 'v*'
   workflow_dispatch:
