@@ -1,6 +1,5 @@
 package com.alixpat.vigie.train;
 
-import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.OngoingTrain;
 import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
@@ -9,23 +8,29 @@ import com.alixpat.vigie.util.DateFormats;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Sélection des trains « qui me concernent à l'instant T » : ceux qui roulent
  * en ce moment entre ma gare d'origine et ma gare de destination, dans un sens
  * ou dans l'autre — typiquement le train dans lequel je suis assis.
  *
- * Deux sources sont nécessaires, car un train déjà parti disparaît du
- * {@code stop-monitoring} de la gare d'origine :
+ * Un train me concerne s'il <b>dessert mes deux gares</b> — c'est
+ * {@link SegmentLeg} qui le détermine, et l'ordre des deux arrêts donne le sens
+ * de circulation. Le terminus annoncé n'entre pas dans la décision.
+ *
+ * Trois sources sont fusionnées, car un train déjà parti a disparu du
+ * {@code stop-monitoring} de ma gare de départ :
  * <ul>
- *   <li>le stop-monitoring de la gare <b>d'arrivée</b> (le train y est encore
- *       annoncé tant qu'il n'est pas arrivé) → heure d'arrivée + retard ;</li>
- *   <li>le stop-monitoring de la gare de <b>départ</b> ou, à défaut, les arrêts
- *       de l'estimated-timetable → heure de départ de ma gare.</li>
+ *   <li>le stop-monitoring de ma gare de <b>départ</b> → heure de départ + retard ;</li>
+ *   <li>celui de ma gare <b>d'arrivée</b> (le train y est encore annoncé tant
+ *       qu'il n'est pas arrivé) → heure d'arrivée + retard à l'arrivée ;</li>
+ *   <li>le parcours complet de l'{@code estimated-timetable} → seule source qui
+ *       connaisse encore les trains déjà partis, et la plus exhaustive.</li>
  * </ul>
- * Un train qui ne dessert pas ma gare de départ est écarté : il ne me concerne pas.
  */
 public final class OngoingTrains {
 
@@ -112,70 +117,67 @@ public final class OngoingTrains {
     // ==================== Construction depuis les réponses SIRI ====================
 
     /**
-     * Construit les trajets en cours d'un sens de circulation.
+     * Les sources disponibles pour reconstituer les trains d'un sens de circulation.
+     * Toutes sont facultatives : plus il y en a, plus la liste est complète.
+     */
+    public static final class Sources {
+        /** Passages à ma gare de départ (stop-monitoring). */
+        public Map<String, StopVisit> originVisits;
+        /** Passages à ma gare d'arrivée (stop-monitoring). */
+        public Map<String, StopVisit> destinationVisits;
+        /** Parcours complets par journeyRef (estimated-timetable). */
+        public Map<String, List<TrainStop>> stops;
+        /** Numéros de train par journeyRef. */
+        public Map<String, String> trainNumbers;
+        /** Noms de mission par journeyRef. */
+        public Map<String, String> missionNames;
+
+        public Sources(Map<String, StopVisit> originVisits,
+                       Map<String, StopVisit> destinationVisits,
+                       Map<String, List<TrainStop>> stops,
+                       Map<String, String> trainNumbers,
+                       Map<String, String> missionNames) {
+            this.originVisits = originVisits;
+            this.destinationVisits = destinationVisits;
+            this.stops = stops;
+            this.trainNumbers = trainNumbers;
+            this.missionNames = missionNames;
+        }
+
+        public Sources(Map<String, StopVisit> originVisits,
+                       Map<String, StopVisit> destinationVisits,
+                       Map<String, List<TrainStop>> stops) {
+            this(originVisits, destinationVisits, stops, null, null);
+        }
+
+        /** Tous les journeyRef connus, toutes sources confondues. */
+        Set<String> journeyRefs() {
+            Set<String> refs = new LinkedHashSet<>();
+            if (originVisits != null) refs.addAll(originVisits.keySet());
+            if (destinationVisits != null) refs.addAll(destinationVisits.keySet());
+            if (stops != null) refs.addAll(stops.keySet());
+            return refs;
+        }
+    }
+
+    /**
+     * Construit les trains d'un sens qui roulent en ce moment sur mon tronçon.
      *
-     * @param originData      visites à ma gare de départ (peut être null / incomplet)
-     * @param destinationData visites à ma gare d'arrivée — source principale
-     * @param stopsCache      arrêts par journeyRef (estimated-timetable), pour retrouver
-     *                        l'heure de départ des trains absents d'{@code originData}
-     * @param direction       sens de circulation concerné
-     * @param now             instant de référence en epoch millis
+     * Le critère est « le train dessert mes deux gares, la gare de départ en
+     * premier » — pas le terminus annoncé. Un train déjà parti ayant disparu du
+     * stop-monitoring de ma gare de départ, son heure de départ est reprise du
+     * parcours (estimated-timetable), seule source à le connaître encore.
+     *
      * @return les trains en circulation sur mon trajet, le dernier parti en tête
      */
-    public static List<TrainSchedule> buildOngoing(Map<String, StopVisit> originData,
-                                                   Map<String, StopVisit> destinationData,
-                                                   Map<String, List<TrainStop>> stopsCache,
-                                                   LineNDirection direction,
+    public static List<TrainSchedule> buildOngoing(Sources sources, LineNDirection direction,
                                                    long now) {
         List<TrainSchedule> result = new ArrayList<>();
-        if (destinationData == null || destinationData.isEmpty()) return result;
+        if (sources == null) return result;
 
-        for (Map.Entry<String, StopVisit> entry : destinationData.entrySet()) {
-            String journeyRef = entry.getKey();
-            StopVisit destinationVisit = entry.getValue();
-            if (destinationVisit == null || destinationVisit.isCancelled()) continue;
-            if (!direction.matchesDestination(destinationVisit.destination)) continue;
-
-            long arrivalMillis = destinationVisit.bestArrivalMillis();
-            if (arrivalMillis <= 0) continue;
-
-            StopVisit originVisit = originData != null ? originData.get(journeyRef) : null;
-            List<TrainStop> stops = stopsCache != null ? stopsCache.get(journeyRef) : null;
-
-            long departureMillis = resolveDepartureMillis(originVisit, stops, direction);
-            if (departureMillis <= 0) continue;   // ne dessert pas ma gare de départ
-
-            // Le retard qui compte à bord est celui annoncé à l'arrivée ; celui du
-            // départ ne sert qu'à savoir si le train a effectivement quitté ma gare.
-            int departureDelay = originVisit != null
-                    ? diffMinutes(originVisit.expectedDeparture, originVisit.aimedDeparture) : 0;
-            int delayMinutes = computeDelayMinutes(destinationVisit, originVisit);
-
-            String expectedDepartureTime = departureDelay > 0
-                    ? DateFormats.formatHhmm(new Date(departureMillis + departureDelay * 60_000L))
-                    : "";
-
-            TrainSchedule schedule = new TrainSchedule(
-                    destinationVisit.destination,
-                    DateFormats.formatHhmm(new Date(departureMillis)),
-                    expectedDepartureTime,
-                    DateFormats.formatHhmm(new Date(arrivalMillis)),
-                    delayMinutes > 0 ? "delayed" : "onTime",
-                    platformOf(destinationVisit, originVisit),
-                    delayMinutes,
-                    journeyRef,
-                    departureMillis,
-                    arrivalMillis,
-                    direction.getOriginName(),
-                    firstNonEmpty(originVisit != null ? originVisit.trainNumber : null,
-                            destinationVisit.trainNumber),
-                    firstNonEmpty(originVisit != null ? originVisit.missionName : null,
-                            destinationVisit.missionName));
-
-            // Même filtre que pour le rafraîchissement local : pas encore parti →
-            // il figure déjà dans les prochains départs ; déjà arrivé → il ne me
-            // concerne plus.
-            if (isOngoing(schedule, now)) result.add(schedule);
+        for (String journeyRef : sources.journeyRefs()) {
+            TrainSchedule schedule = toSchedule(journeyRef, sources, direction);
+            if (schedule != null && isOngoing(schedule, now)) result.add(schedule);
         }
 
         sortByDepartureDesc(result);
@@ -183,54 +185,71 @@ public final class OngoingTrains {
     }
 
     /**
-     * Heure de départ de ma gare : celle du stop-monitoring si le train y est
-     * encore annoncé, sinon celle de l'arrêt correspondant dans le parcours.
+     * @return le trajet sur mon tronçon pour ce train, ou null s'il ne dessert pas
+     *         mes deux gares dans ce sens (ou s'il est supprimé).
      */
-    private static long resolveDepartureMillis(StopVisit originVisit, List<TrainStop> stops,
-                                               LineNDirection direction) {
-        if (originVisit != null && originVisit.aimedDeparture != null) {
-            return originVisit.aimedDeparture.getTime();
-        }
-        TrainStop originStop = findStop(stops, direction.getOriginName());
-        if (originStop == null) return 0L;
-        if (originStop.getAimedDepartureMillis() > 0) return originStop.getAimedDepartureMillis();
-        return originStop.getBestTimeMillis();
+    private static TrainSchedule toSchedule(String journeyRef, Sources sources,
+                                            LineNDirection direction) {
+        StopVisit originVisit = get(sources.originVisits, journeyRef);
+        StopVisit destinationVisit = get(sources.destinationVisits, journeyRef);
+        List<TrainStop> stops = get(sources.stops, journeyRef);
+
+        SegmentLeg leg = SegmentLeg.resolve(originVisit, destinationVisit, stops, direction);
+        if (leg.isCancelled() || !leg.servesMySegment()) return null;
+
+        long departureMillis = leg.getDepartureMillis();
+        long arrivalMillis = leg.getArrivalMillis();
+        int delayMinutes = leg.getDelayMinutes();
+
+        String expectedDepartureTime = leg.getDepartureDelayMinutes() > 0
+                ? DateFormats.formatHhmm(new Date(
+                        departureMillis + leg.getDepartureDelayMinutes() * 60_000L))
+                : "";
+
+        return new TrainSchedule(
+                terminusOf(originVisit, destinationVisit, stops, direction),
+                DateFormats.formatHhmm(new Date(departureMillis)),
+                expectedDepartureTime,
+                DateFormats.formatHhmm(new Date(arrivalMillis)),
+                delayMinutes > 0 ? "delayed" : "onTime",
+                platformOf(destinationVisit, originVisit),
+                delayMinutes,
+                journeyRef,
+                departureMillis,
+                arrivalMillis,
+                direction.getOriginName(),
+                firstNonEmpty(originVisit != null ? originVisit.trainNumber : null,
+                        destinationVisit != null ? destinationVisit.trainNumber : null,
+                        get(sources.trainNumbers, journeyRef)),
+                firstNonEmpty(originVisit != null ? originVisit.missionName : null,
+                        destinationVisit != null ? destinationVisit.missionName : null,
+                        get(sources.missionNames, journeyRef)));
     }
 
-    /**
-     * Retrouve un arrêt par son nom de gare (comparaison normalisée, en mode
-     * {@code contains} dans les deux sens : "Villepreux" ↔ "Villepreux - Les Clayes").
-     */
-    public static TrainStop findStop(List<TrainStop> stops, String stationName) {
-        if (stops == null || stationName == null || stationName.isEmpty()) return null;
-        String target = LineNStation.normalize(stationName);
-        if (target.isEmpty()) return null;
-        for (TrainStop stop : stops) {
-            String candidate = LineNStation.normalize(stop.getStopName());
-            if (candidate.isEmpty()) continue;
-            if (candidate.equals(target)
-                    || candidate.contains(target)
-                    || target.contains(candidate)) {
-                return stop;
+    /** Terminus annoncé du train ; à défaut le dernier arrêt de son parcours. */
+    private static String terminusOf(StopVisit originVisit, StopVisit destinationVisit,
+                                     List<TrainStop> stops, LineNDirection direction) {
+        String terminus = firstNonEmpty(
+                originVisit != null ? originVisit.destination : null,
+                destinationVisit != null ? destinationVisit.destination : null, null);
+        if (!terminus.isEmpty()) return terminus;
+        if (stops != null && !stops.isEmpty()) {
+            long latest = Long.MIN_VALUE;
+            String name = "";
+            for (TrainStop stop : stops) {
+                long time = stop.getBestArrivalMillis();
+                if (time > latest) {
+                    latest = time;
+                    name = stop.getStopName();
+                }
             }
+            if (name != null && !name.isEmpty()) return name;
         }
-        return null;
+        return direction.getDestinationName();
     }
 
-    /** Retard en minutes : à l'arrivée en priorité (c'est celui qui compte à bord). */
-    private static int computeDelayMinutes(StopVisit destinationVisit, StopVisit originVisit) {
-        int delay = diffMinutes(destinationVisit != null ? destinationVisit.expectedArrival : null,
-                destinationVisit != null ? destinationVisit.aimedArrival : null);
-        if (delay == 0 && originVisit != null) {
-            delay = diffMinutes(originVisit.expectedDeparture, originVisit.aimedDeparture);
-        }
-        return delay;
-    }
-
-    private static int diffMinutes(Date expected, Date aimed) {
-        if (expected == null || aimed == null) return 0;
-        int minutes = (int) ((expected.getTime() - aimed.getTime()) / 60_000L);
-        return Math.max(0, minutes);
+    private static <T> T get(Map<String, T> map, String key) {
+        return map != null ? map.get(key) : null;
     }
 
     private static String platformOf(StopVisit destinationVisit, StopVisit originVisit) {
@@ -241,9 +260,10 @@ public final class OngoingTrains {
         return originVisit != null && originVisit.platform != null ? originVisit.platform : "";
     }
 
-    private static String firstNonEmpty(String a, String b) {
+    private static String firstNonEmpty(String a, String b, String c) {
         if (a != null && !a.isEmpty()) return a;
-        return b != null ? b : "";
+        if (b != null && !b.isEmpty()) return b;
+        return c != null ? c : "";
     }
 
     // ==================== Mise en forme pour l'affichage ====================
