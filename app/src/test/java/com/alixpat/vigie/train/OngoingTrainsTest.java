@@ -278,6 +278,69 @@ public class OngoingTrainsTest {
         assertEquals(T0 - 10 * MIN, ongoing.get(0).getAimedDepartureMillis());
     }
 
+    @Test
+    public void findsOriginStopByNumericIdWhenStopNamesAreUnresolved() {
+        // L'estimated-timetable IDFM ne renvoie pas toujours StopPointName : les
+        // arrêts s'appellent alors "Arrêt 43111" (l'ID de Clamart).
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, null));
+        Map<String, List<TrainStop>> stopsCache = new HashMap<>();
+        stopsCache.put("J1", stops("Arrêt 43111", "-5", "Arrêt 43219", "10",
+                "Arrêt 43221", "25"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), villepreux, stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(T0 - 5 * MIN, ongoing.get(0).getAimedDepartureMillis());
+    }
+
+    // ==================== rememberOriginVisits ====================
+
+    @Test
+    public void rememberedOriginVisitSurvivesItsDisappearanceFromStopMonitoring() {
+        Map<String, StopVisit> memory = new HashMap<>();
+        // Rafraîchissement d'il y a 5 minutes : le train est encore annoncé à Clamart.
+        OngoingTrains.rememberOriginVisits(memory,
+                map(visit("J1", "Plaisir - Grignon", -5L, null, null)), T0 - 5 * MIN);
+        // Rafraîchissement suivant : parti, il a disparu de la réponse de l'API.
+        OngoingTrains.rememberOriginVisits(memory, new HashMap<>(), T0);
+
+        assertEquals(1, memory.size());
+
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, null));
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                memory, villepreux, new HashMap<>(), LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(T0 - 5 * MIN, ongoing.get(0).getAimedDepartureMillis());
+    }
+
+    @Test
+    public void rememberOriginVisitsForgetsOldAndUndatedVisits() {
+        Map<String, StopVisit> memory = new HashMap<>();
+        StopVisit undated = visit("J0", "Plaisir - Grignon", null, 10L, null);
+        StopVisit old = visit("J1", "Plaisir - Grignon", -240L, null, null);   // parti il y a 4 h
+        StopVisit recent = visit("J2", "Plaisir - Grignon", -20L, null, null);
+
+        OngoingTrains.rememberOriginVisits(memory, map(undated, old, recent), T0);
+
+        assertEquals(1, memory.size());
+        assertTrue(memory.containsKey("J2"));
+    }
+
+    @Test
+    public void rememberOriginVisitsKeepsFreshestVersionOfAVisit() {
+        Map<String, StopVisit> memory = new HashMap<>();
+        OngoingTrains.rememberOriginVisits(memory,
+                map(visit("J1", "Plaisir - Grignon", -5L, null, null)), T0);
+        StopVisit delayed = visit("J1", "Plaisir - Grignon", -5L, null, null);
+        delayed.expectedDeparture = new Date(T0 - 2 * MIN);
+        OngoingTrains.rememberOriginVisits(memory, map(delayed), T0);
+
+        assertEquals(1, memory.size());
+        assertEquals(new Date(T0 - 2 * MIN), memory.get("J1").expectedDeparture);
+    }
+
     // ==================== describe ====================
 
     @Test

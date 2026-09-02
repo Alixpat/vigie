@@ -41,6 +41,7 @@ public final class LineNDirection {
     private final String originName;
     private final String destinationName;
     private final String[] destinationKeywords;
+    private final String originStopId;
 
     private LineNDirection(String label,
                            String originStopRef, String destinationStopRef,
@@ -52,6 +53,17 @@ public final class LineNDirection {
         this.originName = originName;
         this.destinationName = destinationName;
         this.destinationKeywords = destinationKeywords;
+        this.originStopId = extractNumericId(originStopRef);
+    }
+
+    /** "STIF:StopArea:SP:43111:" → "43111" ; "" si illisible. */
+    private static String extractNumericId(String stopRef) {
+        if (stopRef == null || stopRef.isEmpty()) return "";
+        String[] parts = stopRef.split(":");
+        for (int p = parts.length - 1; p >= 0; p--) {
+            if (!parts[p].isEmpty()) return parts[p];
+        }
+        return "";
     }
 
     public String getLabel() {
@@ -60,6 +72,17 @@ public final class LineNDirection {
 
     public String getOriginStopRef() {
         return originStopRef;
+    }
+
+    /**
+     * @return l'identifiant numérique de la gare d'origine ("43111" pour
+     *         "STIF:StopArea:SP:43111:"). Sert de secours pour retrouver l'arrêt
+     *         dans un parcours dont les noms de gares n'ont pas pu être résolus
+     *         (l'estimated-timetable IDFM ne renvoie pas toujours StopPointName :
+     *         les arrêts s'appellent alors "Arrêt 43111").
+     */
+    public String getOriginStopId() {
+        return originStopId;
     }
 
     public String getDestinationStopRef() {

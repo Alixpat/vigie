@@ -108,7 +108,7 @@
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- Trains en cours sur mon trajet (visible uniquement s'il y en a) -->
+        <!-- Trains en circulation sur mon trajet (liste, ou message quand il n'y en a pas) -->
         <LinearLayout
             android:id="@+id/ongoingSection"
             android:layout_width="match_parent"
@@ -147,6 +147,16 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:nestedScrollingEnabled="false" />
+
+            <TextView
+                android:id="@+id/ongoingEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:padding="12dp"
+                android:textSize="13sp"
+                android:textColor="@color/text_secondary"
+                android:text="Aucun train en circulation entre Clamart et Villepreux en ce moment."
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Perturbations (visibles uniquement si perturbations en cours) -->
