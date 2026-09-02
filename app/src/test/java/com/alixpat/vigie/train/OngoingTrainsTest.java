@@ -70,6 +70,12 @@ public class OngoingTrainsTest {
         return stops;
     }
 
+    private static Map<String, List<TrainStop>> routes(String journeyRef, List<TrainStop> stops) {
+        Map<String, List<TrainStop>> cache = new HashMap<>();
+        cache.put(journeyRef, stops);
+        return cache;
+    }
+
     // ==================== isOngoing / isUpcoming ====================
 
     @Test
@@ -203,17 +209,119 @@ public class OngoingTrainsTest {
     }
 
     @Test
-    public void ignoresTrainsThatDoNotServeMyDepartureStation() {
-        // Terminus dans le bon sens, mais aucune trace d'un passage à Clamart.
-        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, null));
-        Map<String, List<TrainStop>> stopsCache = new HashMap<>();
-        stopsCache.put("J1", stops("Paris Montparnasse", "-20", "Versailles Chantiers", "10",
-                "Villepreux - Les Clayes", "25"));
+    public void showsTrainsAlreadyPastMyDepartureStationEvenWithoutItsDepartureTime() {
+        // Le cas central : le train a franchi Clamart, qui a donc disparu de ses
+        // arrêts restants. Il est physiquement sur mon segment — il doit être listé,
+        // que je sois dedans ou non, quitte à ne pas connaître son heure de départ.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Versailles Chantiers", "10", "Villepreux - Les Clayes", "25"));
 
         List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
-                new HashMap<>(), villepreux, stopsCache, LineNDirection.ALLER, T0);
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals("", ongoing.get(0).getAimedDepartureTime());
+        assertEquals(0, ongoing.get(0).getAimedDepartureMillis());
+        assertEquals(T0 + 25 * MIN, ongoing.get(0).getArrivalMillis());
+    }
+
+    @Test
+    public void ignoresTrainsThatHaveNotReachedMyDepartureStationYet() {
+        // Prochain arrêt = Clamart : le train n'est pas encore sur mon segment,
+        // il appartient aux prochains départs.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Paris Montparnasse", "-4", "Clamart", "6",
+                        "Villepreux - Les Clayes", "31"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
 
         assertTrue(ongoing.isEmpty());
+    }
+
+    @Test
+    public void ignoresTrainsRunningTheOtherWayDownTheSameSegment() {
+        // Train Paris → Mantes dont le prochain arrêt est Clamart : il descend le
+        // corridor Villepreux → Clamart à l'envers, il ne circule pas sur mon
+        // trajet Retour.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Meudon", "-3", "Clamart", "4", "Villepreux - Les Clayes", "29"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.RETOUR, T0);
+
+        assertTrue(ongoing.isEmpty());
+    }
+
+    @Test
+    public void listsEveryTrainCurrentlyOnTheSegment() {
+        // Trois trains simultanément entre Clamart et Villepreux : tous listés,
+        // le prochain à arriver chez moi en tête.
+        Map<String, List<TrainStop>> stopsCache = new HashMap<>();
+        stopsCache.put("J1", stops("Clamart", "-22", "Versailles Chantiers", "-6",
+                "Villepreux - Les Clayes", "8"));
+        stopsCache.put("J2", stops("Clamart", "-10", "Versailles Chantiers", "6",
+                "Villepreux - Les Clayes", "20"));
+        stopsCache.put("J3", stops("Versailles Chantiers", "14",
+                "Villepreux - Les Clayes", "28"));   // Clamart déjà franchie
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(Arrays.asList("J1", "J2", "J3"), Arrays.asList(
+                ongoing.get(0).getJourneyRef(),
+                ongoing.get(1).getJourneyRef(),
+                ongoing.get(2).getJourneyRef()));
+    }
+
+    @Test
+    public void aTrainStandingAtMyArrivalStationIsStillOnTheSegment() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-25", "Villepreux - Les Clayes", "1"));
+
+        assertEquals(1, OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0).size());
+    }
+
+    @Test
+    public void aTrainThatLeftMyArrivalStationIsGone() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-30", "Villepreux - Les Clayes", "-4",
+                        "Plaisir - Grignon", "6"));
+
+        assertTrue(OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0).isEmpty());
+    }
+
+    @Test
+    public void aDelayTakenEnRouteDoesNotHideATrainThatHasAlreadyLeft() {
+        // Parti à l'heure de Clamart il y a 2 min, mais 10 min de retard annoncées à
+        // l'arrivée : le décaler de 10 min le ferait passer pour « pas encore parti ».
+        Map<String, StopVisit> clamart = map(visit("J1", "Plaisir - Grignon", -2L, null, null));
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, 35L));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                clamart, villepreux, new HashMap<>(), LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(10, ongoing.get(0).getDelayMinutes());
+        assertEquals(T0 - 2 * MIN, OngoingTrains.effectiveDepartureMillis(ongoing.get(0)));
+    }
+
+    @Test
+    public void aDelayAnnouncedAtDepartureShiftsTheDeparture() {
+        StopVisit clamartVisit = visit("J1", "Plaisir - Grignon", -2L, null, null);
+        clamartVisit.expectedDeparture = new Date(T0 + 6 * MIN);   // 8 min de retard au départ
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, null));
+
+        // Toujours à quai : il appartient encore aux prochains départs.
+        assertTrue(OngoingTrains.buildOngoing(
+                map(clamartVisit), villepreux, new HashMap<>(), LineNDirection.ALLER, T0).isEmpty());
+
+        List<TrainSchedule> later = OngoingTrains.buildOngoing(
+                map(clamartVisit), villepreux, new HashMap<>(), LineNDirection.ALLER, T0 + 10 * MIN);
+        assertEquals(1, later.size());
+        assertEquals(T0 + 6 * MIN, OngoingTrains.effectiveDepartureMillis(later.get(0)));
     }
 
     @Test
@@ -292,6 +400,81 @@ public class OngoingTrainsTest {
 
         assertEquals(1, ongoing.size());
         assertEquals(T0 - 5 * MIN, ongoing.get(0).getAimedDepartureMillis());
+    }
+
+    @Test
+    public void buildsOngoingTrainAbsentFromBothStopMonitorings() {
+        // Le cas qui cassait l'affichage : le train a dépassé Clamart (il a donc
+        // disparu du stop-monitoring de Clamart) et n'est pas encore dans l'horizon
+        // publié pour Villepreux. Seul son parcours le décrit — cela doit suffire.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-12", "Versailles Chantiers", "8",
+                        "Villepreux - Les Clayes", "23"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        TrainSchedule train = ongoing.get(0);
+        assertEquals("J1", train.getJourneyRef());
+        assertEquals(T0 - 12 * MIN, train.getAimedDepartureMillis());
+        assertEquals(T0 + 23 * MIN, train.getArrivalMillis());
+    }
+
+    @Test
+    public void directionIsReadFromTheOrderOfTheStopsNotFromTheTerminus() {
+        // Terminus "Mantes-la-Jolie" : mot-clé du sens Aller. Mais le parcours passe
+        // par Villepreux AVANT Clamart — c'est donc un train du sens Retour.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Villepreux - Les Clayes", "-10", "Clamart", "15",
+                        "Mantes-la-Jolie", "40"));
+
+        assertTrue(OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0).isEmpty());
+        assertEquals(1, OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.RETOUR, T0).size());
+    }
+
+    @Test
+    public void ignoresTrainsWhoseRouteStopsBeforeMyArrivalStation() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Versailles Chantiers", "10"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertTrue(ongoing.isEmpty());
+    }
+
+    @Test
+    public void stopMonitoringDelayWinsOverTheRouteSchedule() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Villepreux - Les Clayes", "20"));
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 20L, 26L));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), villepreux, stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(6, ongoing.get(0).getDelayMinutes());
+    }
+
+    @Test
+    public void takesTrainNumberFromTheEstimatedTimetableWhenStopMonitoringIsSilent() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Villepreux - Les Clayes", "20"));
+        Map<String, String> trainNumbers = new HashMap<>();
+        trainNumbers.put("J1", "135642");
+        Map<String, String> missions = new HashMap<>();
+        missions.put("J1", "MOPI");
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, trainNumbers, missions,
+                LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals("135642", ongoing.get(0).getTrainNumber());
+        assertEquals("MOPI", ongoing.get(0).getMissionName());
     }
 
     // ==================== rememberOriginVisits ====================

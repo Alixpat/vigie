@@ -27,6 +27,7 @@ import com.alixpat.vigie.model.TrainSchedule;
 import com.alixpat.vigie.model.TrainStop;
 import com.alixpat.vigie.train.IdfmClient;
 import com.alixpat.vigie.train.IncidentClassifier;
+import com.alixpat.vigie.train.JourneyRoutes;
 import com.alixpat.vigie.train.LineNDirection;
 import com.alixpat.vigie.train.OngoingTrains;
 import com.alixpat.vigie.train.StopVisit;
@@ -54,6 +55,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -140,10 +142,12 @@ public class TrainFragment extends Fragment {
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final Map<String, List<TrainStop>> journeyStopsCache = new HashMap<>();
-    private final Map<String, String> journeyTrainNumberCache = new HashMap<>();
-    private final Map<String, String> journeyMissionNameCache = new HashMap<>();
-    private final Map<String, String> stopPointNameCache = new HashMap<>();
+    // Écrits par l'executor, lus par le tick de position sur le thread UI : la
+    // purge des parcours retire des entrées pendant que l'UI en lit.
+    private final Map<String, List<TrainStop>> journeyStopsCache = new ConcurrentHashMap<>();
+    private final Map<String, String> journeyTrainNumberCache = new ConcurrentHashMap<>();
+    private final Map<String, String> journeyMissionNameCache = new ConcurrentHashMap<>();
+    private final Map<String, String> stopPointNameCache = new ConcurrentHashMap<>();
 
     private final Runnable refreshRunnable = new Runnable() {
         @Override
@@ -1061,9 +1065,11 @@ public class TrainFragment extends Fragment {
 
             List<TrainSchedule> ongoingAllerNow = OngoingTrains.buildOngoing(
                     seenAtClamart, villepreuxData, journeyStopsCache,
+                    journeyTrainNumberCache, journeyMissionNameCache,
                     LineNDirection.ALLER, nowMillis);
             List<TrainSchedule> ongoingRetourNow = OngoingTrains.buildOngoing(
                     seenAtVillepreux, clamartData, journeyStopsCache,
+                    journeyTrainNumberCache, journeyMissionNameCache,
                     LineNDirection.RETOUR, nowMillis);
 
             Log.i(TAG, "enCirculation: visites Clamart=" + sizeOf(clamartData)
@@ -1122,9 +1128,11 @@ public class TrainFragment extends Fragment {
         long now = System.currentTimeMillis();
         List<TrainSchedule> aller = OngoingTrains.buildOngoing(
                 seenAtClamart, lastVillepreuxData, journeyStopsCache,
+                journeyTrainNumberCache, journeyMissionNameCache,
                 LineNDirection.ALLER, now);
         List<TrainSchedule> retour = OngoingTrains.buildOngoing(
                 seenAtVillepreux, lastClamartData, journeyStopsCache,
+                journeyTrainNumberCache, journeyMissionNameCache,
                 LineNDirection.RETOUR, now);
         Log.i(TAG, "enCirculation (après parcours): parcours en cache="
                 + journeyStopsCache.size() + " → aller=" + aller.size()
@@ -1432,6 +1440,8 @@ public class TrainFragment extends Fragment {
                     delayMinutes,
                     journeyRef,
                     origin.aimedDeparture.getTime(),
+                    origin.expectedDeparture != null
+                            ? origin.expectedDeparture.getTime() : 0,
                     arrivalMillis,
                     originStation,
                     trainNum,
@@ -1500,9 +1510,11 @@ public class TrainFragment extends Fragment {
         collectOngoing(display, ongoingAller, LineNDirection.ALLER, now);
         collectOngoing(display, ongoingRetour, LineNDirection.RETOUR, now);
 
+        // Le prochain à arriver chez moi en tête : c'est l'ordre utile pour choisir
+        // un train, et il reste défini quand l'heure de départ est inconnue.
         Collections.sort(display, (a, b) -> Long.compare(
-                OngoingTrains.effectiveDepartureMillis(b.getSchedule()),
-                OngoingTrains.effectiveDepartureMillis(a.getSchedule())));
+                OngoingTrains.effectiveArrivalMillis(a.getSchedule()),
+                OngoingTrains.effectiveArrivalMillis(b.getSchedule())));
 
         // La section reste visible même vide : sans elle, impossible de distinguer
         // « aucun train ne roule sur mon trajet » d'un affichage en panne.
@@ -1529,17 +1541,23 @@ public class TrainFragment extends Fragment {
         }
     }
 
-    /** Retire les trains arrivés de {@code source} et met en forme les autres. */
+    /** Retire de {@code source} les trains qui ont quitté mon segment, met en forme les autres. */
     private void collectOngoing(List<OngoingTrain> target, List<TrainSchedule> source,
                                 LineNDirection direction, long now) {
         java.util.Iterator<TrainSchedule> it = source.iterator();
         while (it.hasNext()) {
             TrainSchedule schedule = it.next();
-            if (!OngoingTrains.isOngoing(schedule, now)) {
+            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
+            // Même règle qu'à la construction : la position réelle prime, les
+            // horaires ne tranchent que faute de parcours.
+            OngoingTrains.Placement placement = OngoingTrains.locate(stops, direction, now);
+            boolean stillHere = placement == OngoingTrains.Placement.ON_SEGMENT
+                    || (placement == OngoingTrains.Placement.UNKNOWN
+                        && OngoingTrains.isOngoing(schedule, now));
+            if (!stillHere) {
                 it.remove();
                 continue;
             }
-            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
             target.add(OngoingTrains.describe(schedule, direction, resolveStopNames(stops), now));
         }
     }
@@ -1553,7 +1571,7 @@ public class TrainFragment extends Fragment {
             if (name != null && name.equals(stop.getStopName())) {
                 resolved.add(stop);
             } else {
-                resolved.add(new TrainStop(name,
+                resolved.add(new TrainStop(name, stop.getStopRef(),
                         stop.getAimedArrivalMillis(), stop.getExpectedArrivalMillis(),
                         stop.getAimedDepartureMillis(), stop.getExpectedDepartureMillis(),
                         stop.getPlatformName(), stop.isDeparture(), stop.isArrival()));
@@ -1813,10 +1831,14 @@ public class TrainFragment extends Fragment {
                         }
 
                         if (!stops.isEmpty()) {
-                            // Marquer premier et dernier
-                            journeyStopsCache.put(journeyRef, stops);
+                            // Fusion, jamais écrasement : IDFM ne renvoie que ce qu'il
+                            // reste à parcourir, donc écraser effacerait ma gare de
+                            // départ dès que le train l'a dépassée (cf. JourneyRoutes).
+                            List<TrainStop> route = JourneyRoutes.merge(
+                                    journeyStopsCache.get(journeyRef), stops);
+                            journeyStopsCache.put(journeyRef, route);
                             totalJourneys++;
-                            totalStops += stops.size();
+                            totalStops += route.size();
 
                             // Extraire numéro de train et nom de mission
                             String trainNum = "";
@@ -1862,8 +1884,12 @@ public class TrainFragment extends Fragment {
                 }
             }
 
+            JourneyRoutes.purge(journeyStopsCache, System.currentTimeMillis(),
+                    JourneyRoutes.MAX_AGE_MS);
+
             Log.i(TAG, "parseEstimatedTimetable: " + totalJourneys + " trajets, "
-                    + totalStops + " arrêts au total");
+                    + totalStops + " arrêts au total, "
+                    + journeyStopsCache.size() + " parcours mémorisés");
 
         } catch (Exception e) {
             Log.e(TAG, "parseEstimatedTimetable: exception JSON", e);
@@ -1872,6 +1898,16 @@ public class TrainFragment extends Fragment {
 
     private TrainStop parseEstimatedCall(JSONObject call, boolean isFirst, boolean isLast) {
         try {
+            // Référence de l'arrêt : c'est elle qui identifie l'arrêt d'un
+            // rafraîchissement à l'autre, le nom pouvant rester non résolu.
+            String stopRef;
+            JSONObject stopRefObj = call.optJSONObject("StopPointRef");
+            if (stopRefObj != null) {
+                stopRef = stopRefObj.optString("value", "");
+            } else {
+                stopRef = call.optString("StopPointRef", "");
+            }
+
             // Nom de l'arrêt
             String stopName = "";
             JSONArray stopNames = call.optJSONArray("StopPointName");
@@ -1884,24 +1920,15 @@ public class TrainFragment extends Fragment {
                 }
             }
             // Fallback : résoudre le nom depuis StopPointRef via le cache stop-points-discovery
-            if (stopName.isEmpty()) {
-                String stopRef = "";
-                JSONObject stopRefObj = call.optJSONObject("StopPointRef");
-                if (stopRefObj != null) {
-                    stopRef = stopRefObj.optString("value", "");
-                } else {
-                    stopRef = call.optString("StopPointRef", "");
-                }
-                if (!stopRef.isEmpty()) {
-                    String numericId = extractNumericId(stopRef);
-                    if (!numericId.isEmpty()) {
-                        // Chercher dans le cache stop-points-discovery
-                        String cached = stopPointNameCache.get(numericId);
-                        if (cached != null && !cached.isEmpty()) {
-                            stopName = cached;
-                        } else {
-                            stopName = "Arrêt " + numericId;
-                        }
+            if (stopName.isEmpty() && !stopRef.isEmpty()) {
+                String numericId = extractNumericId(stopRef);
+                if (!numericId.isEmpty()) {
+                    // Chercher dans le cache stop-points-discovery
+                    String cached = stopPointNameCache.get(numericId);
+                    if (cached != null && !cached.isEmpty()) {
+                        stopName = cached;
+                    } else {
+                        stopName = "Arrêt " + numericId;
                     }
                 }
             }
@@ -1922,7 +1949,7 @@ public class TrainFragment extends Fragment {
                 if (depPlatformObj != null) platform = depPlatformObj.optString("value", "");
             }
 
-            return new TrainStop(stopName, aimedArr, expectedArr, aimedDep, expectedDep,
+            return new TrainStop(stopName, stopRef, aimedArr, expectedArr, aimedDep, expectedDep,
                     platform, isFirst, isLast);
         } catch (Exception e) {
             Log.e(TAG, "parseEstimatedCall: erreur", e);
