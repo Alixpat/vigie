@@ -24,7 +24,7 @@ JDK 17, Android Gradle Plugin 8.2.2, Java source/target 1.8. Use the wrapper:
 JVM unit tests live in `app/src/test/java/com/alixpat/vigie/`:
 
 - **`model/`** — covers the five MQTT JSON parsers (`LanHost`, `BackupJob`, `InternetStatus`, `SensorStatus`, `VigieMessage`) plus a `RoutingCascadeTest` that locks in the cascade invariant used by `MqttService.messageArrived`: for any payload, exactly one typed parser accepts (or all reject and `VigieMessage` fallback handles it). If you change a `fromJson` filter, run `testDebugUnitTest` — silent mis-classification is the bug class these tests prevent.
-- **`train/`** — covers the three pure helpers extracted from `TrainFragment` (`IncidentClassifier`, `LineNDirection`, `IdfmClient`). Touching keyword arrays, direction matching, or URL construction without running tests is asking for a regression.
+- **`train/`** — covers the pure helpers extracted from `TrainFragment` (`IncidentClassifier`, `LineNDirection`, `IdfmClient`, `TrainPosition`, `OngoingTrains`). Touching keyword arrays, direction matching, URL construction, or the ongoing-train selection rules without running tests is asking for a regression.
 
 There is no `src/androidTest` source set yet. CI runs `testDebugUnitTest` before `assembleRelease`, so a failing test blocks the APK build and uploads the HTML report as a `test-report` artifact.
 
@@ -52,7 +52,7 @@ Reconnection has two layers: Paho's `automaticReconnect`, plus a `ConnectivityMa
 | 0 | Messages | MQTT (`vigie/*`, `VigieMessage`) | History on `MqttService.messageHistory`; notifications via `NotificationHelper` |
 | 1 | Infra | MQTT — three message types: `LanHost`, `BackupJob`, `InternetStatus` | Single fragment with three sections; each fed by its own broadcast action and its own static cache on `MqttService` |
 | 2 | Météo | HTTP `api.open-meteo.com` (no key) | Hardcoded city coords in `WeatherFragment.CITIES` |
-| 3 | Train | IDFM PRIM REST API (5 endpoints) | Needs `idfmToken` in `BrokerConfig`; line hardcoded to SNCF Ligne N (`STIF:Line::C01736:`) |
+| 3 | Train | IDFM PRIM REST API (5 endpoints) | Needs `idfmToken` in `BrokerConfig`; line hardcoded to SNCF Ligne N (`STIF:Line::C01736:`). Section *En circulation sur mon trajet* en tête : trains déjà partis dans un sens ou dans l'autre, position rafraîchie toutes les 20 s sans appel réseau |
 | 4 | Voiture | TomTom Routing API | Needs `tomtomApiKey` in `BrokerConfig`; rolling 30-min average history in SharedPreferences `vigie_driving_history` |
 | 5 | Capteurs | MQTT (`vigie/sensors/*`, `SensorStatus`) | TTN/LoRaWAN sensors relayed by the `capteur-ttn` bridge. Per-`kind` rendering in `SensorAdapter` (currently `door`; generic key:value fallback otherwise). Adding a new sensor type = a new branch in `SensorAdapter.renderFor`. |
 
@@ -73,6 +73,11 @@ Despite the name, `BrokerConfig` (`SharedPreferences("vigie_prefs")`) holds **al
 - **`IdfmClient`** — HTTP layer. Constructor takes `(lineRef, navitiaLineId)`; the five `fetchXxx(token, ...)` methods return raw JSON strings and throw `IdfmClient.HttpException` (extends `IOException`) on non-200 responses. `HttpException.isServerError()` drives the `stop-monitoring` retry loop. Adding an endpoint = a new method here, not a sixth copy of HttpURLConnection boilerplate.
 - **`LineNDirection`** — two static instances (`ALLER`, `RETOUR`) bundling origin/destination stop refs, human names, and destination keywords. `matchesDestination(String)` is the case-insensitive substring matcher used by `buildCrossReferencedSchedules`.
 - **`IncidentClassifier`** — keyword-based classification of perturbation / travaux / blocking. Used by both the `general-message` parser (entirely via `classifyMessage(text, channel)`) and the `line_reports` parser (via the three `hasXxxKeyword` helpers).
+- **`StopVisit`** — sac de données d'un `MonitoredStopVisit` SIRI (ex-`TrainFragment.RawStopVisit`). Produit par `TrainFragment.parseRawStopVisits`, consommé par `buildCrossReferencedSchedules` et `OngoingTrains`.
+- **`TrainPosition`** — position d'un train sur son parcours à un instant **injecté** (`compute(stops, now)` / `statusAt(stop, now)`), donc reproductible : à quai, entre deux gares, pas encore parti, arrivé, + un avancement en %. `TrainStop.getStatus()` (qui lit l'horloge système) reste pour les autres appelants.
+- **`OngoingTrains`** — sélection des trains « qui me concernent à l'instant T » (section *En circulation sur mon trajet*). `isOngoing`/`isUpcoming` partagent la liste des départs en deux ; `buildOngoing` reconstruit les trains déjà partis à partir du stop-monitoring de la gare **d'arrivée** (un train parti a disparu de celui de la gare de départ) et de `journeyStopsCache` pour retrouver l'heure de départ de ma gare ; `describe` produit l'`OngoingTrain` prêt à afficher. Attention : `effectiveDepartureMillis` n'applique le retard au départ que si une heure de départ estimée est renseignée — un retard pris en route ne change pas l'heure à laquelle le train est parti.
+
+Les horaires sont ramenés sur une fenêtre `[now - 30 min, now + 2 h]` : `OngoingTrains.selectUpcoming` alimente les deux listes de départs, le reste bascule dans la section *En circulation*. Un tick local (`POSITION_TICK_MS`, 20 s) rejoue ce partage et recalcule les positions sans appel réseau ; seul `fetchSchedules` (5 min) refait les requêtes.
 
 The custom `LineMapView` renders the line schematic; train detail dialogs still live in the fragment and combine `estimated-timetable` data with on-demand `stop-monitoring` calls for `OnwardCalls`.
 
