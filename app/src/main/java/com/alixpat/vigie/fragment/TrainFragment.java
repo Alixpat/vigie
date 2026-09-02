@@ -29,6 +29,7 @@ import com.alixpat.vigie.train.IdfmClient;
 import com.alixpat.vigie.train.IncidentClassifier;
 import com.alixpat.vigie.train.LineNDirection;
 import com.alixpat.vigie.train.OngoingTrains;
+import com.alixpat.vigie.train.SegmentLeg;
 import com.alixpat.vigie.train.StopVisit;
 import com.alixpat.vigie.util.DateFormats;
 import com.alixpat.vigie.view.LineMapView;
@@ -54,6 +55,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -98,13 +100,15 @@ public class TrainFragment extends Fragment {
 
     private View ongoingSection;
     private RecyclerView ongoingRecyclerView;
+    private TextView ongoingTitle;
     private TextView ongoingLastUpdate;
     private TrainOngoingAdapter ongoingAdapter;
 
-    // Derniers trajets en cours connus, par sens : la position est recalculée
-    // localement toutes les POSITION_TICK_MS sans refaire d'appel réseau.
-    private final List<TrainSchedule> ongoingAller = new ArrayList<>();
-    private final List<TrainSchedule> ongoingRetour = new ArrayList<>();
+    // Dernières réponses stop-monitoring des deux gares. Publiées par le thread de
+    // fond, relues par le tick local qui reconstruit les trains en circulation
+    // toutes les POSITION_TICK_MS sans refaire d'appel réseau.
+    private volatile Map<String, StopVisit> lastClamartVisits;
+    private volatile Map<String, StopVisit> lastVillepreuxVisits;
 
     // Derniers horaires ramenés par l'API, avant partage "à venir" / "en cours" :
     // le tick local rejoue ce partage pour qu'un train qui vient de partir bascule
@@ -126,10 +130,12 @@ public class TrainFragment extends Fragment {
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
-    private final Map<String, List<TrainStop>> journeyStopsCache = new HashMap<>();
-    private final Map<String, String> journeyTrainNumberCache = new HashMap<>();
-    private final Map<String, String> journeyMissionNameCache = new HashMap<>();
-    private final Map<String, String> stopPointNameCache = new HashMap<>();
+    // ConcurrentHashMap : remplis par le thread de fond, parcourus par le tick
+    // local sur le thread UI (buildOngoing itère sur les clés).
+    private final Map<String, List<TrainStop>> journeyStopsCache = new ConcurrentHashMap<>();
+    private final Map<String, String> journeyTrainNumberCache = new ConcurrentHashMap<>();
+    private final Map<String, String> journeyMissionNameCache = new ConcurrentHashMap<>();
+    private final Map<String, String> stopPointNameCache = new ConcurrentHashMap<>();
 
     private final Runnable refreshRunnable = new Runnable() {
         @Override
@@ -187,6 +193,7 @@ public class TrainFragment extends Fragment {
 
         ongoingSection = view.findViewById(R.id.ongoingSection);
         ongoingRecyclerView = view.findViewById(R.id.ongoingRecyclerView);
+        ongoingTitle = view.findViewById(R.id.ongoingTitle);
         ongoingLastUpdate = view.findViewById(R.id.ongoingLastUpdate);
         ongoingAdapter = new TrainOngoingAdapter();
         ongoingRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
@@ -1035,21 +1042,12 @@ public class TrainFragment extends Fragment {
                     villepreuxData, clamartData,
                     LineNDirection.RETOUR, windowStart, windowEnd);
 
-            // Trains actuellement en circulation sur mon trajet : reconstruits depuis
-            // la gare d'arrivée, car un train déjà parti a disparu du stop-monitoring
-            // de la gare de départ.
-            long nowMillis = System.currentTimeMillis();
-            List<TrainSchedule> ongoingAllerNow = OngoingTrains.buildOngoing(
-                    clamartData, villepreuxData, journeyStopsCache,
-                    LineNDirection.ALLER, nowMillis);
-            List<TrainSchedule> ongoingRetourNow = OngoingTrains.buildOngoing(
-                    villepreuxData, clamartData, journeyStopsCache,
-                    LineNDirection.RETOUR, nowMillis);
+            // Publié pour le tick local, qui reconstruit les trains en circulation.
+            lastClamartVisits = clamartData;
+            lastVillepreuxVisits = villepreuxData;
 
             Log.i(TAG, "fetchSchedules: résultats Aller=" + (allerSchedules != null ? allerSchedules.size() : "null")
-                    + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null")
-                    + ", enCours Aller=" + ongoingAllerNow.size()
-                    + ", enCours Retour=" + ongoingRetourNow.size());
+                    + ", Retour=" + (retourSchedules != null ? retourSchedules.size() : "null"));
 
             if (getActivity() != null) {
                 getActivity().runOnUiThread(() -> {
@@ -1077,16 +1075,6 @@ public class TrainFragment extends Fragment {
                         lastRetourSchedules.clear();
                         lastRetourSchedules.addAll(retourSchedules);
                     }
-
-                    ongoingAller.clear();
-                    ongoingAller.addAll(ongoingAllerNow);
-                    // Filet de sécurité : un train encore annoncé au départ mais dont
-                    // l'heure est passée est aussi un train "en cours".
-                    mergeOngoing(ongoingAller, allerSchedules, uiNow);
-
-                    ongoingRetour.clear();
-                    ongoingRetour.addAll(ongoingRetourNow);
-                    mergeOngoing(ongoingRetour, retourSchedules, uiNow);
 
                     updateOngoingSection();
                 });
@@ -1294,11 +1282,6 @@ public class TrainFragment extends Fragment {
             String journeyRef = entry.getKey();
             StopVisit origin = entry.getValue();
 
-            if (!direction.matchesDestination(origin.destination)) {
-                filteredByDest++;
-                continue;
-            }
-
             if (origin.aimedDeparture == null) {
                 noAimedTime++;
                 continue;
@@ -1309,20 +1292,29 @@ public class TrainFragment extends Fragment {
                 continue;
             }
 
-            String arrivalTimeStr = "";
-            if (destinationData != null) {
-                StopVisit destVisit = destinationData.get(journeyRef);
-                if (destVisit != null) {
-                    if (destVisit.aimedArrival != null) {
-                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedArrival);
-                    } else if (destVisit.aimedDeparture != null) {
-                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedDeparture);
-                    }
-                } else {
-                    filteredByNoStop++;
-                    // Train gardé sans heure d'arrivée
+            // Ce train me concerne s'il dessert mes deux gares, ma gare de départ
+            // en premier — le terminus annoncé ne sert que de repli quand on ne
+            // connaît rien de son parcours.
+            StopVisit destVisit = destinationData != null ? destinationData.get(journeyRef) : null;
+            List<TrainStop> stops = journeyStopsCache.get(journeyRef);
+            SegmentLeg leg = SegmentLeg.resolve(origin, destVisit, stops, direction);
+
+            if (!leg.servesMySegment()) {
+                boolean routeKnown = destVisit != null || (stops != null && !stops.isEmpty());
+                if (routeKnown) {
+                    filteredByDest++;   // on sait qu'il ne dessert pas mes deux gares
+                    continue;
                 }
+                if (!direction.matchesDestination(origin.destination)) {
+                    filteredByDest++;
+                    continue;
+                }
+                filteredByNoStop++;     // gardé sur le seul terminus, sans heure d'arrivée
             }
+
+            long arrivalMillis = leg.hasArrival() ? leg.getArrivalMillis() : 0L;
+            String arrivalTimeStr = arrivalMillis > 0
+                    ? DateFormats.formatHhmm(new Date(arrivalMillis)) : "";
 
             int delayMinutes = 0;
             String expectedTimeStr = "";
@@ -1345,15 +1337,6 @@ public class TrainFragment extends Fragment {
                     + " status=" + origin.departureStatus
                     + " retard=" + delayMinutes + "min"
                     + " voie=" + origin.platform);
-
-            long arrivalMillis = 0;
-            if (destinationData != null) {
-                StopVisit destVisit = destinationData.get(journeyRef);
-                if (destVisit != null) {
-                    if (destVisit.aimedArrival != null) arrivalMillis = destVisit.aimedArrival.getTime();
-                    else if (destVisit.aimedDeparture != null) arrivalMillis = destVisit.aimedDeparture.getTime();
-                }
-            }
 
             String originStation = direction.getOriginName();
 
@@ -1400,27 +1383,10 @@ public class TrainFragment extends Fragment {
     }
 
     /**
-     * Ajoute à {@code ongoing} les trajets de {@code schedules} qui sont partis mais
-     * pas encore arrivés et qui n'y figurent pas déjà (même journeyRef).
-     */
-    private void mergeOngoing(List<TrainSchedule> ongoing, List<TrainSchedule> schedules, long now) {
-        if (schedules == null) return;
-        for (TrainSchedule candidate : OngoingTrains.selectOngoing(schedules, now)) {
-            boolean known = false;
-            for (TrainSchedule existing : ongoing) {
-                if (existing.getJourneyRef().equals(candidate.getJourneyRef())) {
-                    known = true;
-                    break;
-                }
-            }
-            if (!known) ongoing.add(candidate);
-        }
-    }
-
-    /**
-     * Redessine la section "En circulation sur mon trajet" à partir des trajets
-     * déjà connus : recalcule la position de chaque train à l'instant T et retire
-     * ceux qui sont arrivés. Aucun appel réseau — appelée aussi par le tick local.
+     * Redessine la section "En circulation sur mon trajet" : reconstruit, à
+     * l'instant T, les trains partis de l'une de mes deux gares et pas encore
+     * arrivés à l'autre, dans les deux sens. Aucun appel réseau — c'est aussi ce
+     * que rejoue le tick local toutes les POSITION_TICK_MS.
      */
     private void updateOngoingSection() {
         if (!isAdded() || ongoingSection == null) return;
@@ -1429,14 +1395,14 @@ public class TrainFragment extends Fragment {
 
         // Un train dont l'heure de départ vient de passer quitte la liste des
         // prochains départs et rejoint les trains en circulation.
-        repartitionDepartures(lastAllerSchedules, ongoingAller, scheduleAdapterAller,
+        repartitionDepartures(lastAllerSchedules, scheduleAdapterAller,
                 scheduleEmptyAller, scheduleRecyclerViewAller, "Clamart → Villepreux", now);
-        repartitionDepartures(lastRetourSchedules, ongoingRetour, scheduleAdapterRetour,
+        repartitionDepartures(lastRetourSchedules, scheduleAdapterRetour,
                 scheduleEmptyRetour, scheduleRecyclerViewRetour, "Villepreux → Clamart", now);
 
         List<OngoingTrain> display = new ArrayList<>();
-        collectOngoing(display, ongoingAller, LineNDirection.ALLER, now);
-        collectOngoing(display, ongoingRetour, LineNDirection.RETOUR, now);
+        collectOngoing(display, LineNDirection.ALLER, lastClamartVisits, lastVillepreuxVisits, now);
+        collectOngoing(display, LineNDirection.RETOUR, lastVillepreuxVisits, lastClamartVisits, now);
 
         Collections.sort(display, (a, b) -> Long.compare(
                 OngoingTrains.effectiveDepartureMillis(b.getSchedule()),
@@ -1449,8 +1415,29 @@ public class TrainFragment extends Fragment {
         }
 
         ongoingSection.setVisibility(View.VISIBLE);
+        ongoingTitle.setText("\uD83D\uDE86 En circulation sur mon trajet \u00B7 " + display.size());
         ongoingLastUpdate.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
         ongoingAdapter.updateTrains(display);
+
+        Log.d(TAG, "updateOngoingSection: " + display.size() + " train(s) en circulation"
+                + " (parcours en cache=" + journeyStopsCache.size()
+                + ", visites Clamart=" + (lastClamartVisits != null ? lastClamartVisits.size() : "null")
+                + ", visites Villepreux=" + (lastVillepreuxVisits != null ? lastVillepreuxVisits.size() : "null")
+                + ")");
+    }
+
+    /** Reconstruit puis met en forme les trains en circulation d'un sens. */
+    private void collectOngoing(List<OngoingTrain> target, LineNDirection direction,
+                                Map<String, StopVisit> originVisits,
+                                Map<String, StopVisit> destinationVisits, long now) {
+        OngoingTrains.Sources sources = new OngoingTrains.Sources(
+                originVisits, destinationVisits, journeyStopsCache,
+                journeyTrainNumberCache, journeyMissionNameCache);
+
+        for (TrainSchedule schedule : OngoingTrains.buildOngoing(sources, direction, now)) {
+            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
+            target.add(OngoingTrains.describe(schedule, direction, resolveStopNames(stops), now));
+        }
     }
 
     /**
@@ -1458,29 +1445,13 @@ public class TrainFragment extends Fragment {
      * sans appel réseau. La liste des départs n'est redessinée que si sa taille a
      * changé (un train est parti), pour ne pas la rafraîchir toutes les 20 s.
      */
-    private void repartitionDepartures(List<TrainSchedule> source, List<TrainSchedule> ongoing,
+    private void repartitionDepartures(List<TrainSchedule> source,
                                        TrainScheduleAdapter adapter, TextView emptyView,
                                        RecyclerView recycler, String direction, long now) {
         if (source.isEmpty()) return;
-        mergeOngoing(ongoing, source, now);
         List<TrainSchedule> upcoming = OngoingTrains.selectUpcoming(source, now);
         if (upcoming.size() != adapter.getItemCount()) {
             updateScheduleUI(upcoming, emptyView, recycler, adapter, direction);
-        }
-    }
-
-    /** Retire les trains arrivés de {@code source} et met en forme les autres. */
-    private void collectOngoing(List<OngoingTrain> target, List<TrainSchedule> source,
-                                LineNDirection direction, long now) {
-        java.util.Iterator<TrainSchedule> it = source.iterator();
-        while (it.hasNext()) {
-            TrainSchedule schedule = it.next();
-            if (!OngoingTrains.isOngoing(schedule, now)) {
-                it.remove();
-                continue;
-            }
-            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
-            target.add(OngoingTrains.describe(schedule, direction, resolveStopNames(stops), now));
         }
     }
 
@@ -1801,6 +1772,14 @@ public class TrainFragment extends Fragment {
 
             Log.i(TAG, "parseEstimatedTimetable: " + totalJourneys + " trajets, "
                     + totalStops + " arrêts au total");
+
+            // Le parcours complet est la source la plus exhaustive pour les trains
+            // déjà partis : la section "en circulation" se complète dès son arrivée.
+            if (getActivity() != null) {
+                getActivity().runOnUiThread(() -> {
+                    if (isAdded()) updateOngoingSection();
+                });
+            }
 
         } catch (Exception e) {
             Log.e(TAG, "parseEstimatedTimetable: exception JSON", e);
