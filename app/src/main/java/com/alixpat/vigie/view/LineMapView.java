@@ -550,35 +550,44 @@ public class LineMapView extends View {
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        switch (event.getActionMasked()) {
-            case MotionEvent.ACTION_DOWN:
-                // Si le DOWN tombe sur un train, on intercepte ET on bloque le
-                // HorizontalScrollView parent. Sinon on laisse le scroll vivre.
-                for (HitArea area : trainHitAreas) {
-                    if (area.rect.contains(event.getX(), event.getY())) {
-                        if (getParent() != null) {
-                            getParent().requestDisallowInterceptTouchEvent(true);
-                        }
-                        return true; // garantit qu'on recevra ACTION_UP
-                    }
-                }
-                return false;
-            case MotionEvent.ACTION_UP:
-                // Parcours en sens inverse : le triangle dessiné en dernier
-                // (= au-dessus) gagne en cas de chevauchement.
-                for (int i = trainHitAreas.size() - 1; i >= 0; i--) {
-                    HitArea area = trainHitAreas.get(i);
-                    if (area.rect.contains(event.getX(), event.getY())) {
-                        if (trainClickListener != null) {
-                            trainClickListener.onTrainClicked(area.train);
-                        }
-                        performClick();
-                        return true;
-                    }
-                }
-                return false;
+        int action = event.getActionMasked();
+        if (action != MotionEvent.ACTION_DOWN && action != MotionEvent.ACTION_UP) {
+            return super.onTouchEvent(event);
         }
-        return super.onTouchEvent(event);
+
+        HitArea hit = findTrainAt(event.getX(), event.getY());
+        if (hit == null) {
+            return false; // pas un train : on laisse vivre le scroll parent
+        }
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            // Le DOWN tombe sur un train : on intercepte ET on bloque le
+            // HorizontalScrollView parent, ce qui garantit de recevoir l'UP.
+            if (getParent() != null) {
+                getParent().requestDisallowInterceptTouchEvent(true);
+            }
+        } else {
+            if (trainClickListener != null) {
+                trainClickListener.onTrainClicked(hit.train);
+            }
+            performClick();
+        }
+        return true;
+    }
+
+    /**
+     * Zone de tap contenant (x, y), ou null si le point ne touche aucun train.
+     * Parcours en sens inverse : le triangle dessiné en dernier (= au-dessus)
+     * gagne en cas de chevauchement.
+     */
+    private HitArea findTrainAt(float x, float y) {
+        for (int i = trainHitAreas.size() - 1; i >= 0; i--) {
+            HitArea area = trainHitAreas.get(i);
+            if (area.rect.contains(x, y)) {
+                return area;
+            }
+        }
+        return null;
     }
 
     @Override
