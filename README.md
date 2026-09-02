@@ -15,7 +15,7 @@ Application Android de surveillance personnelle. Elle combine une connexion MQTT
   - LAN : grille des machines du réseau (up/down)
   - Backup : statut des jobs de sauvegarde (success / failed / missing)
 - **Onglet Météo** : conditions courantes via [Open-Meteo](https://open-meteo.com/) (sans clé API)
-- **Onglet Train** : passages, perturbations et travaux de la ligne SNCF N via l'API [IDFM PRIM](https://prim.iledefrance-mobilites.fr/) (token requis)
+- **Onglet Train** : passages, perturbations et travaux de la ligne SNCF N via l'API [IDFM PRIM](https://prim.iledefrance-mobilites.fr/) (token requis), plus une section « En circulation sur mon trajet » qui suit en direct les trains déjà partis, dans un sens comme dans l'autre (position, prochain arrêt, arrivée estimée)
 - **Onglet Voiture** : temps de trajet domicile-travail via l'API [TomTom Routing](https://developer.tomtom.com/) (clé API requise), avec moyenne glissante sur 30 min
 - **Écran de configuration** : broker MQTT (IP, port, identifiants) + tokens IDFM et TomTom
 
