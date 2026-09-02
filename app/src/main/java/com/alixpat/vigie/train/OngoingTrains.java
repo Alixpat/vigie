@@ -16,23 +16,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Sélection des trains « qui me concernent à l'instant T » : ceux qui roulent
- * en ce moment entre ma gare d'origine et ma gare de destination, dans un sens
- * ou dans l'autre — typiquement le train dans lequel je suis assis.
+ * Inventaire des trains présents sur mon segment à l'instant T : <b>tous</b> ceux
+ * qui se trouvent en ce moment entre ma gare d'origine et ma gare de destination,
+ * dans un sens ou dans l'autre — que je sois dedans ou non.
  *
- * <p>La source de vérité est le <b>parcours</b> du train
- * ({@code estimated-timetable}, mémorisé et fusionné par {@link JourneyRoutes}) :
- * il porte mes deux gares, donc l'heure de départ, l'heure d'arrivée et le sens
- * de circulation (lu dans l'ordre des arrêts).</p>
+ * <p>Le critère est une <b>position</b>, pas un horaire de départ : « où est ce
+ * train maintenant ? ». C'est la seule question à laquelle les données d'IDFM
+ * répondent de bout en bout. L'{@code estimated-timetable} ne décrit que les
+ * arrêts restants d'un train, donc ma gare de départ disparaît de son parcours
+ * dès qu'il l'a franchie ; sélectionner sur l'heure de départ fait donc
+ * disparaître le train au moment précis où il roule sur mon segment. Le prochain
+ * arrêt, lui, est toujours publié — c'est l'ancre de {@link #locate}, épaulée par
+ * la géographie de la ligne ({@link LineSegment}).</p>
  *
  * <p>Le {@code stop-monitoring} de mes deux gares vient enrichir (retard réel,
  * voie, numéro de train) et sert de secours quand le parcours est inconnu. Il ne
- * peut pas porter la sélection à lui seul : un train déjà parti disparaît de
- * celui de ma gare de départ, et n'apparaît dans celui de ma gare d'arrivée que
- * dans l'horizon publié par IDFM — s'y fier ne montre le train qu'en toute fin
- * de trajet.</p>
+ * peut pas porter la sélection : un train déjà parti disparaît de celui de ma
+ * gare de départ, et n'apparaît dans celui de ma gare d'arrivée que dans
+ * l'horizon publié par IDFM — s'y fier ne montre le train qu'en fin de trajet.</p>
  *
- * Un train qui ne dessert pas mes deux gares est écarté : il ne me concerne pas.
+ * <p>Compromis assumé : quand un train a franchi ma gare de départ sans que l'app
+ * ait pu observer ce passage, rien ne prouve plus qu'il la desservait (un
+ * semi-direct a pu la sauter). Il est alors affiché sans heure de départ plutôt
+ * qu'écarté — un train manquant est plus gênant qu'un train en trop.</p>
  */
 public final class OngoingTrains {
 
@@ -171,18 +177,16 @@ public final class OngoingTrains {
     /**
      * Construit les trajets en cours d'un sens de circulation.
      *
-     * <p>La source principale est le <b>parcours</b> de chaque train
-     * ({@code estimated-timetable}, mémorisé et fusionné par {@link JourneyRoutes}) :
-     * il contient à la fois ma gare de départ et ma gare d'arrivée, donc l'heure de
-     * départ, l'heure d'arrivée et le sens de circulation — celui-ci se lit dans
-     * l'ordre des arrêts, sans avoir à deviner le terminus.</p>
+     * <p>Le critère est <b>positionnel</b> : tout train qui se trouve entre mes deux
+     * gares à l'instant demandé, que je sois dedans ou non. {@link #locate} tranche
+     * à partir du parcours ({@code estimated-timetable}, mémorisé et fusionné par
+     * {@link JourneyRoutes}) et, quand ma gare de départ n'y figure plus, de la
+     * géographie de la ligne ({@link LineSegment}).</p>
      *
-     * <p>Le stop-monitoring des deux gares ne sert plus qu'à enrichir (retard réel,
-     * voie, numéro de train) et de secours quand le parcours est inconnu. C'est
-     * important : un train déjà parti disparaît du stop-monitoring de ma gare de
-     * départ, et il n'apparaît dans celui de ma gare d'arrivée que dans l'horizon
-     * publié par IDFM — s'y fier revient à ne voir le train qu'en toute fin de
-     * trajet.</p>
+     * <p>Un train dont le passage à ma gare de départ n'est plus exposé est affiché
+     * sans heure de départ plutôt qu'écarté : le manquer serait pire que l'afficher
+     * incomplet. Le stop-monitoring des deux gares ne sert qu'à enrichir (retard
+     * réel, voie, numéro de train) et de secours quand le parcours est inconnu.</p>
      *
      * @param originData      visites à ma gare de départ (peut être null / incomplet)
      * @param destinationData visites à ma gare d'arrivée (peut être null / incomplet)
@@ -208,27 +212,102 @@ public final class OngoingTrains {
         if (destinationData != null) journeyRefs.addAll(destinationData.keySet());
 
         for (String journeyRef : journeyRefs) {
-            TrainSchedule schedule = buildOne(journeyRef, originData, destinationData, routes,
-                    trainNumbers, missionNames, direction);
-            // Même filtre que pour le rafraîchissement local : pas encore parti →
-            // il figure déjà dans les prochains départs ; déjà arrivé → il ne me
-            // concerne plus.
-            if (schedule != null && isOngoing(schedule, now)) result.add(schedule);
+            List<TrainStop> stops = routes != null ? routes.get(journeyRef) : null;
+            Placement placement = locate(stops, direction, now);
+            if (placement == Placement.OFF_SEGMENT) continue;
+
+            TrainSchedule schedule = buildOne(journeyRef, originData, destinationData, stops,
+                    trainNumbers, missionNames, direction, placement);
+            if (schedule == null) continue;
+            // Parcours inconnu : faute de position réelle, on tranche sur les horaires
+            // (pas encore parti → il figure déjà dans les prochains départs).
+            if (placement == Placement.UNKNOWN && !isOngoing(schedule, now)) continue;
+            result.add(schedule);
         }
 
-        sortByDepartureDesc(result);
+        sortByArrival(result);
         return result;
+    }
+
+    /** Où en est un train vis-à-vis de mon segment, d'après son parcours. */
+    public enum Placement {
+        /** Physiquement entre mes deux gares à l'instant demandé. */
+        ON_SEGMENT,
+        /** Ailleurs : pas encore à ma gare de départ, déjà au-delà, ou autre sens. */
+        OFF_SEGMENT,
+        /** Parcours absent ou trop incomplet pour conclure. */
+        UNKNOWN
+    }
+
+    /**
+     * Situe un train sur mon segment à l'instant {@code now}, à partir de son
+     * parcours et — quand ma gare de départ n'y figure plus — de la géographie de
+     * la ligne.
+     *
+     * <p>La question posée est « où est ce train maintenant ? », pas « à quelle
+     * heure est-il parti de chez moi ? ». C'est la seule formulation qui tienne :
+     * l'{@code estimated-timetable} ne décrit que les arrêts restants, donc ma
+     * gare de départ disparaît du parcours dès qu'elle est franchie. Raisonner sur
+     * l'heure de départ fait disparaître le train à ce moment précis, alors qu'il
+     * est justement sur mon segment.</p>
+     *
+     * <p>L'ancre est le <b>prochain arrêt</b> — le premier que le train n'a pas
+     * encore quitté —, toujours présent dans la réponse puisqu'il est à venir.</p>
+     */
+    public static Placement locate(List<TrainStop> stops, LineNDirection direction, long now) {
+        if (stops == null || stops.isEmpty()) return Placement.UNKNOWN;
+
+        int destinationIndex = indexOfStop(stops, direction.getDestinationName(),
+                direction.getDestinationStopId());
+        // Ma gare d'arrivée absente du parcours connu : soit le train n'y va pas,
+        // soit le parcours est incomplet — on ne tranche pas ici.
+        if (destinationIndex < 0) return Placement.UNKNOWN;
+
+        int pendingIndex = indexOfPendingStop(stops, now);
+        if (pendingIndex < 0) return Placement.OFF_SEGMENT;              // parcours terminé
+        if (pendingIndex > destinationIndex) return Placement.OFF_SEGMENT; // ma gare déjà dépassée
+
+        int originIndex = indexOfStop(stops, direction.getOriginName(), direction.getOriginStopId());
+        if (originIndex >= 0) {
+            // Ma gare de départ est encore décrite : tout se lit dans le parcours.
+            if (originIndex >= destinationIndex) return Placement.OFF_SEGMENT;   // sens inverse
+            return pendingIndex > originIndex ? Placement.ON_SEGMENT : Placement.OFF_SEGMENT;
+        }
+
+        // Ma gare de départ n'est plus décrite (franchie) ou ne l'a jamais été : on
+        // situe le prochain arrêt sur le tronçon lui-même. Au-delà de l'index 0
+        // (ma gare de départ), le train est entre mes deux gares.
+        int corridorIndex = direction.getSegment().indexOf(stops.get(pendingIndex).getStopName());
+        if (corridorIndex < 0) return Placement.OFF_SEGMENT;
+        return corridorIndex >= 1 ? Placement.ON_SEGMENT : Placement.OFF_SEGMENT;
+    }
+
+    /**
+     * @return l'index du premier arrêt que le train n'a pas encore quitté (il y
+     *         roule ou y est à quai), ou -1 si le parcours est terminé
+     */
+    private static int indexOfPendingStop(List<TrainStop> stops, long now) {
+        for (int i = 0; i < stops.size(); i++) {
+            if (stops.get(i).getBestTimeMillis() > now) return i;
+        }
+        return -1;
+    }
+
+    /** Le prochain à arriver chez moi en tête : c'est l'ordre utile pour choisir un train. */
+    private static void sortByArrival(List<TrainSchedule> schedules) {
+        Collections.sort(schedules, (a, b) ->
+                Long.compare(effectiveArrivalMillis(a), effectiveArrivalMillis(b)));
     }
 
     /** @return le trajet de bout en bout sur mon parcours, ou null s'il ne me concerne pas. */
     private static TrainSchedule buildOne(String journeyRef,
                                           Map<String, StopVisit> originData,
                                           Map<String, StopVisit> destinationData,
-                                          Map<String, List<TrainStop>> routes,
+                                          List<TrainStop> stops,
                                           Map<String, String> trainNumbers,
                                           Map<String, String> missionNames,
-                                          LineNDirection direction) {
-        List<TrainStop> stops = routes != null ? routes.get(journeyRef) : null;
+                                          LineNDirection direction,
+                                          Placement placement) {
         StopVisit originVisit = originData != null ? originData.get(journeyRef) : null;
         StopVisit destinationVisit = destinationData != null ? destinationData.get(journeyRef) : null;
 
@@ -240,17 +319,17 @@ public final class OngoingTrains {
         TrainStop originStop = originIndex >= 0 ? stops.get(originIndex) : null;
         TrainStop destinationStop = destinationIndex >= 0 ? stops.get(destinationIndex) : null;
 
-        // Le train doit desservir mes deux gares : sinon il ne me concerne pas.
-        boolean servesOrigin = originStop != null || originVisit != null;
-        boolean servesDestination = destinationStop != null || destinationVisit != null;
-        if (!servesOrigin || !servesDestination) return null;
-
-        // Sens de circulation : l'ordre des arrêts du parcours fait foi ; à défaut,
-        // on retombe sur les mots-clés du terminus annoncé.
-        if (originIndex >= 0 && destinationIndex >= 0) {
-            if (originIndex >= destinationIndex) return null;
-        } else if (!direction.matchesDestination(terminusOf(stops, destinationVisit))) {
-            return null;
+        if (placement == Placement.UNKNOWN) {
+            // Sans position réelle, on exige de voir le train à mes deux gares et on
+            // lit le sens dans les mots-clés du terminus annoncé.
+            boolean servesOrigin = originStop != null || originVisit != null;
+            boolean servesDestination = destinationStop != null || destinationVisit != null;
+            if (!servesOrigin || !servesDestination) return null;
+            if (originIndex >= 0 && destinationIndex >= 0) {
+                if (originIndex >= destinationIndex) return null;
+            } else if (!direction.matchesDestination(terminusOf(stops, destinationVisit))) {
+                return null;
+            }
         }
 
         long departureMillis = 0L;
@@ -264,7 +343,9 @@ public final class OngoingTrains {
             departureDelay = diffMinutes(originStop.getExpectedDepartureMillis(),
                     originStop.getAimedDepartureMillis());
         }
-        if (departureMillis <= 0) return null;
+        // Un train déjà au-delà de ma gare de départ n'expose plus son heure de
+        // passage : on l'affiche quand même (il est sur mon segment), départ vide.
+        if (departureMillis <= 0 && placement != Placement.ON_SEGMENT) return null;
 
         long arrivalMillis = 0L;
         int arrivalDelay = 0;
@@ -285,14 +366,15 @@ public final class OngoingTrains {
 
         // Le départ n'est décalé que par le retard annoncé **au départ** : un retard
         // pris en route ne change pas l'heure à laquelle le train a quitté ma gare.
-        long realDepartureMillis = departureMillis + departureDelay * 60_000L;
+        long realDepartureMillis = departureMillis > 0
+                ? departureMillis + departureDelay * 60_000L : 0L;
         String expectedDepartureTime = departureDelay > 0
                 ? DateFormats.formatHhmm(new Date(realDepartureMillis))
                 : "";
 
         return new TrainSchedule(
                 terminusOf(stops, destinationVisit),
-                DateFormats.formatHhmm(new Date(departureMillis)),
+                departureMillis > 0 ? DateFormats.formatHhmm(new Date(departureMillis)) : "",
                 expectedDepartureTime,
                 DateFormats.formatHhmm(new Date(arrivalMillis)),
                 delayMinutes > 0 ? "delayed" : "onTime",

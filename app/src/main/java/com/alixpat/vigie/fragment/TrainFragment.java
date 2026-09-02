@@ -1510,9 +1510,11 @@ public class TrainFragment extends Fragment {
         collectOngoing(display, ongoingAller, LineNDirection.ALLER, now);
         collectOngoing(display, ongoingRetour, LineNDirection.RETOUR, now);
 
+        // Le prochain à arriver chez moi en tête : c'est l'ordre utile pour choisir
+        // un train, et il reste défini quand l'heure de départ est inconnue.
         Collections.sort(display, (a, b) -> Long.compare(
-                OngoingTrains.effectiveDepartureMillis(b.getSchedule()),
-                OngoingTrains.effectiveDepartureMillis(a.getSchedule())));
+                OngoingTrains.effectiveArrivalMillis(a.getSchedule()),
+                OngoingTrains.effectiveArrivalMillis(b.getSchedule())));
 
         // La section reste visible même vide : sans elle, impossible de distinguer
         // « aucun train ne roule sur mon trajet » d'un affichage en panne.
@@ -1539,17 +1541,23 @@ public class TrainFragment extends Fragment {
         }
     }
 
-    /** Retire les trains arrivés de {@code source} et met en forme les autres. */
+    /** Retire de {@code source} les trains qui ont quitté mon segment, met en forme les autres. */
     private void collectOngoing(List<OngoingTrain> target, List<TrainSchedule> source,
                                 LineNDirection direction, long now) {
         java.util.Iterator<TrainSchedule> it = source.iterator();
         while (it.hasNext()) {
             TrainSchedule schedule = it.next();
-            if (!OngoingTrains.isOngoing(schedule, now)) {
+            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
+            // Même règle qu'à la construction : la position réelle prime, les
+            // horaires ne tranchent que faute de parcours.
+            OngoingTrains.Placement placement = OngoingTrains.locate(stops, direction, now);
+            boolean stillHere = placement == OngoingTrains.Placement.ON_SEGMENT
+                    || (placement == OngoingTrains.Placement.UNKNOWN
+                        && OngoingTrains.isOngoing(schedule, now));
+            if (!stillHere) {
                 it.remove();
                 continue;
             }
-            List<TrainStop> stops = journeyStopsCache.get(schedule.getJourneyRef());
             target.add(OngoingTrains.describe(schedule, direction, resolveStopNames(stops), now));
         }
     }

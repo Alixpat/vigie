@@ -43,6 +43,7 @@ public final class LineNDirection {
     private final String[] destinationKeywords;
     private final String originStopId;
     private final String destinationStopId;
+    private final LineSegment segment;
 
     private LineNDirection(String label,
                            String originStopRef, String destinationStopRef,
@@ -56,6 +57,7 @@ public final class LineNDirection {
         this.destinationKeywords = destinationKeywords;
         this.originStopId = extractNumericId(originStopRef);
         this.destinationStopId = extractNumericId(destinationStopRef);
+        this.segment = LineSegment.between(originName, destinationName);
     }
 
     /** "STIF:StopArea:SP:43111:" → "43111" ; "" si illisible. */
@@ -99,6 +101,15 @@ public final class LineNDirection {
      */
     public String getDestinationStopId() {
         return destinationStopId;
+    }
+
+    /**
+     * @return le tronçon de ligne entre mes deux gares, dans ce sens de
+     *         circulation. Sert à situer un train dont le parcours ne contient
+     *         plus ma gare de départ (cf. {@link LineSegment}).
+     */
+    public LineSegment getSegment() {
+        return segment;
     }
 
     public String getOriginName() {

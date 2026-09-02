@@ -76,13 +76,17 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
 
         StringBuilder departure = new StringBuilder();
         String aimed = train.getSchedule().getAimedDepartureTime();
+        departure.append("Départ ").append(train.getSchedule().getOriginStation()).append(" · ");
         if (aimed != null && !aimed.isEmpty()) {
-            departure.append("Départ ").append(train.getSchedule().getOriginStation())
-                    .append(" · ").append(aimed);
+            departure.append(aimed);
             String expected = train.getSchedule().getExpectedDepartureTime();
             if (expected != null && !expected.isEmpty()) {
                 departure.append(" → ").append(expected);
             }
+        } else {
+            // Train déjà au-delà de ma gare de départ : IDFM n'expose plus son
+            // passage. On le dit plutôt que d'inventer une heure.
+            departure.append("non communiqué");
         }
         String platform = train.getSchedule().getPlatformName();
         if (platform != null && !platform.isEmpty()) {
