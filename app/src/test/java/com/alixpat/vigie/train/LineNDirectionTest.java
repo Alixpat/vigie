@@ -92,4 +92,10 @@ public class LineNDirectionTest {
         assertFalse(LineNDirection.ALLER.matchesDestination("Argenteuil"));
         assertFalse(LineNDirection.RETOUR.matchesDestination("Argenteuil"));
     }
+
+    @Test
+    public void exposesNumericIdOfOriginStop() {
+        assertEquals("43111", LineNDirection.ALLER.getOriginStopId());
+        assertEquals("43221", LineNDirection.RETOUR.getOriginStopId());
+    }
 }

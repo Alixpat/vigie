@@ -9,6 +9,7 @@ import com.alixpat.vigie.util.DateFormats;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -109,6 +110,42 @@ public final class OngoingTrains {
                 Long.compare(effectiveDepartureMillis(b), effectiveDepartureMillis(a)));
     }
 
+    // ==================== Mémoire des passages à ma gare de départ ====================
+
+    /** Durée pendant laquelle on se souvient d'un train vu à ma gare de départ. */
+    public static final long ORIGIN_MEMORY_MS = 3 * 60 * 60_000L;
+
+    /**
+     * Entretient le souvenir des trains vus à ma gare de départ.
+     *
+     * Un train qui vient de partir disparaît du {@code stop-monitoring} de cette
+     * gare : sans mémoire, son heure de départ n'est plus connue et il ne peut
+     * plus être reconnu comme « en circulation sur mon trajet ». On conserve donc
+     * les passages observés lors des rafraîchissements précédents, purgés au-delà
+     * de {@link #ORIGIN_MEMORY_MS} après leur heure de départ.
+     *
+     * @param memory carte accumulée entre deux rafraîchissements (modifiée sur place)
+     * @param fresh  passages tout juste ramenés par l'API (peut être null)
+     * @param now    instant de référence en epoch millis
+     * @return {@code memory}, pour chaîner
+     */
+    public static Map<String, StopVisit> rememberOriginVisits(Map<String, StopVisit> memory,
+                                                              Map<String, StopVisit> fresh,
+                                                              long now) {
+        if (memory == null) return null;
+        if (fresh != null) memory.putAll(fresh);
+        Iterator<Map.Entry<String, StopVisit>> it = memory.entrySet().iterator();
+        while (it.hasNext()) {
+            StopVisit visit = it.next().getValue();
+            if (visit == null || visit.aimedDeparture == null) {
+                it.remove();
+                continue;
+            }
+            if (now - visit.aimedDeparture.getTime() > ORIGIN_MEMORY_MS) it.remove();
+        }
+        return memory;
+    }
+
     // ==================== Construction depuis les réponses SIRI ====================
 
     /**
@@ -192,6 +229,11 @@ public final class OngoingTrains {
             return originVisit.aimedDeparture.getTime();
         }
         TrainStop originStop = findStop(stops, direction.getOriginName());
+        if (originStop == null) {
+            // Parcours dont les noms d'arrêts n'ont pas pu être résolus : ils
+            // s'appellent "Arrêt 43111". On retombe sur l'identifiant numérique.
+            originStop = findStop(stops, direction.getOriginStopId());
+        }
         if (originStop == null) return 0L;
         if (originStop.getAimedDepartureMillis() > 0) return originStop.getAimedDepartureMillis();
         return originStop.getBestTimeMillis();
