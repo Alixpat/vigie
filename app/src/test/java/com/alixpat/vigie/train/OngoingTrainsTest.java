@@ -70,6 +70,12 @@ public class OngoingTrainsTest {
         return stops;
     }
 
+    private static Map<String, List<TrainStop>> routes(String journeyRef, List<TrainStop> stops) {
+        Map<String, List<TrainStop>> cache = new HashMap<>();
+        cache.put(journeyRef, stops);
+        return cache;
+    }
+
     // ==================== isOngoing / isUpcoming ====================
 
     @Test
@@ -217,6 +223,37 @@ public class OngoingTrainsTest {
     }
 
     @Test
+    public void aDelayTakenEnRouteDoesNotHideATrainThatHasAlreadyLeft() {
+        // Parti à l'heure de Clamart il y a 2 min, mais 10 min de retard annoncées à
+        // l'arrivée : le décaler de 10 min le ferait passer pour « pas encore parti ».
+        Map<String, StopVisit> clamart = map(visit("J1", "Plaisir - Grignon", -2L, null, null));
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, 35L));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                clamart, villepreux, new HashMap<>(), LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(10, ongoing.get(0).getDelayMinutes());
+        assertEquals(T0 - 2 * MIN, OngoingTrains.effectiveDepartureMillis(ongoing.get(0)));
+    }
+
+    @Test
+    public void aDelayAnnouncedAtDepartureShiftsTheDeparture() {
+        StopVisit clamartVisit = visit("J1", "Plaisir - Grignon", -2L, null, null);
+        clamartVisit.expectedDeparture = new Date(T0 + 6 * MIN);   // 8 min de retard au départ
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 25L, null));
+
+        // Toujours à quai : il appartient encore aux prochains départs.
+        assertTrue(OngoingTrains.buildOngoing(
+                map(clamartVisit), villepreux, new HashMap<>(), LineNDirection.ALLER, T0).isEmpty());
+
+        List<TrainSchedule> later = OngoingTrains.buildOngoing(
+                map(clamartVisit), villepreux, new HashMap<>(), LineNDirection.ALLER, T0 + 10 * MIN);
+        assertEquals(1, later.size());
+        assertEquals(T0 + 6 * MIN, OngoingTrains.effectiveDepartureMillis(later.get(0)));
+    }
+
+    @Test
     public void ignoresTrainsNotYetDeparted() {
         Map<String, StopVisit> clamart = map(visit("J1", "Plaisir - Grignon", 10L, null, null));
         Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 40L, null));
@@ -292,6 +329,81 @@ public class OngoingTrainsTest {
 
         assertEquals(1, ongoing.size());
         assertEquals(T0 - 5 * MIN, ongoing.get(0).getAimedDepartureMillis());
+    }
+
+    @Test
+    public void buildsOngoingTrainAbsentFromBothStopMonitorings() {
+        // Le cas qui cassait l'affichage : le train a dépassé Clamart (il a donc
+        // disparu du stop-monitoring de Clamart) et n'est pas encore dans l'horizon
+        // publié pour Villepreux. Seul son parcours le décrit — cela doit suffire.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-12", "Versailles Chantiers", "8",
+                        "Villepreux - Les Clayes", "23"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        TrainSchedule train = ongoing.get(0);
+        assertEquals("J1", train.getJourneyRef());
+        assertEquals(T0 - 12 * MIN, train.getAimedDepartureMillis());
+        assertEquals(T0 + 23 * MIN, train.getArrivalMillis());
+    }
+
+    @Test
+    public void directionIsReadFromTheOrderOfTheStopsNotFromTheTerminus() {
+        // Terminus "Mantes-la-Jolie" : mot-clé du sens Aller. Mais le parcours passe
+        // par Villepreux AVANT Clamart — c'est donc un train du sens Retour.
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Villepreux - Les Clayes", "-10", "Clamart", "15",
+                        "Mantes-la-Jolie", "40"));
+
+        assertTrue(OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0).isEmpty());
+        assertEquals(1, OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.RETOUR, T0).size());
+    }
+
+    @Test
+    public void ignoresTrainsWhoseRouteStopsBeforeMyArrivalStation() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Versailles Chantiers", "10"));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, LineNDirection.ALLER, T0);
+
+        assertTrue(ongoing.isEmpty());
+    }
+
+    @Test
+    public void stopMonitoringDelayWinsOverTheRouteSchedule() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Villepreux - Les Clayes", "20"));
+        Map<String, StopVisit> villepreux = map(visit("J1", "Plaisir - Grignon", null, 20L, 26L));
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), villepreux, stopsCache, LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals(6, ongoing.get(0).getDelayMinutes());
+    }
+
+    @Test
+    public void takesTrainNumberFromTheEstimatedTimetableWhenStopMonitoringIsSilent() {
+        Map<String, List<TrainStop>> stopsCache = routes("J1",
+                stops("Clamart", "-10", "Villepreux - Les Clayes", "20"));
+        Map<String, String> trainNumbers = new HashMap<>();
+        trainNumbers.put("J1", "135642");
+        Map<String, String> missions = new HashMap<>();
+        missions.put("J1", "MOPI");
+
+        List<TrainSchedule> ongoing = OngoingTrains.buildOngoing(
+                new HashMap<>(), new HashMap<>(), stopsCache, trainNumbers, missions,
+                LineNDirection.ALLER, T0);
+
+        assertEquals(1, ongoing.size());
+        assertEquals("135642", ongoing.get(0).getTrainNumber());
+        assertEquals("MOPI", ongoing.get(0).getMissionName());
     }
 
     // ==================== rememberOriginVisits ====================

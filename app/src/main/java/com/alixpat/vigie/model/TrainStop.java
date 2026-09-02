@@ -7,6 +7,8 @@ package com.alixpat.vigie.model;
 public class TrainStop {
 
     private final String stopName;
+    /** Référence SIRI de l'arrêt ("STIF:StopPoint:Q:43111:") ; "" si inconnue. */
+    private final String stopRef;
     private final long aimedArrivalMillis;
     private final long expectedArrivalMillis;
     private final long aimedDepartureMillis;
@@ -20,7 +22,18 @@ public class TrainStop {
                      long aimedDepartureMillis, long expectedDepartureMillis,
                      String platformName,
                      boolean isDeparture, boolean isArrival) {
+        this(stopName, "", aimedArrivalMillis, expectedArrivalMillis,
+                aimedDepartureMillis, expectedDepartureMillis, platformName,
+                isDeparture, isArrival);
+    }
+
+    public TrainStop(String stopName, String stopRef,
+                     long aimedArrivalMillis, long expectedArrivalMillis,
+                     long aimedDepartureMillis, long expectedDepartureMillis,
+                     String platformName,
+                     boolean isDeparture, boolean isArrival) {
         this.stopName = stopName;
+        this.stopRef = stopRef != null ? stopRef : "";
         this.aimedArrivalMillis = aimedArrivalMillis;
         this.expectedArrivalMillis = expectedArrivalMillis;
         this.aimedDepartureMillis = aimedDepartureMillis;
@@ -31,6 +44,7 @@ public class TrainStop {
     }
 
     public String getStopName() { return stopName; }
+    public String getStopRef() { return stopRef; }
     public long getAimedArrivalMillis() { return aimedArrivalMillis; }
     public long getExpectedArrivalMillis() { return expectedArrivalMillis; }
     public long getAimedDepartureMillis() { return aimedDepartureMillis; }

@@ -11,6 +11,8 @@ public class TrainSchedule {
     private final int delayMinutes;
     private final String journeyRef;
     private final long aimedDepartureMillis;
+    /** Heure réelle de départ (théorique + retard annoncé au départ) ; 0 si inconnue. */
+    private final long expectedDepartureMillis;
     private final long arrivalMillis;
     private final String originStation;
     private final String trainNumber;
@@ -41,7 +43,20 @@ public class TrainSchedule {
                          int delayMinutes, String journeyRef,
                          long aimedDepartureMillis, long arrivalMillis,
                          String originStation, String trainNumber, String missionName) {
+        this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
+                departureStatus, platformName, delayMinutes, journeyRef,
+                aimedDepartureMillis, 0, arrivalMillis, originStation, trainNumber, missionName);
+    }
+
+    public TrainSchedule(String destination, String aimedDepartureTime,
+                         String expectedDepartureTime, String arrivalTime,
+                         String departureStatus, String platformName,
+                         int delayMinutes, String journeyRef,
+                         long aimedDepartureMillis, long expectedDepartureMillis,
+                         long arrivalMillis,
+                         String originStation, String trainNumber, String missionName) {
         this.destination = destination;
+        this.expectedDepartureMillis = expectedDepartureMillis;
         this.aimedDepartureTime = aimedDepartureTime;
         this.expectedDepartureTime = expectedDepartureTime;
         this.arrivalTime = arrivalTime != null ? arrivalTime : "";
@@ -65,6 +80,7 @@ public class TrainSchedule {
     public int getDelayMinutes() { return delayMinutes; }
     public String getJourneyRef() { return journeyRef; }
     public long getAimedDepartureMillis() { return aimedDepartureMillis; }
+    public long getExpectedDepartureMillis() { return expectedDepartureMillis; }
     public long getArrivalMillis() { return arrivalMillis; }
     public String getOriginStation() { return originStation; }
     public String getTrainNumber() { return trainNumber; }
