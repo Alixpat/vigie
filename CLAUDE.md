@@ -52,7 +52,7 @@ Reconnection has two layers: Paho's `automaticReconnect`, plus a `ConnectivityMa
 | 0 | Messages | MQTT (`vigie/*`, `VigieMessage`) | History on `MqttService.messageHistory`; notifications via `NotificationHelper` |
 | 1 | Infra | MQTT — three message types: `LanHost`, `BackupJob`, `InternetStatus` | Single fragment with three sections; each fed by its own broadcast action and its own static cache on `MqttService` |
 | 2 | Météo | HTTP `api.open-meteo.com` (no key) | Hardcoded city coords in `WeatherFragment.CITIES` |
-| 3 | Train | IDFM PRIM REST API (5 endpoints) | Needs `idfmToken` in `BrokerConfig`; line hardcoded to SNCF Ligne N (`STIF:Line::C01736:`). Section *Trains entre Clamart et Villepreux* en tête : **tous** les trains physiquement sur le segment à l'instant T, dans un sens ou dans l'autre, que je sois dedans ou non ; position rafraîchie toutes les 20 s sans appel réseau |
+| 3 | Train | IDFM PRIM REST API (5 endpoints) | Needs `idfmToken` in `BrokerConfig`; line hardcoded to SNCF Ligne N (`STIF:Line::C01736:`). **Une carte par sens** (Clamart → Villepreux, puis Villepreux → Clamart), et dans chaque carte deux divisions : *Prochains départs* puis *En circulation* — **tous** les trains physiquement sur le segment dans ce sens à l'instant T, que je sois dedans ou non ; position rafraîchie toutes les 20 s sans appel réseau |
 | 4 | Voiture | TomTom Routing API | Needs `tomtomApiKey` in `BrokerConfig`; rolling 30-min average history in SharedPreferences `vigie_driving_history` |
 | 5 | Capteurs | MQTT (`vigie/sensors/*`, `SensorStatus`) | TTN/LoRaWAN sensors relayed by the `capteur-ttn` bridge. Per-`kind` rendering in `SensorAdapter` (currently `door`; generic key:value fallback otherwise). Adding a new sensor type = a new branch in `SensorAdapter.renderFor`. |
 
@@ -81,7 +81,9 @@ Despite the name, `BrokerConfig` (`SharedPreferences("vigie_prefs")`) holds **al
 
 Les horaires sont ramenés sur une fenêtre `[now - 30 min, now + 2 h]` : `OngoingTrains.selectUpcoming` alimente les deux listes de départs, le reste bascule dans la section *En circulation*. Un tick local (`POSITION_TICK_MS`, 20 s) rejoue ce partage et recalcule les positions sans appel réseau ; seul `fetchSchedules` (5 min) refait les requêtes.
 
-The custom `LineMapView` renders the line schematic; train detail dialogs still live in the fragment and combine `estimated-timetable` data with on-demand `stop-monitoring` calls for `OnwardCalls`.
+Le plan (`LineMapView`) dessine le schéma de la ligne. Quatre règles y sont structurantes : les colonnes sont **mesurées** sur le nom de gare le plus long de la colonne de gauche et chaque nom est tronqué à cette largeur (avec un écart fixe, les noms du tronc s'écrivaient par-dessus la branche voisine) ; les couleurs viennent des **ressources** (`values` / `values-night`), donc le plan reste lisible en mode nuit ; `setHighlightedSegment` surligne mon tronçon via le corridor `LineSegment`, le même que celui qui sélectionne les trains en circulation ; et une gare n'est reconnue que sur une **suite de mots** entière (`findStationPos`), jamais sur un mot isolé — « Chaville Rive Gauche » et « Sèvres Rive Gauche » en partagent deux, et l'ancienne recherche par mot-clé plaçait les trains de l'une à l'autre. Une correspondance ambiguë est refusée : un train absent est moins grave qu'un train au mauvais endroit. Le dialogue ouvert est rejoué à chaque tick de 20 s (`TrainFragment.refreshOpenLineMap`) au lieu de figer les positions.
+
+Train detail dialogs still live in the fragment and combine `estimated-timetable` data with on-demand `stop-monitoring` calls for `OnwardCalls`.
 
 `WeatherFragment` and `VoitureFragment` still use plain `HttpURLConnection` on a single-thread `ExecutorService` — they have not been refactored onto an HTTP helper yet. There is no Retrofit/OkHttp/coroutine layer.
 

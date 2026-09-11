@@ -61,6 +61,11 @@ public final class LineSegment {
         return stations.size();
     }
 
+    /** Les gares du corridor, de ma gare de départ à ma gare d'arrivée. */
+    public List<String> stations() {
+        return stations;
+    }
+
     public boolean isEmpty() {
         return stations.isEmpty();
     }
