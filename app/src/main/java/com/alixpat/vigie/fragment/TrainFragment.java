@@ -98,11 +98,20 @@ public class TrainFragment extends Fragment {
     private final List<TrainIncident> lastTravaux = new ArrayList<>();
     private boolean incidentsListVisible = false;
 
-    private View ongoingSection;
-    private RecyclerView ongoingRecyclerView;
-    private TextView ongoingLastUpdate;
-    private TextView ongoingEmpty;
-    private TrainOngoingAdapter ongoingAdapter;
+    // Une carte par sens, et dans chaque carte deux divisions : les prochains
+    // départs puis les trains en circulation dans ce sens. Les deux sens ne
+    // partagent plus aucune liste à l'écran.
+    private RecyclerView ongoingRecyclerViewAller;
+    private TextView ongoingTitleAller;
+    private TextView ongoingLastUpdateAller;
+    private TextView ongoingEmptyAller;
+    private TrainOngoingAdapter ongoingAdapterAller;
+
+    private RecyclerView ongoingRecyclerViewRetour;
+    private TextView ongoingTitleRetour;
+    private TextView ongoingLastUpdateRetour;
+    private TextView ongoingEmptyRetour;
+    private TrainOngoingAdapter ongoingAdapterRetour;
 
     // Derniers trajets en cours connus, par sens : la position est recalculée
     // localement toutes les POSITION_TICK_MS sans refaire d'appel réseau.
@@ -132,13 +141,20 @@ public class TrainFragment extends Fragment {
     private TextView scheduleEmptyAller;
     private TextView scheduleLastUpdateAller;
     private TextView scheduleTitleAller;
+    private TextView departuresTitleAller;
     private TrainScheduleAdapter scheduleAdapterAller;
 
     private RecyclerView scheduleRecyclerViewRetour;
     private TextView scheduleEmptyRetour;
     private TextView scheduleLastUpdateRetour;
     private TextView scheduleTitleRetour;
+    private TextView departuresTitleRetour;
     private TrainScheduleAdapter scheduleAdapterRetour;
+
+    // Plan de la ligne actuellement ouvert (null si le dialogue est fermé) :
+    // gardé pour rejouer les positions à chaque tick au lieu de figer la vue.
+    private LineMapView openLineMapView;
+    private TextView openLineMapCount;
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -203,20 +219,23 @@ public class TrainFragment extends Fragment {
         travauxRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         travauxRecyclerView.setAdapter(travauxAdapter);
 
-        ongoingSection = view.findViewById(R.id.ongoingSection);
-        ongoingRecyclerView = view.findViewById(R.id.ongoingRecyclerView);
-        ongoingLastUpdate = view.findViewById(R.id.ongoingLastUpdate);
-        ongoingEmpty = view.findViewById(R.id.ongoingEmpty);
-        ongoingAdapter = new TrainOngoingAdapter();
-        ongoingRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
-        ongoingRecyclerView.setAdapter(ongoingAdapter);
-        ongoingAdapter.setOnOngoingTrainClickListener(
-                train -> showTrainDetailDialog(train.getSchedule()));
+        ongoingRecyclerViewAller = view.findViewById(R.id.ongoingRecyclerViewAller);
+        ongoingTitleAller = view.findViewById(R.id.ongoingTitleAller);
+        ongoingLastUpdateAller = view.findViewById(R.id.ongoingLastUpdateAller);
+        ongoingEmptyAller = view.findViewById(R.id.ongoingEmptyAller);
+        ongoingAdapterAller = createOngoingAdapter(ongoingRecyclerViewAller);
+
+        ongoingRecyclerViewRetour = view.findViewById(R.id.ongoingRecyclerViewRetour);
+        ongoingTitleRetour = view.findViewById(R.id.ongoingTitleRetour);
+        ongoingLastUpdateRetour = view.findViewById(R.id.ongoingLastUpdateRetour);
+        ongoingEmptyRetour = view.findViewById(R.id.ongoingEmptyRetour);
+        ongoingAdapterRetour = createOngoingAdapter(ongoingRecyclerViewRetour);
 
         scheduleRecyclerViewAller = view.findViewById(R.id.scheduleRecyclerViewAller);
         scheduleEmptyAller = view.findViewById(R.id.scheduleEmptyAller);
         scheduleLastUpdateAller = view.findViewById(R.id.scheduleLastUpdateAller);
         scheduleTitleAller = view.findViewById(R.id.scheduleTitleAller);
+        departuresTitleAller = view.findViewById(R.id.departuresTitleAller);
         scheduleAdapterAller = new TrainScheduleAdapter();
         scheduleRecyclerViewAller.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewAller.setAdapter(scheduleAdapterAller);
@@ -225,6 +244,7 @@ public class TrainFragment extends Fragment {
         scheduleEmptyRetour = view.findViewById(R.id.scheduleEmptyRetour);
         scheduleLastUpdateRetour = view.findViewById(R.id.scheduleLastUpdateRetour);
         scheduleTitleRetour = view.findViewById(R.id.scheduleTitleRetour);
+        departuresTitleRetour = view.findViewById(R.id.departuresTitleRetour);
         scheduleAdapterRetour = new TrainScheduleAdapter();
         scheduleRecyclerViewRetour.setLayoutManager(new LinearLayoutManager(requireContext()));
         scheduleRecyclerViewRetour.setAdapter(scheduleAdapterRetour);
@@ -236,6 +256,20 @@ public class TrainFragment extends Fragment {
         if (lineMapButton != null) {
             lineMapButton.setOnClickListener(v -> showLineMapDialog());
         }
+    }
+
+    /**
+     * Monte une liste "en circulation" sur son RecyclerView. Une par sens : le
+     * sens est déjà écrit en tête de la carte, donc l'item affiche le terminus
+     * du train plutôt que de répéter "Clamart → Villepreux".
+     */
+    private TrainOngoingAdapter createOngoingAdapter(RecyclerView recycler) {
+        TrainOngoingAdapter adapter = new TrainOngoingAdapter();
+        adapter.setShowDirection(false);
+        recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
+        recycler.setAdapter(adapter);
+        adapter.setOnOngoingTrainClickListener(train -> showTrainDetailDialog(train.getSchedule()));
+        return adapter;
     }
 
     @Override
@@ -672,15 +706,21 @@ public class TrainFragment extends Fragment {
 
         closeButton.setOnClickListener(v -> dialog.dismiss());
 
-        // Construire la liste des trains sur le plan
-        List<LineMapView.TrainOnMap> trainsOnMap = buildTrainsOnMap();
-        lineMapView.setTrains(trainsOnMap);
+        // Mes deux gares sont mises en évidence sur le plan : c'est le seul
+        // tronçon qui m'intéresse au milieu de toute la ligne N.
+        lineMapView.setHighlightedSegment(
+                LineNDirection.ALLER.getOriginName(),
+                LineNDirection.ALLER.getDestinationName());
         lineMapView.setOnTrainClickListener(this::showTrainOnMapDialog);
 
-        if (trainCountView != null) {
-            int count = trainsOnMap.size();
-            trainCountView.setText(count + " train" + (count > 1 ? "s" : "") + " en circulation");
-        }
+        openLineMapView = lineMapView;
+        openLineMapCount = trainCountView;
+        refreshOpenLineMap();
+
+        dialog.setOnDismissListener(d -> {
+            openLineMapView = null;
+            openLineMapCount = null;
+        });
 
         dialog.show();
 
@@ -689,6 +729,21 @@ public class TrainFragment extends Fragment {
             dialog.getWindow().setLayout(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT);
+        }
+    }
+
+    /**
+     * Rejoue les positions sur le plan ouvert. Appelée au tick local (20 s) :
+     * sans ça, le plan reste figé à l'instant où on l'a ouvert alors que les
+     * cartes de trains, elles, avancent.
+     */
+    private void refreshOpenLineMap() {
+        if (openLineMapView == null) return;
+        List<LineMapView.TrainOnMap> trainsOnMap = buildTrainsOnMap();
+        openLineMapView.setTrains(trainsOnMap);
+        if (openLineMapCount != null) {
+            int count = trainsOnMap.size();
+            openLineMapCount.setText(count + " train" + (count > 1 ? "s" : "") + " en circulation");
         }
     }
 
@@ -1032,8 +1087,8 @@ public class TrainFragment extends Fragment {
         if (getActivity() != null) {
             getActivity().runOnUiThread(() -> {
                 if (!isAdded()) return;
-                scheduleTitleAller.setText("Clamart \u2192 Villepreux des 2 prochaines heures");
-                scheduleTitleRetour.setText("Villepreux \u2192 Clamart des 2 prochaines heures");
+                scheduleTitleAller.setText("Clamart \u2192 Villepreux");
+                scheduleTitleRetour.setText("Villepreux \u2192 Clamart");
             });
         }
 
@@ -1094,12 +1149,12 @@ public class TrainFragment extends Fragment {
                     long uiNow = System.currentTimeMillis();
                     updateScheduleUI(allerSchedules == null ? null
                                     : OngoingTrains.selectUpcoming(allerSchedules, uiNow),
-                            scheduleEmptyAller, scheduleRecyclerViewAller,
-                            scheduleAdapterAller, "Clamart → Villepreux");
+                            departuresTitleAller, scheduleEmptyAller,
+                            scheduleRecyclerViewAller, scheduleAdapterAller);
                     updateScheduleUI(retourSchedules == null ? null
                                     : OngoingTrains.selectUpcoming(retourSchedules, uiNow),
-                            scheduleEmptyRetour, scheduleRecyclerViewRetour,
-                            scheduleAdapterRetour, "Villepreux → Clamart");
+                            departuresTitleRetour, scheduleEmptyRetour,
+                            scheduleRecyclerViewRetour, scheduleAdapterRetour);
 
                     if (allerSchedules != null) {
                         lastAllerSchedules.clear();
@@ -1490,25 +1545,45 @@ public class TrainFragment extends Fragment {
     }
 
     /**
-     * Redessine la section "En circulation sur mon trajet" à partir des trajets
-     * déjà connus : recalcule la position de chaque train à l'instant T et retire
-     * ceux qui sont arrivés. Aucun appel réseau — appelée aussi par le tick local.
+     * Redessine les deux cartes de sens à partir des trajets déjà connus :
+     * recalcule la position de chaque train à l'instant T et retire ceux qui sont
+     * arrivés. Aucun appel réseau — appelée aussi par le tick local.
      */
     private void updateOngoingSection() {
-        if (!isAdded() || ongoingSection == null) return;
+        if (!isAdded() || ongoingRecyclerViewAller == null) return;
 
         long now = System.currentTimeMillis();
 
         // Un train dont l'heure de départ vient de passer quitte la liste des
-        // prochains départs et rejoint les trains en circulation.
+        // prochains départs et rejoint les trains en circulation, dans sa carte.
         repartitionDepartures(lastAllerSchedules, ongoingAller, scheduleAdapterAller,
-                scheduleEmptyAller, scheduleRecyclerViewAller, "Clamart → Villepreux", now);
+                departuresTitleAller, scheduleEmptyAller, scheduleRecyclerViewAller, now);
         repartitionDepartures(lastRetourSchedules, ongoingRetour, scheduleAdapterRetour,
-                scheduleEmptyRetour, scheduleRecyclerViewRetour, "Villepreux → Clamart", now);
+                departuresTitleRetour, scheduleEmptyRetour, scheduleRecyclerViewRetour, now);
 
+        renderOngoing(ongoingAller, LineNDirection.ALLER, ongoingAdapterAller,
+                ongoingTitleAller, ongoingLastUpdateAller, ongoingRecyclerViewAller,
+                ongoingEmptyAller, now);
+        renderOngoing(ongoingRetour, LineNDirection.RETOUR, ongoingAdapterRetour,
+                ongoingTitleRetour, ongoingLastUpdateRetour, ongoingRecyclerViewRetour,
+                ongoingEmptyRetour, now);
+
+        // Le plan de la ligne ouvert suit le même tick : sinon il fige les trains
+        // à l'instant où on l'a ouvert.
+        refreshOpenLineMap();
+    }
+
+    /**
+     * Met en forme les trains en circulation d'un seul sens et les pose dans sa
+     * carte. La liste vide reste affichée (message explicite) : sans elle,
+     * impossible de distinguer « aucun train dans ce sens » d'un affichage en panne.
+     */
+    private void renderOngoing(List<TrainSchedule> source, LineNDirection direction,
+                               TrainOngoingAdapter adapter, TextView titleView,
+                               TextView lastUpdateView, RecyclerView recycler,
+                               TextView emptyView, long now) {
         List<OngoingTrain> display = new ArrayList<>();
-        collectOngoing(display, ongoingAller, LineNDirection.ALLER, now);
-        collectOngoing(display, ongoingRetour, LineNDirection.RETOUR, now);
+        collectOngoing(display, source, direction, now);
 
         // Le prochain à arriver chez moi en tête : c'est l'ordre utile pour choisir
         // un train, et il reste défini quand l'heure de départ est inconnue.
@@ -1516,13 +1591,13 @@ public class TrainFragment extends Fragment {
                 OngoingTrains.effectiveArrivalMillis(a.getSchedule()),
                 OngoingTrains.effectiveArrivalMillis(b.getSchedule())));
 
-        // La section reste visible même vide : sans elle, impossible de distinguer
-        // « aucun train ne roule sur mon trajet » d'un affichage en panne.
-        ongoingSection.setVisibility(View.VISIBLE);
-        ongoingLastUpdate.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
-        ongoingRecyclerView.setVisibility(display.isEmpty() ? View.GONE : View.VISIBLE);
-        ongoingEmpty.setVisibility(display.isEmpty() ? View.VISIBLE : View.GONE);
-        ongoingAdapter.updateTrains(display);
+        titleView.setText(display.isEmpty()
+                ? "🚆 En circulation"
+                : "🚆 En circulation · " + display.size());
+        lastUpdateView.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
+        recycler.setVisibility(display.isEmpty() ? View.GONE : View.VISIBLE);
+        emptyView.setVisibility(display.isEmpty() ? View.VISIBLE : View.GONE);
+        adapter.updateTrains(display);
     }
 
     /**
@@ -1531,13 +1606,13 @@ public class TrainFragment extends Fragment {
      * changé (un train est parti), pour ne pas la rafraîchir toutes les 20 s.
      */
     private void repartitionDepartures(List<TrainSchedule> source, List<TrainSchedule> ongoing,
-                                       TrainScheduleAdapter adapter, TextView emptyView,
-                                       RecyclerView recycler, String direction, long now) {
+                                       TrainScheduleAdapter adapter, TextView titleView,
+                                       TextView emptyView, RecyclerView recycler, long now) {
         if (source.isEmpty()) return;
         mergeOngoing(ongoing, source, now);
         List<TrainSchedule> upcoming = OngoingTrains.selectUpcoming(source, now);
         if (upcoming.size() != adapter.getItemCount()) {
-            updateScheduleUI(upcoming, emptyView, recycler, adapter, direction);
+            updateScheduleUI(upcoming, titleView, emptyView, recycler, adapter);
         }
     }
 
@@ -1580,9 +1655,15 @@ public class TrainFragment extends Fragment {
         return resolved;
     }
 
-    private void updateScheduleUI(List<TrainSchedule> schedules, TextView emptyView,
-                                  RecyclerView recycler, TrainScheduleAdapter scheduleAdapter,
-                                  String direction) {
+    private void updateScheduleUI(List<TrainSchedule> schedules, TextView titleView,
+                                  TextView emptyView, RecyclerView recycler,
+                                  TrainScheduleAdapter scheduleAdapter) {
+        int count = schedules != null ? schedules.size() : 0;
+        if (titleView != null) {
+            titleView.setText(count == 0
+                    ? "🕑 Prochains départs"
+                    : "🕑 Prochains départs · " + count);
+        }
         if (schedules == null) {
             showMessage(emptyView, recycler, "Erreur de chargement des horaires.");
         } else if (schedules.isEmpty()) {

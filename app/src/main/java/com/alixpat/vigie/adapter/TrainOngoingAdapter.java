@@ -28,9 +28,19 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
 
     private final List<OngoingTrain> trains = new ArrayList<>();
     private OnOngoingTrainClickListener clickListener;
+    private boolean showDirection = true;
 
     public void setOnOngoingTrainClickListener(OnOngoingTrainClickListener listener) {
         this.clickListener = listener;
+    }
+
+    /**
+     * À false quand la liste est déjà dédiée à un sens : répéter
+     * "Clamart → Villepreux" sur chaque carte n'apprend rien. La place sert
+     * alors au terminus du train, qui lui varie d'un train à l'autre.
+     */
+    public void setShowDirection(boolean show) {
+        this.showDirection = show;
     }
 
     public void updateTrains(List<OngoingTrain> newData) {
@@ -55,7 +65,13 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
             if (clickListener != null) clickListener.onOngoingTrainClick(train);
         });
 
-        holder.direction.setText(train.getDirectionLabel());
+        if (showDirection) {
+            holder.direction.setText(train.getDirectionLabel());
+        } else {
+            String terminus = train.getSchedule().getDestination();
+            holder.direction.setText(terminus == null || terminus.isEmpty()
+                    ? "" : "→ " + terminus);
+        }
         holder.status.setText(train.getSchedule().getStatusLabel());
         holder.status.setTextColor(train.getSchedule().getStatusColor());
         holder.stripe.setBackgroundColor(train.getSchedule().getStatusColor());

@@ -29,6 +29,18 @@ public class LineSegmentTest {
     }
 
     @Test
+    public void stationsAreExposedInTravelOrder() {
+        // Le plan surligne mon tronçon en suivant cette liste : si elle n'est pas
+        // ordonnée, le surlignage saute d'une gare à l'autre.
+        java.util.List<String> stations = LineNDirection.ALLER.getSegment().stations();
+
+        assertEquals(10, stations.size());
+        assertEquals("Clamart", stations.get(0));
+        assertEquals("Villepreux - Les Clayes", stations.get(9));
+        assertEquals("Saint-Cyr", stations.get(7));
+    }
+
+    @Test
     public void stationsOutsideTheSegmentAreNotFound() {
         LineSegment segment = LineNDirection.ALLER.getSegment();
 

@@ -2,73 +2,91 @@ package com.alixpat.vigie.view;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.util.AttributeSet;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 
-import android.util.Log;
+import androidx.core.content.ContextCompat;
 
+import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.LineNStation;
-import com.alixpat.vigie.model.TrainStop;
+import com.alixpat.vigie.train.LineSegment;
+import com.alixpat.vigie.train.StationMatch;
 
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
 /**
- * Vue personnalisée qui dessine le schéma de la ligne N du Transilien
- * avec les arrêts et les positions des trains en temps réel.
+ * Schéma de la ligne N : les gares en colonnes (tronc + branches) et les trains
+ * à leur position de l'instant.
+ *
+ * <p>Trois choix de dessin méritent une explication :</p>
+ * <ul>
+ *   <li><b>Colonnes mesurées</b> — l'écart entre deux colonnes est calculé à
+ *       partir du nom de gare le plus long de la colonne de gauche, et chaque
+ *       nom est tronqué à cette largeur. Avec un écart fixe, les noms du tronc
+ *       débordaient sur la branche voisine et se superposaient à ses gares.</li>
+ *   <li><b>Couleurs du thème</b> — prises dans les ressources, donc valides en
+ *       mode nuit. En dur, le plan écrivait du texte gris foncé sur une carte
+ *       gris foncé : illisible.</li>
+ *   <li><b>Mon tronçon surligné</b> — au milieu de 30 gares, les deux seules
+ *       qui comptent sont les miennes ({@link #setHighlightedSegment}).</li>
+ * </ul>
  */
 public class LineMapView extends View {
 
     private static final String TAG = "LineMapView";
 
-    // Couleur officielle de la Ligne N (vert Transilien)
+    // Couleur officielle de la Ligne N (vert Transilien) : identité de la ligne,
+    // elle ne suit pas le thème. Elle reste lisible sur fond clair comme sombre.
     private static final int COLOR_LINE_N = 0xFF00A86B;
-    private static final int COLOR_STOP_FILL = 0xFFFFFFFF;
-    private static final int COLOR_STOP_STROKE = 0xFF424242;
-    private static final int COLOR_TEXT = 0xFF212121;
-    private static final int COLOR_TEXT_SECONDARY = 0xFF757575;
-    private static final int COLOR_TRAIN_ON_TIME = 0xFF4CAF50;
-    private static final int COLOR_TRAIN_DELAYED = 0xFFFF9800;
-    private static final int COLOR_TRAIN_CANCELLED = 0xFFF44336;
-    private static final int COLOR_JUNCTION = 0xFF00A86B;
-    private static final int COLOR_BG_LEGEND = 0xFFF5F5F5;
+
+    // Couleurs issues du thème (clair / nuit), résolues dans init().
+    private int colorText;
+    private int colorTextSecondary;
+    private int colorSurface;
+    private int colorLegendBg;
+    private int colorHighlight;
+    private int colorTrainOnTime;
+    private int colorTrainDelayed;
+    private int colorTrainCancelled;
 
     // Dimensions en dp (converties en px dans init)
+    private float density;
     private float lineWidth;
+    private float highlightWidth;
     private float stopRadius;
     private float stopRadiusJunction;
+    private float stopRadiusMine;
     private float trainSize;
     private float textSize;
     private float textSizeSmall;
     private float textSizeLegend;
     private float rowHeight;
-    private float branchOffsetX;
     private float startX;
     private float startY;
     private float legendHeight;
+    private float columnGap;
 
     // Paints
     private final Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint highlightPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stopFillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stopStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint textSecondaryPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint trainPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint trainStrokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint legendBgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint legendTextPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint dashPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     // Data
     private List<LineNStation> trunk;
@@ -78,6 +96,9 @@ public class LineMapView extends View {
 
     // Positions calculées des gares : nom normalisé → (x, y)
     private final Map<String, float[]> stationPositions = new HashMap<>();
+
+    // Mon tronçon : gares normalisées à surligner, dans l'ordre du corridor.
+    private final List<String> highlightedStations = new ArrayList<>();
 
     // Trains à afficher
     private final List<TrainOnMap> trains = new ArrayList<>();
@@ -154,55 +175,64 @@ public class LineMapView extends View {
     }
 
     private void init() {
-        float density = getResources().getDisplayMetrics().density;
+        density = getResources().getDisplayMetrics().density;
+        Context ctx = getContext();
+
+        colorText = ContextCompat.getColor(ctx, R.color.text_primary);
+        colorTextSecondary = ContextCompat.getColor(ctx, R.color.text_secondary);
+        colorSurface = ContextCompat.getColor(ctx, R.color.background_card);
+        colorLegendBg = ContextCompat.getColor(ctx, R.color.background_item);
+        colorHighlight = ContextCompat.getColor(ctx, R.color.secondary);
+        colorTrainOnTime = ContextCompat.getColor(ctx, R.color.status_ok);
+        colorTrainDelayed = ContextCompat.getColor(ctx, R.color.status_warning);
+        colorTrainCancelled = ContextCompat.getColor(ctx, R.color.status_error);
 
         lineWidth = 4 * density;
+        highlightWidth = 9 * density;
         stopRadius = 5 * density;
         stopRadiusJunction = 7 * density;
-        trainSize = 10 * density;
+        stopRadiusMine = 9 * density;
+        trainSize = 9 * density;
         textSize = 12 * density;
         textSizeSmall = 10 * density;
         textSizeLegend = 11 * density;
-        rowHeight = 48 * density;
-        branchOffsetX = 200 * density;
-        startX = 90 * density;
-        startY = 60 * density;
-        legendHeight = 32 * density; // une seule ligne (statuts trains), pas Paris/Banlieue
+        rowHeight = 42 * density;
+        startX = 30 * density;
+        startY = 8 * density;
+        legendHeight = 66 * density;
+        columnGap = 14 * density;
 
         linePaint.setStyle(Paint.Style.STROKE);
         linePaint.setStrokeWidth(lineWidth);
         linePaint.setStrokeCap(Paint.Cap.ROUND);
+        linePaint.setColor(COLOR_LINE_N);
+
+        highlightPaint.setStyle(Paint.Style.STROKE);
+        highlightPaint.setStrokeWidth(highlightWidth);
+        highlightPaint.setStrokeCap(Paint.Cap.ROUND);
+        highlightPaint.setColor(colorHighlight);
+        highlightPaint.setAlpha(120);
 
         stopFillPaint.setStyle(Paint.Style.FILL);
-        stopFillPaint.setColor(COLOR_STOP_FILL);
+        stopFillPaint.setColor(colorSurface);
 
         stopStrokePaint.setStyle(Paint.Style.STROKE);
-        stopStrokePaint.setColor(COLOR_STOP_STROKE);
         stopStrokePaint.setStrokeWidth(2 * density);
 
         textPaint.setTextSize(textSize);
-        textPaint.setColor(COLOR_TEXT);
-        textPaint.setTypeface(Typeface.DEFAULT);
-
-        textSecondaryPaint.setTextSize(textSizeSmall);
-        textSecondaryPaint.setColor(COLOR_TEXT_SECONDARY);
+        textPaint.setColor(colorText);
 
         trainPaint.setStyle(Paint.Style.FILL);
 
         trainStrokePaint.setStyle(Paint.Style.STROKE);
-        trainStrokePaint.setColor(Color.WHITE);
+        trainStrokePaint.setColor(colorSurface);
         trainStrokePaint.setStrokeWidth(2 * density);
 
         legendBgPaint.setStyle(Paint.Style.FILL);
-        legendBgPaint.setColor(COLOR_BG_LEGEND);
+        legendBgPaint.setColor(colorLegendBg);
 
         legendTextPaint.setTextSize(textSizeLegend);
-        legendTextPaint.setColor(COLOR_TEXT);
-
-        dashPaint.setStyle(Paint.Style.STROKE);
-        dashPaint.setStrokeWidth(1 * density);
-        dashPaint.setColor(0xFFBDBDBD);
-        dashPaint.setPathEffect(new DashPathEffect(new float[]{4 * density, 4 * density}, 0));
+        legendTextPaint.setColor(colorText);
 
         trunk = LineNStation.getTrunk();
         branchRambouillet = LineNStation.getBranchRambouillet();
@@ -216,28 +246,62 @@ public class LineMapView extends View {
             trains.addAll(trainList);
         }
         Log.i(TAG, "setTrains: " + trains.size() + " trains reçus");
-        for (int i = 0; i < trains.size(); i++) {
-            TrainOnMap t = trains.get(i);
-            Log.d(TAG, "  train[" + i + "] journey=" + t.journeyRef
-                    + " current=" + t.currentStopName + " next=" + t.nextStopName
-                    + " progress=" + t.progressBetweenStops + " dest=" + t.destination
-                    + " mission=" + t.missionName + " num=" + t.trainNumber);
-        }
         invalidate();
+    }
+
+    /**
+     * Surligne le tronçon entre mes deux gares. Le corridor est celui de
+     * {@link LineSegment} : même géographie que la sélection des trains en
+     * circulation, donc le plan et les listes racontent la même chose.
+     */
+    public void setHighlightedSegment(String originName, String destinationName) {
+        highlightedStations.clear();
+        for (String station : LineSegment.between(originName, destinationName).stations()) {
+            highlightedStations.add(LineNStation.normalize(station));
+        }
+        Log.i(TAG, "setHighlightedSegment: " + originName + " → " + destinationName
+                + " = " + highlightedStations.size() + " gares");
+        invalidate();
+    }
+
+    // ==================== MISE EN PAGE ====================
+
+    /** Décalage entre le point d'une gare et le début de son nom. */
+    private float textOffset() {
+        return stopRadiusMine + trainSize + 12 * density;
+    }
+
+    /** Largeur du plus long nom d'une colonne, en gras (cas le plus large). */
+    private float widestName(List<LineNStation>... branches) {
+        Paint probe = new Paint(textPaint);
+        probe.setTypeface(Typeface.DEFAULT_BOLD);
+        float max = 0;
+        for (List<LineNStation> branch : branches) {
+            if (branch == null) continue;
+            for (LineNStation station : branch) {
+                max = Math.max(max, probe.measureText(station.getName()));
+            }
+        }
+        return max;
+    }
+
+    /** Abscisse de la colonne du milieu (branche Mantes). */
+    private float columnMantes() {
+        return startX + textOffset() + widestName(trunk, branchRambouillet) + columnGap;
+    }
+
+    /** Abscisse de la colonne de droite (branche Dreux). */
+    private float columnDreux() {
+        return columnMantes() + textOffset() + widestName(branchMantes) + columnGap;
     }
 
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
-        float density = getResources().getDisplayMetrics().density;
-
-        // Largeur nécessaire pour que les noms de gares tiennent à droite de
-        // la branche la plus à droite (Dreux). Sans ça, dans un
-        // HorizontalScrollView le View se mesure à ~400dp et les noms sont
-        // dessinés hors-canvas → invisibles.
-        float longestNameWidth = measureLongestStationName();
-        float maxX = startX + 2 * branchOffsetX; // colDreux
-        float textX = maxX + stopRadiusJunction + trainSize + 16 * density;
-        int neededWidth = (int) (textX + longestNameWidth + 16 * density);
+        // Largeur : la dernière colonne est la seule dont les noms peuvent
+        // s'étendre librement, il faut donc qu'ils tiennent dans la vue —
+        // sinon, dans un HorizontalScrollView, ils sont dessinés hors-canvas.
+        int neededWidth = (int) (columnDreux() + textOffset()
+                + widestName(branchDreux) + 16 * density);
 
         int requestedWidth = MeasureSpec.getSize(widthMeasureSpec);
         int width = Math.max(neededWidth, requestedWidth);
@@ -246,30 +310,13 @@ public class LineMapView extends View {
         // Hauteur : tronc puis branches en parallèle.
         int trunkRows = trunk.size();
         int maxBranchRows = Math.max(branchRambouillet.size(),
-                Math.max(branchMantes.size() + 4, branchDreux.size() + 4));
-        // +4 pour Mantes/Dreux car la branche Dreux bifurque de Plaisir-Grignon (4e gare de branche Mantes)
+                Math.max(branchMantes.size(), branchDreux.size() + 4));
+        // +4 pour Dreux : la branche bifurque de Plaisir-Grignon (4e gare de Mantes)
 
         int totalRows = trunkRows + maxBranchRows + 2; // +2 pour espacement
-        float totalHeight = startY + legendHeight + totalRows * rowHeight + rowHeight;
-
-        Log.d(TAG, "onMeasure: requested=" + requestedWidth + "px, needed=" + neededWidth
-                + "px (longestName=" + longestNameWidth + "px), final=" + width + "px");
+        float totalHeight = startY + legendHeight + totalRows * rowHeight;
 
         setMeasuredDimension(width, (int) totalHeight);
-    }
-
-    private float measureLongestStationName() {
-        Paint probe = new Paint(textPaint);
-        probe.setTypeface(Typeface.DEFAULT_BOLD); // junctions sont en bold (plus large)
-        float max = 0;
-        for (List<LineNStation> branch : new List[]{trunk, branchRambouillet, branchMantes, branchDreux}) {
-            if (branch == null) continue;
-            for (LineNStation s : branch) {
-                float w = probe.measureText(s.getName());
-                if (w > max) max = w;
-            }
-        }
-        return max;
     }
 
     @Override
@@ -279,198 +326,229 @@ public class LineMapView extends View {
         trainHitAreas.clear();
 
         float width = getWidth();
-
-        // ====== LÉGENDE ======
         drawLegend(canvas, width);
 
-        // ====== TRONC COMMUN (colonne gauche) ======
-        float x = startX;
+        float colTrunk = startX;
+        float colMantes = columnMantes();
+        float colDreux = columnDreux();
         float y = startY + legendHeight;
-        float colTrunk = x;
 
-        // Dessiner la ligne du tronc
-        float trunkStartY = y;
+        // Chaque colonne tronque ses noms avant la colonne suivante : c'est ce
+        // qui empêche le tronc d'écrire par-dessus la branche Mantes.
+        float trunkTextWidth = colMantes - (colTrunk + textOffset()) - columnGap;
+        float mantesTextWidth = colDreux - (colMantes + textOffset()) - columnGap;
+        float dreuxTextWidth = width - (colDreux + textOffset()) - 8;
+
+        // ====== TRACÉ DES LIGNES ======
         float trunkEndY = y + (trunk.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_LINE_N);
-        canvas.drawLine(colTrunk, trunkStartY, colTrunk, trunkEndY, linePaint);
+        canvas.drawLine(colTrunk, y, colTrunk, trunkEndY, linePaint);
 
-        for (int i = 0; i < trunk.size(); i++) {
-            LineNStation station = trunk.get(i);
-            float sy = y + i * rowHeight;
-            boolean isJunction = (i == trunk.size() - 1); // Saint-Cyr
-            drawStop(canvas, colTrunk, sy, station.getName(), isJunction, COLOR_LINE_N, width);
-            stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colTrunk, sy});
-        }
-
-        // Point de bifurcation : Saint-Cyr
-        float junctionY = y + (trunk.size() - 1) * rowHeight;
-
-        // ====== BRANCHE RAMBOUILLET (colonne gauche, continue tout droit) ======
-        float colRamb = colTrunk;
+        float junctionY = trunkEndY;                       // Saint-Cyr
         float rambStartY = junctionY + rowHeight;
+        canvas.drawLine(colTrunk, junctionY, colTrunk,
+                rambStartY + (branchRambouillet.size() - 1) * rowHeight, linePaint);
 
-        linePaint.setColor(COLOR_LINE_N);
-        canvas.drawLine(colRamb, junctionY, colRamb, rambStartY + (branchRambouillet.size() - 1) * rowHeight, linePaint);
-
-        for (int i = 0; i < branchRambouillet.size(); i++) {
-            LineNStation station = branchRambouillet.get(i);
-            float sy = rambStartY + i * rowHeight;
-            boolean isTerminus = (i == branchRambouillet.size() - 1);
-            drawStop(canvas, colRamb, sy, station.getName(), isTerminus, COLOR_LINE_N, width);
-            stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colRamb, sy});
-        }
-
-        // ====== BRANCHE MANTES (colonne centre) ======
-        float colMantes = colTrunk + branchOffsetX;
-
-        // Courbe de raccordement Saint-Cyr → Fontenay
         float mantesStartY = junctionY + rowHeight;
-        drawBranchCurve(canvas, colTrunk, junctionY, colMantes, mantesStartY, COLOR_LINE_N);
+        drawBranchCurve(canvas, colTrunk, junctionY, colMantes, mantesStartY, linePaint);
+        canvas.drawLine(colMantes, mantesStartY, colMantes,
+                mantesStartY + (branchMantes.size() - 1) * rowHeight, linePaint);
 
-        // Ligne verticale branche Mantes
-        float mantesEndY = mantesStartY + (branchMantes.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_LINE_N);
-        canvas.drawLine(colMantes, mantesStartY, colMantes, mantesEndY, linePaint);
-
-        // Point de bifurcation Plaisir-Grignon (index 3 dans branche Mantes)
         float plaisirGrignonY = mantesStartY + 3 * rowHeight;
+        float dreuxStartY = plaisirGrignonY + rowHeight;
+        drawBranchCurve(canvas, colMantes, plaisirGrignonY, colDreux, dreuxStartY, linePaint);
+        canvas.drawLine(colDreux, dreuxStartY, colDreux,
+                dreuxStartY + (branchDreux.size() - 1) * rowHeight, linePaint);
 
+        // ====== POSITIONS DES GARES ======
+        for (int i = 0; i < trunk.size(); i++) {
+            remember(trunk.get(i), colTrunk, y + i * rowHeight);
+        }
+        for (int i = 0; i < branchRambouillet.size(); i++) {
+            remember(branchRambouillet.get(i), colTrunk, rambStartY + i * rowHeight);
+        }
         for (int i = 0; i < branchMantes.size(); i++) {
-            LineNStation station = branchMantes.get(i);
-            float sy = mantesStartY + i * rowHeight;
-            boolean isJunction = (i == 3); // Plaisir-Grignon
-            boolean isTerminus = (i == branchMantes.size() - 1);
-            drawStop(canvas, colMantes, sy, station.getName(), isJunction || isTerminus, COLOR_LINE_N, width);
-            stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colMantes, sy});
+            remember(branchMantes.get(i), colMantes, mantesStartY + i * rowHeight);
+        }
+        for (int i = 0; i < branchDreux.size(); i++) {
+            remember(branchDreux.get(i), colDreux, dreuxStartY + i * rowHeight);
         }
 
-        // ====== BRANCHE DREUX (colonne droite, bifurque de Plaisir-Grignon) ======
-        float colDreux = colMantes + branchOffsetX;
-        float dreuxStartY = plaisirGrignonY + rowHeight;
+        // ====== MON TRONÇON (par-dessus le tracé, sous les gares) ======
+        drawHighlight(canvas);
 
-        // Courbe de raccordement Plaisir-Grignon → Montfort
-        drawBranchCurve(canvas, colMantes, plaisirGrignonY, colDreux, dreuxStartY, COLOR_LINE_N);
-
-        // Ligne verticale branche Dreux
-        float dreuxEndY = dreuxStartY + (branchDreux.size() - 1) * rowHeight;
-        linePaint.setColor(COLOR_LINE_N);
-        canvas.drawLine(colDreux, dreuxStartY, colDreux, dreuxEndY, linePaint);
-
+        // ====== GARES ======
+        for (int i = 0; i < trunk.size(); i++) {
+            drawStop(canvas, trunk.get(i), colTrunk, y + i * rowHeight,
+                    i == trunk.size() - 1, trunkTextWidth);
+        }
+        for (int i = 0; i < branchRambouillet.size(); i++) {
+            drawStop(canvas, branchRambouillet.get(i), colTrunk, rambStartY + i * rowHeight,
+                    i == branchRambouillet.size() - 1, trunkTextWidth);
+        }
+        for (int i = 0; i < branchMantes.size(); i++) {
+            drawStop(canvas, branchMantes.get(i), colMantes, mantesStartY + i * rowHeight,
+                    i == 3 || i == branchMantes.size() - 1, mantesTextWidth);
+        }
         for (int i = 0; i < branchDreux.size(); i++) {
-            LineNStation station = branchDreux.get(i);
-            float sy = dreuxStartY + i * rowHeight;
-            boolean isTerminus = (i == branchDreux.size() - 1);
-            drawStop(canvas, colDreux, sy, station.getName(), isTerminus, COLOR_LINE_N, width);
-            stationPositions.put(LineNStation.normalize(station.getName()), new float[]{colDreux, sy});
+            drawStop(canvas, branchDreux.get(i), colDreux, dreuxStartY + i * rowHeight,
+                    i == branchDreux.size() - 1, dreuxTextWidth);
         }
 
         // ====== TRAINS ======
         // Cluster par (currentStop, nextStop) pour éviter que plusieurs trains
         // au même segment se dessinent les uns sur les autres.
-        Log.i(TAG, "onDraw: " + stationPositions.size() + " stations positionnées, " + trains.size() + " trains à dessiner");
-        Map<String, List<TrainOnMap>> clusters = new java.util.LinkedHashMap<>();
+        Map<String, List<TrainOnMap>> clusters = new LinkedHashMap<>();
         for (TrainOnMap train : trains) {
             String key = (train.currentStopName == null ? "" : train.currentStopName)
                     + "→" + (train.nextStopName == null ? "" : train.nextStopName);
-            clusters.computeIfAbsent(key, k -> new ArrayList<>()).add(train);
+            List<TrainOnMap> cluster = clusters.get(key);
+            if (cluster == null) {
+                cluster = new ArrayList<>();
+                clusters.put(key, cluster);
+            }
+            cluster.add(train);
         }
+        int drawn = 0;
         for (List<TrainOnMap> cluster : clusters.values()) {
             for (int i = 0; i < cluster.size(); i++) {
-                drawTrain(canvas, cluster.get(i), i, cluster.size());
+                if (drawTrain(canvas, cluster.get(i), i, cluster.size())) drawn++;
+            }
+        }
+        Log.i(TAG, "onDraw: " + stationPositions.size() + " gares, "
+                + drawn + "/" + trains.size() + " trains placés");
+    }
+
+    private void remember(LineNStation station, float x, float y) {
+        stationPositions.put(LineNStation.normalize(station.getName()), new float[]{x, y});
+    }
+
+    /** Est-ce une de mes gares (extrémité de mon tronçon) ? */
+    private boolean isMyStation(String normalizedName) {
+        if (highlightedStations.isEmpty()) return false;
+        return normalizedName.equals(highlightedStations.get(0))
+                || normalizedName.equals(highlightedStations.get(highlightedStations.size() - 1));
+    }
+
+    private boolean isOnMySegment(String normalizedName) {
+        return highlightedStations.contains(normalizedName);
+    }
+
+    /** Repasse mon tronçon en surbrillance, gare après gare. */
+    private void drawHighlight(Canvas canvas) {
+        for (int i = 0; i + 1 < highlightedStations.size(); i++) {
+            float[] from = stationPositions.get(highlightedStations.get(i));
+            float[] to = stationPositions.get(highlightedStations.get(i + 1));
+            if (from == null || to == null) continue;
+            if (from[0] == to[0]) {
+                canvas.drawLine(from[0], from[1], to[0], to[1], highlightPaint);
+            } else {
+                // Changement de colonne (Saint-Cyr → Fontenay) : même courbe que
+                // le raccordement dessiné dessous, sinon le surlignage coupe au
+                // travers du plan.
+                drawBranchCurve(canvas, from[0], from[1], to[0], to[1], highlightPaint);
             }
         }
     }
 
     private void drawLegend(Canvas canvas, float width) {
-        float density = getResources().getDisplayMetrics().density;
-        float ly = 8 * density;
-        float lx = startX;
-
-        // Fond légende
-        canvas.drawRoundRect(new RectF(4 * density, 2 * density, width - 4 * density, startY + legendHeight - 8 * density),
+        canvas.drawRoundRect(new RectF(4 * density, 4 * density,
+                        width - 4 * density, startY + legendHeight - 10 * density),
                 6 * density, 6 * density, legendBgPaint);
 
-        // Titre
+        float lx = 12 * density;
+        float ly = startY + 6 * density;
+
         legendTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
         legendTextPaint.setTextSize(textSizeLegend);
+        legendTextPaint.setColor(colorText);
         canvas.drawText("Ligne N — Transilien", lx, ly + textSizeLegend, legendTextPaint);
 
+        // Statuts des trains
+        ly += textSizeLegend + 12 * density;
         legendTextPaint.setTypeface(Typeface.DEFAULT);
         legendTextPaint.setTextSize(textSizeSmall);
-        ly += textSizeLegend + 10 * density;
-
-        // Légende trains (statuts)
-        lx = startX;
-        int[] trainColors = {COLOR_TRAIN_ON_TIME, COLOR_TRAIN_DELAYED, COLOR_TRAIN_CANCELLED};
-        String[] trainLabels = {"À l'heure", "Retardé", "Supprimé"};
-        for (int i = 0; i < trainColors.length; i++) {
-            trainPaint.setColor(trainColors[i]);
-            float triX = lx;
-            float triY = ly;
+        int[] colors = {colorTrainOnTime, colorTrainDelayed, colorTrainCancelled};
+        String[] labels = {"À l'heure", "Retardé", "Supprimé"};
+        for (int i = 0; i < colors.length; i++) {
+            trainPaint.setColor(colors[i]);
             Path tri = new Path();
-            tri.moveTo(triX, triY + 10 * density);
-            tri.lineTo(triX + 8 * density, triY);
-            tri.lineTo(triX + 16 * density, triY + 10 * density);
+            tri.moveTo(lx, ly + 9 * density);
+            tri.lineTo(lx + 7 * density, ly);
+            tri.lineTo(lx + 14 * density, ly + 9 * density);
             tri.close();
             canvas.drawPath(tri, trainPaint);
-            legendTextPaint.setColor(COLOR_TEXT);
-            canvas.drawText(trainLabels[i], triX + 18 * density, triY + 9 * density, legendTextPaint);
-            lx += textPaint.measureText(trainLabels[i]) + 36 * density;
+            legendTextPaint.setColor(colorText);
+            canvas.drawText(labels[i], lx + 18 * density, ly + 8 * density, legendTextPaint);
+            lx += 18 * density + legendTextPaint.measureText(labels[i]) + 16 * density;
         }
 
+        // Sens de circulation + repère de mes gares
+        lx = 12 * density;
+        ly += 18 * density;
+        legendTextPaint.setColor(colorTextSecondary);
+        String senses = "▲ vers Paris   ▼ vers la province";
+        canvas.drawText(senses, lx, ly + 8 * density, legendTextPaint);
+
+        if (!highlightedStations.isEmpty()) {
+            lx += legendTextPaint.measureText(senses) + 16 * density;
+            stopStrokePaint.setColor(colorHighlight);
+            canvas.drawCircle(lx + 5 * density, ly + 4 * density, 5 * density, stopFillPaint);
+            canvas.drawCircle(lx + 5 * density, ly + 4 * density, 5 * density, stopStrokePaint);
+            canvas.drawText("mon trajet", lx + 14 * density, ly + 8 * density, legendTextPaint);
+        }
     }
 
     private void drawBranchCurve(Canvas canvas, float fromX, float fromY,
-                                  float toX, float toY, int color) {
-        linePaint.setColor(color);
+                                 float toX, float toY, Paint paint) {
         Path path = new Path();
         path.moveTo(fromX, fromY);
         float midY = (fromY + toY) / 2;
         path.cubicTo(fromX, midY, toX, midY, toX, toY);
-        canvas.drawPath(path, linePaint);
+        canvas.drawPath(path, paint);
     }
 
-    private void drawStop(Canvas canvas, float x, float y, String name,
-                           boolean isJunction, int branchColor, float viewWidth) {
-        float radius = isJunction ? stopRadiusJunction : stopRadius;
+    private void drawStop(Canvas canvas, LineNStation station, float x, float y,
+                          boolean isJunction, float maxTextWidth) {
+        String normalized = LineNStation.normalize(station.getName());
+        boolean mine = isMyStation(normalized);
+        boolean onSegment = isOnMySegment(normalized);
 
-        // Cercle de la gare
-        stopStrokePaint.setColor(branchColor);
+        float radius = mine ? stopRadiusMine : (isJunction ? stopRadiusJunction : stopRadius);
+        stopStrokePaint.setColor(mine || onSegment ? colorHighlight : COLOR_LINE_N);
         canvas.drawCircle(x, y, radius, stopFillPaint);
         canvas.drawCircle(x, y, radius, stopStrokePaint);
+        if (mine) {
+            // Pastille pleine : mes deux gares se repèrent d'un coup d'œil.
+            stopFillPaint.setColor(colorHighlight);
+            canvas.drawCircle(x, y, radius - 3 * density, stopFillPaint);
+            stopFillPaint.setColor(colorSurface);
+        }
 
-        // Nom de la gare (décalé pour laisser la voie montante à droite)
-        float textX = x + radius + trainSize + 16 * getResources().getDisplayMetrics().density;
+        textPaint.setTypeface(mine || isJunction ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        textPaint.setColor(mine ? colorHighlight : colorText);
+        textPaint.setTextSize(textSize);
+
+        float textX = x + textOffset();
         float textY = y + textSize / 3;
-
-        if (isJunction) {
-            textPaint.setTypeface(Typeface.DEFAULT_BOLD);
-        } else {
-            textPaint.setTypeface(Typeface.DEFAULT);
-        }
-
-        // Tronquer le texte si nécessaire
-        float maxTextWidth = viewWidth - textX - 8 * getResources().getDisplayMetrics().density;
-        String displayName = name;
-        if (textPaint.measureText(displayName) > maxTextWidth && maxTextWidth > 0) {
-            while (displayName.length() > 3 && textPaint.measureText(displayName + "…") > maxTextWidth) {
-                displayName = displayName.substring(0, displayName.length() - 1);
-            }
-            displayName += "…";
-        }
-        canvas.drawText(displayName, textX, textY, textPaint);
+        canvas.drawText(ellipsize(station.getName(), maxTextWidth), textX, textY, textPaint);
     }
 
-    private void drawTrain(Canvas canvas, TrainOnMap train, int clusterIndex, int clusterSize) {
+    /** Tronque un nom à la largeur disponible de sa colonne. */
+    private String ellipsize(String name, float maxWidth) {
+        if (maxWidth <= 0 || textPaint.measureText(name) <= maxWidth) return name;
+        String shortened = name;
+        while (shortened.length() > 3 && textPaint.measureText(shortened + "…") > maxWidth) {
+            shortened = shortened.substring(0, shortened.length() - 1);
+        }
+        return shortened + "…";
+    }
+
+    /** @return true si le train a pu être placé sur le plan */
+    private boolean drawTrain(Canvas canvas, TrainOnMap train, int clusterIndex, int clusterSize) {
         float[] posFrom = findStationPos(train.currentStopName);
         float[] posTo = findStationPos(train.nextStopName);
 
-        Log.d(TAG, "drawTrain: mission=" + train.missionName + " num=" + train.trainNumber
-                + " current='" + train.currentStopName + "' → posFrom=" + (posFrom != null ? "[" + posFrom[0] + "," + posFrom[1] + "]" : "NULL")
-                + " | next='" + train.nextStopName + "' → posTo=" + (posTo != null ? "[" + posTo[0] + "," + posTo[1] + "]" : "NULL"));
-
         float tx, ty;
-
         if (posFrom != null && posTo != null) {
             float progress = Math.max(0, Math.min(1, train.progressBetweenStops));
             tx = posFrom[0] + (posTo[0] - posFrom[0]) * progress;
@@ -482,49 +560,42 @@ public class LineMapView extends View {
             tx = posTo[0];
             ty = posTo[1];
         } else {
-            Log.w(TAG, "drawTrain: AUCUNE position trouvée pour train mission=" + train.missionName
-                    + " current='" + train.currentStopName + "' next='" + train.nextStopName + "' → TRAIN NON DESSINÉ");
-            return;
+            Log.w(TAG, "drawTrain: gare inconnue pour mission=" + train.missionName
+                    + " current='" + train.currentStopName + "' next='" + train.nextStopName + "'");
+            return false;
         }
-
-        float density = getResources().getDisplayMetrics().density;
 
         // Décale verticalement les trains du même cluster pour qu'ils ne se
         // superposent pas (centré autour de la position d'origine).
         if (clusterSize > 1) {
-            float spacing = trainSize * 2.4f;
-            float offset = (clusterIndex - (clusterSize - 1) / 2.0f) * spacing;
-            ty += offset;
+            float spacing = trainSize * 2.2f;
+            ty += (clusterIndex - (clusterSize - 1) / 2.0f) * spacing;
         }
 
-        // Déterminer le sens : montant (vers Paris, Y décroissant) ou descendant
-        boolean goingUp = false;
-        if (posFrom != null && posTo != null) {
+        // Sens : montant (vers Paris, Y décroissant) ou descendant
+        boolean goingUp;
+        if (posFrom != null && posTo != null && posFrom[1] != posTo[1]) {
             goingUp = posTo[1] < posFrom[1];
         } else {
-            String destLower = train.destination != null ? train.destination.toLowerCase(Locale.FRENCH) : "";
+            String destLower = train.destination != null
+                    ? train.destination.toLowerCase(Locale.FRENCH) : "";
             goingUp = destLower.contains("paris") || destLower.contains("montparnasse");
         }
 
-        // Deux voies : montants à droite, descendants à gauche
-        if (goingUp) {
-            tx += trainSize + 4 * density;
-        } else {
-            tx -= trainSize + 4 * density;
-        }
+        // Deux voies : montants à droite du trait, descendants à gauche.
+        tx += goingUp ? (trainSize + 3 * density) : -(trainSize + 3 * density);
 
-        // Couleur selon le statut
         int color;
         if (train.cancelled) {
-            color = COLOR_TRAIN_CANCELLED;
+            color = colorTrainCancelled;
         } else if (train.delayed) {
-            color = COLOR_TRAIN_DELAYED;
+            color = colorTrainDelayed;
         } else {
-            color = COLOR_TRAIN_ON_TIME;
+            color = colorTrainOnTime;
         }
         trainPaint.setColor(color);
 
-        // Triangle : ▲ montant vers Paris, ▼ descendant vers banlieue
+        // Triangle : ▲ montant vers Paris, ▼ descendant vers la province
         Path path = new Path();
         if (goingUp) {
             path.moveTo(tx, ty - trainSize);
@@ -544,8 +615,9 @@ public class LineMapView extends View {
         float pad = 4 * density;
         trainHitAreas.add(new HitArea(
                 new RectF(tx - trainSize - pad, ty - trainSize - pad,
-                          tx + trainSize + pad, ty + trainSize + pad),
+                        tx + trainSize + pad, ty + trainSize + pad),
                 train));
+        return true;
     }
 
     @Override
@@ -595,41 +667,16 @@ public class LineMapView extends View {
         return super.performClick();
     }
 
+    /**
+     * Position de la gare portant ce nom, ou null quand elle n'est pas
+     * identifiable sans ambiguïté (cf. {@link StationMatch}).
+     */
     private float[] findStationPos(String stopName) {
-        if (stopName == null || stopName.isEmpty()) {
-            Log.d(TAG, "findStationPos: stopName est null/vide");
+        String match = StationMatch.bestMatch(stopName, stationPositions.keySet());
+        if (match == null) {
+            Log.w(TAG, "findStationPos: gare non identifiée '" + stopName + "'");
             return null;
         }
-        String normalized = LineNStation.normalize(stopName);
-
-        // Recherche exacte
-        float[] pos = stationPositions.get(normalized);
-        if (pos != null) {
-            Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → EXACT MATCH");
-            return pos;
-        }
-
-        // Recherche partielle
-        for (Map.Entry<String, float[]> entry : stationPositions.entrySet()) {
-            if (entry.getKey().contains(normalized) || normalized.contains(entry.getKey())) {
-                Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → PARTIAL MATCH avec '" + entry.getKey() + "'");
-                return entry.getValue();
-            }
-        }
-
-        // Recherche par mot-clé
-        for (Map.Entry<String, float[]> entry : stationPositions.entrySet()) {
-            String[] words = normalized.split("\\s+");
-            for (String word : words) {
-                if (word.length() > 3 && entry.getKey().contains(word)) {
-                    Log.d(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → KEYWORD MATCH mot='" + word + "' avec '" + entry.getKey() + "'");
-                    return entry.getValue();
-                }
-            }
-        }
-
-        // Log des stations connues pour diagnostic
-        Log.w(TAG, "findStationPos: '" + stopName + "' → normalized='" + normalized + "' → AUCUNE CORRESPONDANCE. Stations connues: " + stationPositions.keySet());
-        return null;
+        return stationPositions.get(match);
     }
 }
