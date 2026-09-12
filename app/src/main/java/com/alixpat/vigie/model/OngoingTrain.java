@@ -37,8 +37,4 @@ public class OngoingTrain {
     public String getNextStopLabel() { return nextStopLabel; }
     public String getEtaLabel() { return etaLabel; }
     public String getTrainInfoLabel() { return trainInfoLabel; }
-
-    public String getJourneyRef() {
-        return schedule != null ? schedule.getJourneyRef() : "";
-    }
 }

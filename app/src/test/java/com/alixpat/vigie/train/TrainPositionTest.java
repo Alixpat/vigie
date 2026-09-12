@@ -106,6 +106,28 @@ public class TrainPositionTest {
     }
 
     @Test
+    public void segmentProgressLocatesTrainBetweenTwoStops() {
+        // Le plan interpole le triangle entre deux gares avec cet avancement-là :
+        // l'avancement global du trajet, lui, ne dit pas où en est le tronçon.
+        assertEquals(0.5f, TrainPosition.compute(parcours(), T0 + 15 * MIN)
+                .getSegmentProgress(), 0.001f);
+        assertEquals(0.1f, TrainPosition.compute(parcours(), T0 + 11 * MIN)
+                .getSegmentProgress(), 0.001f);
+    }
+
+    @Test
+    public void segmentProgressIsZeroWhenNotBetweenStops() {
+        // À quai, pas encore parti ou arrivé : le train est *sur* une gare.
+        assertEquals(0f, TrainPosition.compute(parcours(), T0 + 10 * MIN)
+                .getSegmentProgress(), 0.001f);
+        assertEquals(0f, TrainPosition.compute(parcours(), T0 - 5 * MIN)
+                .getSegmentProgress(), 0.001f);
+        assertEquals(0f, TrainPosition.compute(parcours(), T0 + 60 * MIN)
+                .getSegmentProgress(), 0.001f);
+        assertEquals(0f, TrainPosition.unknown().getSegmentProgress(), 0.001f);
+    }
+
+    @Test
     public void statusAtUsesInjectedInstant() {
         TrainStop meudon = stop("Meudon", 10, false, false);
 

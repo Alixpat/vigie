@@ -33,18 +33,20 @@ public final class TrainPosition {
     private final String nextStopName;
     private final long nextStopMillis;
     private final int progressPercent;
+    private final float segmentProgress;
 
     private TrainPosition(Phase phase, String currentStopName, String nextStopName,
-                          long nextStopMillis, int progressPercent) {
+                          long nextStopMillis, int progressPercent, float segmentProgress) {
         this.phase = phase;
         this.currentStopName = currentStopName != null ? currentStopName : "";
         this.nextStopName = nextStopName != null ? nextStopName : "";
         this.nextStopMillis = nextStopMillis;
         this.progressPercent = progressPercent;
+        this.segmentProgress = segmentProgress;
     }
 
     public static TrainPosition unknown() {
-        return new TrainPosition(Phase.UNKNOWN, "", "", 0L, -1);
+        return new TrainPosition(Phase.UNKNOWN, "", "", 0L, -1, 0f);
     }
 
     /**
@@ -68,7 +70,7 @@ public final class TrainPosition {
                         sorted.get(i).getStopName(),
                         next != null ? next.getStopName() : "",
                         next != null ? next.getBestArrivalMillis() : 0L,
-                        progress);
+                        progress, 0f);
             }
         }
 
@@ -80,7 +82,8 @@ public final class TrainPosition {
                         sorted.get(i).getStopName(),
                         sorted.get(i + 1).getStopName(),
                         sorted.get(i + 1).getBestArrivalMillis(),
-                        progress);
+                        progress,
+                        betweenProgress(sorted.get(i), sorted.get(i + 1), now));
             }
         }
 
@@ -99,11 +102,11 @@ public final class TrainPosition {
                     first.getStopName(),
                     next != null ? next.getStopName() : "",
                     next != null ? next.getBestArrivalMillis() : 0L,
-                    progress);
+                    progress, 0f);
         }
         if (allPassed) {
             return new TrainPosition(Phase.ARRIVED,
-                    sorted.get(sorted.size() - 1).getStopName(), "", 0L, progress);
+                    sorted.get(sorted.size() - 1).getStopName(), "", 0L, progress, 0f);
         }
         return unknown();
     }
@@ -124,6 +127,20 @@ public final class TrainPosition {
         return TrainStop.StopStatus.UPCOMING;
     }
 
+    /**
+     * Avancement entre l'arrêt quitté et le suivant, de 0 (au départ du premier) à
+     * 1 (à l'arrivée du second). C'est ce que le plan de la ligne interpole pour
+     * poser le train entre deux gares ; l'avancement global, lui, ne dit rien de
+     * l'endroit où le train se trouve sur le trait.
+     */
+    private static float betweenProgress(TrainStop from, TrainStop to, long now) {
+        long left = from.getBestTimeMillis();
+        long reach = to.getBestArrivalMillis();
+        if (left <= 0 || reach <= left) return 0.5f;   // horaires inutilisables : au milieu
+        float ratio = (float) (now - left) / (float) (reach - left);
+        return Math.max(0f, Math.min(1f, ratio));
+    }
+
     /** Avancement sur l'ensemble du parcours, en % ; -1 si les horaires manquent. */
     private static int computeProgress(List<TrainStop> sorted, long now) {
         long start = sorted.get(0).getBestTimeMillis();
@@ -138,6 +155,13 @@ public final class TrainPosition {
     public String getNextStopName() { return nextStopName; }
     public long getNextStopMillis() { return nextStopMillis; }
     public int getProgressPercent() { return progressPercent; }
+
+    /**
+     * @return l'avancement entre {@link #getCurrentStopName()} et
+     *         {@link #getNextStopName()}, de 0 à 1 ; 0 quand le train est à quai,
+     *         pas encore parti ou arrivé.
+     */
+    public float getSegmentProgress() { return segmentProgress; }
 
     public boolean isKnown() {
         return phase != Phase.UNKNOWN;
