@@ -29,7 +29,7 @@ import java.util.Map;
  * Schéma de la ligne N : les gares en colonnes (tronc + branches) et les trains
  * à leur position de l'instant.
  *
- * <p>Trois choix de dessin méritent une explication :</p>
+ * <p>Quatre choix de dessin méritent une explication :</p>
  * <ul>
  *   <li><b>Colonnes mesurées</b> — l'écart entre deux colonnes est calculé à
  *       partir du nom de gare le plus long de la colonne de gauche, et chaque
@@ -40,6 +40,12 @@ import java.util.Map;
  *       gris foncé : illisible.</li>
  *   <li><b>Mon tronçon surligné</b> — au milieu de 30 gares, les deux seules
  *       qui comptent sont les miennes ({@link #setHighlightedSegment}).</li>
+ *   <li><b>Mes trains détachés du reste</b> — la ligne fait circuler une
+ *       cinquantaine de trains, dont la plupart ne desservent pas mes gares.
+ *       Ceux qui les desservent sont pleins et à taille normale, les autres
+ *       réduits et translucides : le trafic reste lisible en fond sans noyer
+ *       les trains que je peux prendre ({@code TrainOnMap.onMyRoute},
+ *       {@link #setShowOtherTrains}).</li>
  * </ul>
  */
 public class LineMapView extends View {
@@ -58,7 +64,6 @@ public class LineMapView extends View {
     private int colorHighlight;
     private int colorTrainOnTime;
     private int colorTrainDelayed;
-    private int colorTrainCancelled;
 
     // Dimensions en dp (converties en px dans init)
     private float density;
@@ -103,6 +108,11 @@ public class LineMapView extends View {
     // Trains à afficher
     private final List<TrainOnMap> trains = new ArrayList<>();
 
+    // Le trafic qui ne me concerne pas peut être masqué entièrement : sur un
+    // téléphone, cinquante triangles sur trente gares finissent par cacher les
+    // deux ou trois qui comptent.
+    private boolean showOtherTrains = true;
+
     // Zones de tap pour chaque train (recalculées à chaque onDraw)
     private final List<HitArea> trainHitAreas = new ArrayList<>();
     private OnTrainClickListener trainClickListener;
@@ -130,32 +140,30 @@ public class LineMapView extends View {
         public final String currentStopName;
         public final String nextStopName;
         public final float progressBetweenStops; // 0.0 à 1.0
-        public final boolean onTime;
-        public final boolean delayed;
-        public final boolean cancelled;
         public final int delayMinutes;
-        public final String label;
+        /** Ce train dessert-il mes deux gares ? (cf. {@code MyTrains}) */
+        public final boolean onMyRoute;
         public final String trainNumber;
         public final String missionName;
 
         public TrainOnMap(String journeyRef, String destination,
                           String currentStopName, String nextStopName,
-                          float progressBetweenStops,
-                          boolean onTime, boolean delayed, boolean cancelled,
-                          int delayMinutes, String label,
+                          float progressBetweenStops, int delayMinutes,
+                          boolean onMyRoute,
                           String trainNumber, String missionName) {
             this.journeyRef = journeyRef;
             this.destination = destination;
             this.currentStopName = currentStopName;
             this.nextStopName = nextStopName;
             this.progressBetweenStops = progressBetweenStops;
-            this.onTime = onTime;
-            this.delayed = delayed;
-            this.cancelled = cancelled;
             this.delayMinutes = delayMinutes;
-            this.label = label;
+            this.onMyRoute = onMyRoute;
             this.trainNumber = trainNumber;
             this.missionName = missionName;
+        }
+
+        public boolean isDelayed() {
+            return delayMinutes > 0;
         }
     }
 
@@ -185,7 +193,6 @@ public class LineMapView extends View {
         colorHighlight = ContextCompat.getColor(ctx, R.color.secondary);
         colorTrainOnTime = ContextCompat.getColor(ctx, R.color.status_ok);
         colorTrainDelayed = ContextCompat.getColor(ctx, R.color.status_warning);
-        colorTrainCancelled = ContextCompat.getColor(ctx, R.color.status_error);
 
         lineWidth = 4 * density;
         highlightWidth = 9 * density;
@@ -247,6 +254,21 @@ public class LineMapView extends View {
         }
         Log.i(TAG, "setTrains: " + trains.size() + " trains reçus");
         invalidate();
+    }
+
+    /**
+     * Affiche ou masque les trains qui ne desservent pas mes deux gares. Ils
+     * restent dessinés en retrait quand ils sont visibles : c'est du contexte,
+     * pas de l'information sur mon trajet.
+     */
+    public void setShowOtherTrains(boolean show) {
+        if (showOtherTrains == show) return;
+        showOtherTrains = show;
+        invalidate();
+    }
+
+    public boolean isShowingOtherTrains() {
+        return showOtherTrains;
     }
 
     /**
@@ -398,7 +420,10 @@ public class LineMapView extends View {
         // Cluster par (currentStop, nextStop) pour éviter que plusieurs trains
         // au même segment se dessinent les uns sur les autres.
         Map<String, List<TrainOnMap>> clusters = new LinkedHashMap<>();
+        int shown = 0;
         for (TrainOnMap train : trains) {
+            if (!train.onMyRoute && !showOtherTrains) continue;
+            shown++;
             String key = (train.currentStopName == null ? "" : train.currentStopName)
                     + "→" + (train.nextStopName == null ? "" : train.nextStopName);
             List<TrainOnMap> cluster = clusters.get(key);
@@ -408,14 +433,20 @@ public class LineMapView extends View {
             }
             cluster.add(train);
         }
+        // Mes trains passent en dernier : ils se dessinent par-dessus le trafic
+        // de fond, et le hit-test (qui parcourt à l'envers) les choisit d'abord.
         int drawn = 0;
-        for (List<TrainOnMap> cluster : clusters.values()) {
-            for (int i = 0; i < cluster.size(); i++) {
-                if (drawTrain(canvas, cluster.get(i), i, cluster.size())) drawn++;
+        for (int pass = 0; pass < 2; pass++) {
+            boolean mine = pass == 1;
+            for (List<TrainOnMap> cluster : clusters.values()) {
+                for (int i = 0; i < cluster.size(); i++) {
+                    if (cluster.get(i).onMyRoute != mine) continue;
+                    if (drawTrain(canvas, cluster.get(i), i, cluster.size())) drawn++;
+                }
             }
         }
         Log.i(TAG, "onDraw: " + stationPositions.size() + " gares, "
-                + drawn + "/" + trains.size() + " trains placés");
+                + drawn + "/" + shown + " trains placés");
     }
 
     private void remember(LineNStation station, float x, float y) {
@@ -463,24 +494,13 @@ public class LineMapView extends View {
         legendTextPaint.setColor(colorText);
         canvas.drawText("Ligne N — Transilien", lx, ly + textSizeLegend, legendTextPaint);
 
-        // Statuts des trains
+        // Statuts des trains, puis le repère qui distingue mes trains du reste.
         ly += textSizeLegend + 12 * density;
         legendTextPaint.setTypeface(Typeface.DEFAULT);
         legendTextPaint.setTextSize(textSizeSmall);
-        int[] colors = {colorTrainOnTime, colorTrainDelayed, colorTrainCancelled};
-        String[] labels = {"À l'heure", "Retardé", "Supprimé"};
-        for (int i = 0; i < colors.length; i++) {
-            trainPaint.setColor(colors[i]);
-            Path tri = new Path();
-            tri.moveTo(lx, ly + 9 * density);
-            tri.lineTo(lx + 7 * density, ly);
-            tri.lineTo(lx + 14 * density, ly + 9 * density);
-            tri.close();
-            canvas.drawPath(tri, trainPaint);
-            legendTextPaint.setColor(colorText);
-            canvas.drawText(labels[i], lx + 18 * density, ly + 8 * density, legendTextPaint);
-            lx += 18 * density + legendTextPaint.measureText(labels[i]) + 16 * density;
-        }
+        lx = drawLegendTrain(canvas, lx, ly, colorTrainOnTime, 255, "À l'heure");
+        lx = drawLegendTrain(canvas, lx, ly, colorTrainDelayed, 255, "Retardé");
+        drawLegendTrain(canvas, lx, ly, colorTrainOnTime, 90, "Ne dessert pas mes gares");
 
         // Sens de circulation + repère de mes gares
         lx = 12 * density;
@@ -496,6 +516,19 @@ public class LineMapView extends View {
             canvas.drawCircle(lx + 5 * density, ly + 4 * density, 5 * density, stopStrokePaint);
             canvas.drawText("mon trajet", lx + 14 * density, ly + 8 * density, legendTextPaint);
         }
+    }
+
+    /** Un pictogramme de train + son libellé ; @return l'abscisse du suivant. */
+    private float drawLegendTrain(Canvas canvas, float lx, float ly,
+                                  int color, int alpha, String label) {
+        trainPaint.setColor(color);
+        trainPaint.setAlpha(alpha);
+        canvas.drawPath(trianglePath(lx + 7 * density, ly + 4 * density, 6 * density, true),
+                trainPaint);
+        trainPaint.setAlpha(255);
+        legendTextPaint.setColor(colorText);
+        canvas.drawText(label, lx + 18 * density, ly + 8 * density, legendTextPaint);
+        return lx + 18 * density + legendTextPaint.measureText(label) + 16 * density;
     }
 
     private void drawBranchCurve(Canvas canvas, float fromX, float fromY,
@@ -585,39 +618,47 @@ public class LineMapView extends View {
         // Deux voies : montants à droite du trait, descendants à gauche.
         tx += goingUp ? (trainSize + 3 * density) : -(trainSize + 3 * density);
 
-        int color;
-        if (train.cancelled) {
-            color = colorTrainCancelled;
-        } else if (train.delayed) {
-            color = colorTrainDelayed;
-        } else {
-            color = colorTrainOnTime;
-        }
-        trainPaint.setColor(color);
+        // Un train qui ne dessert pas mes gares est du décor : même forme, mais
+        // réduit et translucide, pour qu'il ne se dispute pas l'attention avec
+        // ceux que je peux prendre.
+        float size = train.onMyRoute ? trainSize : trainSize * 0.62f;
+        trainPaint.setColor(train.isDelayed() ? colorTrainDelayed : colorTrainOnTime);
+        trainPaint.setAlpha(train.onMyRoute ? 255 : 90);
 
         // Triangle : ▲ montant vers Paris, ▼ descendant vers la province
-        Path path = new Path();
-        if (goingUp) {
-            path.moveTo(tx, ty - trainSize);
-            path.lineTo(tx - trainSize * 0.7f, ty + trainSize * 0.5f);
-            path.lineTo(tx + trainSize * 0.7f, ty + trainSize * 0.5f);
-        } else {
-            path.moveTo(tx, ty + trainSize);
-            path.lineTo(tx - trainSize * 0.7f, ty - trainSize * 0.5f);
-            path.lineTo(tx + trainSize * 0.7f, ty - trainSize * 0.5f);
-        }
-        path.close();
+        Path path = trianglePath(tx, ty, size, goingUp);
         canvas.drawPath(path, trainPaint);
-        canvas.drawPath(path, trainStrokePaint);
+        if (train.onMyRoute) {
+            // Liseré de la couleur de la carte : détache le triangle du trait de
+            // la ligne, sur lequel il est posé.
+            canvas.drawPath(path, trainStrokePaint);
+        }
+        trainPaint.setAlpha(255);
 
         // Pas de label sur le plan : trop d'encombrement avec 30+ trains.
         // L'info détaillée est accessible au tap (hit-test enregistré ci-dessous).
         float pad = 4 * density;
         trainHitAreas.add(new HitArea(
-                new RectF(tx - trainSize - pad, ty - trainSize - pad,
-                        tx + trainSize + pad, ty + trainSize + pad),
+                new RectF(tx - size - pad, ty - size - pad,
+                        tx + size + pad, ty + size + pad),
                 train));
         return true;
+    }
+
+    /** ▲ vers Paris (Y décroissant), ▼ vers la province. */
+    private static Path trianglePath(float cx, float cy, float size, boolean goingUp) {
+        Path path = new Path();
+        if (goingUp) {
+            path.moveTo(cx, cy - size);
+            path.lineTo(cx - size * 0.7f, cy + size * 0.5f);
+            path.lineTo(cx + size * 0.7f, cy + size * 0.5f);
+        } else {
+            path.moveTo(cx, cy + size);
+            path.lineTo(cx - size * 0.7f, cy - size * 0.5f);
+            path.lineTo(cx + size * 0.7f, cy - size * 0.5f);
+        }
+        path.close();
+        return path;
     }
 
     @Override

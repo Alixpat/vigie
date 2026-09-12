@@ -21,25 +21,6 @@ public class TrainSchedule {
     public TrainSchedule(String destination, String aimedDepartureTime,
                          String expectedDepartureTime, String arrivalTime,
                          String departureStatus, String platformName,
-                         int delayMinutes) {
-        this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
-                departureStatus, platformName, delayMinutes, "", 0, 0, "", "", "");
-    }
-
-    public TrainSchedule(String destination, String aimedDepartureTime,
-                         String expectedDepartureTime, String arrivalTime,
-                         String departureStatus, String platformName,
-                         int delayMinutes, String journeyRef,
-                         long aimedDepartureMillis, long arrivalMillis,
-                         String originStation) {
-        this(destination, aimedDepartureTime, expectedDepartureTime, arrivalTime,
-                departureStatus, platformName, delayMinutes, journeyRef,
-                aimedDepartureMillis, arrivalMillis, originStation, "", "");
-    }
-
-    public TrainSchedule(String destination, String aimedDepartureTime,
-                         String expectedDepartureTime, String arrivalTime,
-                         String departureStatus, String platformName,
                          int delayMinutes, String journeyRef,
                          long aimedDepartureMillis, long arrivalMillis,
                          String originStation, String trainNumber, String missionName) {

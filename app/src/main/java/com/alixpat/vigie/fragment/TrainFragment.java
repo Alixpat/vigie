@@ -29,8 +29,10 @@ import com.alixpat.vigie.train.IdfmClient;
 import com.alixpat.vigie.train.IncidentClassifier;
 import com.alixpat.vigie.train.JourneyRoutes;
 import com.alixpat.vigie.train.LineNDirection;
+import com.alixpat.vigie.train.MyTrains;
 import com.alixpat.vigie.train.OngoingTrains;
 import com.alixpat.vigie.train.StopVisit;
+import com.alixpat.vigie.train.TrainPosition;
 import com.alixpat.vigie.util.DateFormats;
 import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
@@ -71,6 +73,10 @@ public class TrainFragment extends Fragment {
     private static final long SCHEDULE_LOOKBACK_MS = 30 * 60 * 1000;
     /** Rafraîchissement local de la position des trains en cours (sans appel réseau). */
     private static final long POSITION_TICK_MS = 20 * 1000;
+    /** Sur le plan, un train reste affiché ce délai après son arrivée au terminus. */
+    private static final long MAP_ARRIVED_GRACE_MS = 5 * 60 * 1000;
+    /** Sur le plan, un train dont le départ est plus loin que ça n'est pas dessiné. */
+    private static final long MAP_DEPARTURE_HORIZON_MS = 30 * 60 * 1000;
 
     private final IdfmClient idfmClient = new IdfmClient(
             "STIF:Line::C01736:",   // Ligne N (SIRI LineRef)
@@ -122,8 +128,10 @@ public class TrainFragment extends Fragment {
     // qui vient de partir disparaît du stop-monitoring de sa gare de départ, et son
     // heure de départ serait alors introuvable — donc le train ne serait jamais
     // reconnu comme « en circulation ». Purgé par OngoingTrains.rememberOriginVisits.
-    private final Map<String, StopVisit> seenAtClamart = new HashMap<>();
-    private final Map<String, StopVisit> seenAtVillepreux = new HashMap<>();
+    // Concurrentes : écrites par l'executor (rememberOriginVisits), lues par le
+    // thread UI quand le plan de la ligne trie mes trains du reste du trafic.
+    private final Map<String, StopVisit> seenAtClamart = new ConcurrentHashMap<>();
+    private final Map<String, StopVisit> seenAtVillepreux = new ConcurrentHashMap<>();
 
     // Derniers passages ramenés par l'API, conservés pour rejouer la construction des
     // trains en circulation quand le parcours des trains (estimated-timetable) arrive
@@ -155,6 +163,7 @@ public class TrainFragment extends Fragment {
     // gardé pour rejouer les positions à chaque tick au lieu de figer la vue.
     private LineMapView openLineMapView;
     private TextView openLineMapCount;
+    private TextView openLineMapFilter;
 
     private final Handler refreshHandler = new Handler(Looper.getMainLooper());
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -702,9 +711,14 @@ public class TrainFragment extends Fragment {
 
         LineMapView lineMapView = dialogView.findViewById(R.id.lineMapView);
         TextView trainCountView = dialogView.findViewById(R.id.lineMapTrainCount);
+        TextView filterButton = dialogView.findViewById(R.id.lineMapFilter);
         TextView closeButton = dialogView.findViewById(R.id.lineMapClose);
 
         closeButton.setOnClickListener(v -> dialog.dismiss());
+        filterButton.setOnClickListener(v -> {
+            lineMapView.setShowOtherTrains(!lineMapView.isShowingOtherTrains());
+            refreshOpenLineMap();
+        });
 
         // Mes deux gares sont mises en évidence sur le plan : c'est le seul
         // tronçon qui m'intéresse au milieu de toute la ligne N.
@@ -715,11 +729,13 @@ public class TrainFragment extends Fragment {
 
         openLineMapView = lineMapView;
         openLineMapCount = trainCountView;
+        openLineMapFilter = filterButton;
         refreshOpenLineMap();
 
         dialog.setOnDismissListener(d -> {
             openLineMapView = null;
             openLineMapCount = null;
+            openLineMapFilter = null;
         });
 
         dialog.show();
@@ -741,9 +757,19 @@ public class TrainFragment extends Fragment {
         if (openLineMapView == null) return;
         List<LineMapView.TrainOnMap> trainsOnMap = buildTrainsOnMap();
         openLineMapView.setTrains(trainsOnMap);
+
+        // Le compte sépare les deux populations : « 42 trains » ne dit pas si
+        // l'un d'eux passe chez moi, qui est la seule question que je me pose.
+        int mine = countOnMyRoute(trainsOnMap);
+        int others = trainsOnMap.size() - mine;
         if (openLineMapCount != null) {
-            int count = trainsOnMap.size();
-            openLineMapCount.setText(count + " train" + (count > 1 ? "s" : "") + " en circulation");
+            openLineMapCount.setText(openLineMapView.isShowingOtherTrains()
+                    ? mine + " chez moi · " + others + " autres"
+                    : mine + " chez moi");
+        }
+        if (openLineMapFilter != null) {
+            openLineMapFilter.setText(openLineMapView.isShowingOtherTrains()
+                    ? "Mes gares" : "Tous");
         }
     }
 
@@ -764,13 +790,14 @@ public class TrainFragment extends Fragment {
         if (train.destination != null && !train.destination.isEmpty()) {
             body.append("Direction : ").append(train.destination).append("\n\n");
         }
-        if (train.cancelled) {
-            body.append("⛔ Supprimé\n");
-        } else if (train.delayed && train.delayMinutes > 0) {
+        if (train.isDelayed()) {
             body.append("⏰ Retard +").append(train.delayMinutes).append(" min\n");
         } else {
             body.append("✅ À l'heure\n");
         }
+        body.append(train.onMyRoute
+                ? "🎯 Dessert Clamart et Villepreux\n"
+                : "➖ Ne dessert pas mes deux gares\n");
         body.append("\nPosition : ");
         if (train.currentStopName != null && !train.currentStopName.isEmpty()) {
             body.append(train.currentStopName);
@@ -781,10 +808,6 @@ public class TrainFragment extends Fragment {
                 && !train.nextStopName.equals(train.currentStopName)) {
             body.append(" → ").append(train.nextStopName);
         }
-        if (train.label != null && !train.label.isEmpty()
-                && !train.label.equals(train.missionName)) {
-            body.append("\n\n").append(train.label);
-        }
 
         new AlertDialog.Builder(requireContext())
                 .setTitle(titleSb.toString())
@@ -793,155 +816,93 @@ public class TrainFragment extends Fragment {
                 .show();
     }
 
+    /**
+     * Les trains à poser sur le plan, à l'instant {@code now}.
+     *
+     * <p>Deux populations, distinguées par {@link MyTrains} : ceux qui desservent
+     * mes deux gares — les seuls que je puisse prendre — et tout le reste du
+     * trafic de la ligne, dessiné en retrait. La position vient de
+     * {@link TrainPosition}, la même que celle des cartes « en circulation » :
+     * deux calculs concurrents finissaient par se contredire à l'écran.</p>
+     */
     private List<LineMapView.TrainOnMap> buildTrainsOnMap() {
         List<LineMapView.TrainOnMap> result = new ArrayList<>();
         long now = System.currentTimeMillis();
 
-        Log.i(TAG, "buildTrainsOnMap: journeyStopsCache contient " + journeyStopsCache.size() + " trajets");
+        // Les statuts connus, indexés une fois pour toutes : les chercher dans la
+        // boucle reconstruisait la liste complète pour chaque train.
+        Map<String, TrainSchedule> knownSchedules = new HashMap<>();
+        if (scheduleAdapterAller != null) {
+            indexSchedules(knownSchedules, scheduleAdapterAller.getSchedules());
+        }
+        if (scheduleAdapterRetour != null) {
+            indexSchedules(knownSchedules, scheduleAdapterRetour.getSchedules());
+        }
+        // En dernier : pour un train déjà parti, c'est la carte « en circulation »
+        // qui porte le retard réel, pas la liste des départs qu'il a quittée.
+        indexSchedules(knownSchedules, ongoingAller);
+        indexSchedules(knownSchedules, ongoingRetour);
 
         for (Map.Entry<String, List<TrainStop>> entry : journeyStopsCache.entrySet()) {
             String journeyRef = entry.getKey();
             List<TrainStop> stops = entry.getValue();
             if (stops == null || stops.isEmpty()) continue;
 
-            // Vérifier si ce train est encore actif (pas encore arrivé au terminus)
-            TrainStop lastStop = stops.get(stops.size() - 1);
-            TrainStop firstStop = stops.get(0);
-            long lastTime = lastStop.getBestArrivalMillis();
-            long firstTime = firstStop.getBestTimeMillis();
+            // Hors fenêtre d'intérêt : déjà arrivé, ou départ trop lointain.
+            long lastTime = stops.get(stops.size() - 1).getBestArrivalMillis();
+            long firstTime = stops.get(0).getBestTimeMillis();
+            if (lastTime > 0 && now > lastTime + MAP_ARRIVED_GRACE_MS) continue;
+            if (firstTime > 0 && firstTime - now > MAP_DEPARTURE_HORIZON_MS) continue;
 
-            // Ignorer les trains déjà arrivés ou pas encore partis dans > 30min
-            if (lastTime > 0 && now > lastTime + 5 * 60_000L) {
-                Log.d(TAG, "buildTrainsOnMap: SKIP " + journeyRef + " déjà arrivé (lastTime=" + lastTime + " now=" + now + " diff=" + ((now - lastTime) / 60000) + "min)");
-                continue;
-            }
-            if (firstTime > 0 && firstTime - now > 30 * 60_000L) {
-                Log.d(TAG, "buildTrainsOnMap: SKIP " + journeyRef + " départ dans +" + ((firstTime - now) / 60000) + "min");
-                continue;
-            }
+            TrainSchedule schedule = knownSchedules.get(journeyRef);
+            // Un train supprimé ne circule pas : il n'a rien à faire sur le plan.
+            if (schedule != null && schedule.isCancelled()) continue;
 
-            // Trouver la position du train
-            String currentStop = null;
-            String nextStop = null;
-            float progress = 0f;
+            List<TrainStop> named = resolveStopNames(stops);
+            TrainPosition position = TrainPosition.compute(named, now);
+            if (!position.isKnown()) continue;
 
-            // Log des statuts de chaque arrêt pour ce trajet
-            StringBuilder stopStatuses = new StringBuilder();
-            for (int i = 0; i < stops.size(); i++) {
-                TrainStop s = stops.get(i);
-                if (i > 0) stopStatuses.append(" | ");
-                stopStatuses.append(resolveStopName(s.getStopName())).append("=").append(s.getStatus());
-            }
-            Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " stops(" + stops.size() + "): " + stopStatuses);
+            String destination = schedule != null && !schedule.getDestination().isEmpty()
+                    ? schedule.getDestination()
+                    : named.get(named.size() - 1).getStopName();
+            int delayMinutes = schedule != null ? schedule.getDelayMinutes() : 0;
 
-            // Chercher entre quels arrêts le train se trouve
-            for (int i = 0; i < stops.size(); i++) {
-                TrainStop stop = stops.get(i);
-                TrainStop.StopStatus status = stop.getStatus();
-
-                if (status == TrainStop.StopStatus.CURRENT) {
-                    currentStop = resolveStopName(stop.getStopName());
-                    if (i + 1 < stops.size()) {
-                        nextStop = resolveStopName(stops.get(i + 1).getStopName());
-                    }
-                    progress = 0.1f; // En gare
-                    Log.d(TAG, "buildTrainsOnMap: " + journeyRef + " → CURRENT trouvé: " + currentStop);
-                    break;
-                }
-            }
-
-            // Si pas trouvé "CURRENT", chercher entre deux arrêts
-            if (currentStop == null) {
-                for (int i = 0; i < stops.size() - 1; i++) {
-                    if (stops.get(i).getStatus() == TrainStop.StopStatus.PASSED
-                            && stops.get(i + 1).getStatus() == TrainStop.StopStatus.UPCOMING) {
-                        currentStop = resolveStopName(stops.get(i).getStopName());
-                        nextStop = resolveStopName(stops.get(i + 1).getStopName());
-
-                        // Calculer la progression entre les deux arrêts
-                        long depTime = stops.get(i).getBestTimeMillis();
-                        long arrTime = stops.get(i + 1).getBestArrivalMillis();
-                        if (depTime > 0 && arrTime > depTime) {
-                            progress = (float)(now - depTime) / (float)(arrTime - depTime);
-                            progress = Math.max(0.1f, Math.min(0.9f, progress));
-                        } else {
-                            progress = 0.5f;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            // Train pas encore parti ou toutes les gares sont UPCOMING
-            if (currentStop == null) {
-                currentStop = resolveStopName(firstStop.getStopName());
-                if (stops.size() > 1) {
-                    nextStop = resolveStopName(stops.get(1).getStopName());
-                }
-                progress = 0f;
-            }
-
-            // Déterminer le statut du train
-            String destination = resolveStopName(lastStop.getStopName());
-            boolean onTime = true;
-            boolean delayed = false;
-            boolean cancelled = false;
-            int delayMinutes = 0;
-
-            // Chercher le TrainSchedule correspondant pour le statut
-            List<TrainSchedule> allSchedules = new ArrayList<>();
-            if (scheduleAdapterAller != null) allSchedules.addAll(scheduleAdapterAller.getSchedules());
-            if (scheduleAdapterRetour != null) allSchedules.addAll(scheduleAdapterRetour.getSchedules());
-
-            for (TrainSchedule schedule : allSchedules) {
-                if (journeyRef.equals(schedule.getJourneyRef())) {
-                    cancelled = schedule.isCancelled();
-                    delayed = schedule.isDelayed();
-                    onTime = schedule.isOnTime();
-                    delayMinutes = schedule.getDelayMinutes();
-                    destination = schedule.getDestination();
-                    break;
-                }
-            }
-
-            if (cancelled) continue; // Ne pas afficher les trains supprimés sur le plan
-
-            // Label court pour le train
-            String label = shortenDestination(destination);
-
-            // Récupérer numéro de train et nom de mission
-            String trainNumber = journeyTrainNumberCache.get(journeyRef);
-            String missionName = journeyMissionNameCache.get(journeyRef);
-            if (trainNumber == null) trainNumber = "";
-            if (missionName == null) missionName = "";
-
-            Log.d(TAG, "buildTrainsOnMap: AJOUTÉ " + journeyRef
-                    + " currentStop=" + currentStop + " nextStop=" + nextStop
-                    + " progress=" + progress + " dest=" + destination
-                    + " train=" + trainNumber + " mission=" + missionName);
+            boolean onMyRoute = MyTrains.servesMyStations(journeyRef, named,
+                    LineNDirection.ALLER, seenAtClamart, seenAtVillepreux);
 
             result.add(new LineMapView.TrainOnMap(
                     journeyRef, destination,
-                    currentStop, nextStop, progress,
-                    onTime, delayed, cancelled, delayMinutes, label,
-                    trainNumber, missionName));
+                    position.getCurrentStopName(), position.getNextStopName(),
+                    position.getSegmentProgress(), delayMinutes, onMyRoute,
+                    valueOrEmpty(journeyTrainNumberCache.get(journeyRef)),
+                    valueOrEmpty(journeyMissionNameCache.get(journeyRef))));
         }
 
+        Log.i(TAG, "buildTrainsOnMap: " + result.size() + " trains sur "
+                + journeyStopsCache.size() + " parcours en cache, dont "
+                + countOnMyRoute(result) + " desservant mes gares");
         return result;
     }
 
-    private static String shortenDestination(String dest) {
-        if (dest == null) return "";
-        String lower = dest.toLowerCase(Locale.FRENCH);
-        if (lower.contains("montparnasse") || lower.contains("paris")) return "Paris";
-        if (lower.contains("rambouillet")) return "Ramb.";
-        if (lower.contains("mantes")) return "Mantes";
-        if (lower.contains("dreux")) return "Dreux";
-        if (lower.contains("plaisir")) return "Plaisir";
-        if (lower.contains("versailles")) return "Versail.";
-        if (lower.contains("villepreux")) return "Villep.";
-        if (dest.length() > 8) return dest.substring(0, 7) + ".";
-        return dest;
+    private static void indexSchedules(Map<String, TrainSchedule> target,
+                                       List<TrainSchedule> schedules) {
+        if (schedules == null) return;
+        for (TrainSchedule schedule : schedules) {
+            String ref = schedule.getJourneyRef();
+            if (ref != null && !ref.isEmpty()) target.put(ref, schedule);
+        }
+    }
+
+    private static int countOnMyRoute(List<LineMapView.TrainOnMap> trains) {
+        int count = 0;
+        for (LineMapView.TrainOnMap train : trains) {
+            if (train.onMyRoute) count++;
+        }
+        return count;
+    }
+
+    private static String valueOrEmpty(String value) {
+        return value != null ? value : "";
     }
 
     private int dpToPx(int dp) {
@@ -1412,7 +1373,7 @@ public class TrainFragment extends Fragment {
 
         int filteredByDest = 0;
         int filteredByTime = 0;
-        int filteredByNoStop = 0;
+        int noArrivalVisit = 0;
         int noAimedTime = 0;
 
         for (Map.Entry<String, StopVisit> entry : originData.entrySet()) {
@@ -1434,20 +1395,23 @@ public class TrainFragment extends Fragment {
                 continue;
             }
 
-            String arrivalTimeStr = "";
-            if (destinationData != null) {
-                StopVisit destVisit = destinationData.get(journeyRef);
-                if (destVisit != null) {
-                    if (destVisit.aimedArrival != null) {
-                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedArrival);
-                    } else if (destVisit.aimedDeparture != null) {
-                        arrivalTimeStr = DateFormats.formatHhmm(destVisit.aimedDeparture);
-                    }
-                } else {
-                    filteredByNoStop++;
-                    // Train gardé sans heure d'arrivée
+            // Le passage à ma gare d'arrivée n'est pas toujours publié : le train
+            // est alors gardé, mais sans heure d'arrivée (mieux vaut un horaire
+            // incomplet qu'un train manquant).
+            StopVisit destination = destinationData != null
+                    ? destinationData.get(journeyRef) : null;
+            if (destinationData != null && destination == null) noArrivalVisit++;
+
+            long arrivalMillis = 0;
+            if (destination != null) {
+                if (destination.aimedArrival != null) {
+                    arrivalMillis = destination.aimedArrival.getTime();
+                } else if (destination.aimedDeparture != null) {
+                    arrivalMillis = destination.aimedDeparture.getTime();
                 }
             }
+            String arrivalTimeStr = arrivalMillis > 0
+                    ? DateFormats.formatHhmm(new Date(arrivalMillis)) : "";
 
             int delayMinutes = 0;
             String expectedTimeStr = "";
@@ -1470,15 +1434,6 @@ public class TrainFragment extends Fragment {
                     + " status=" + origin.departureStatus
                     + " retard=" + delayMinutes + "min"
                     + " voie=" + origin.platform);
-
-            long arrivalMillis = 0;
-            if (destinationData != null) {
-                StopVisit destVisit = destinationData.get(journeyRef);
-                if (destVisit != null) {
-                    if (destVisit.aimedArrival != null) arrivalMillis = destVisit.aimedArrival.getTime();
-                    else if (destVisit.aimedDeparture != null) arrivalMillis = destVisit.aimedDeparture.getTime();
-                }
-            }
 
             String originStation = direction.getOriginName();
 
@@ -1520,7 +1475,7 @@ public class TrainFragment extends Fragment {
                 + " gardés=" + schedules.size()
                 + " filtrés(destination)=" + filteredByDest
                 + " filtrés(horsFenêtre)=" + filteredByTime
-                + " filtrés(pasArrêt)=" + filteredByNoStop
+                + " sansPassageArrivée=" + noArrivalVisit
                 + " sansAimed=" + noAimedTime);
 
         return schedules;
@@ -1602,8 +1557,10 @@ public class TrainFragment extends Fragment {
 
     /**
      * Rejoue le partage "à venir" / "en cours" sur les derniers horaires connus,
-     * sans appel réseau. La liste des départs n'est redessinée que si sa taille a
-     * changé (un train est parti), pour ne pas la rafraîchir toutes les 20 s.
+     * sans appel réseau. La liste des départs n'est redessinée que si elle a
+     * réellement changé, pour ne pas la rafraîchir toutes les 20 s — comparée sur
+     * les trains eux-mêmes et non sur leur nombre : un train qui part pendant
+     * qu'un autre apparaît laisse le compte identique.
      */
     private void repartitionDepartures(List<TrainSchedule> source, List<TrainSchedule> ongoing,
                                        TrainScheduleAdapter adapter, TextView titleView,
@@ -1611,9 +1568,18 @@ public class TrainFragment extends Fragment {
         if (source.isEmpty()) return;
         mergeOngoing(ongoing, source, now);
         List<TrainSchedule> upcoming = OngoingTrains.selectUpcoming(source, now);
-        if (upcoming.size() != adapter.getItemCount()) {
+        if (!sameJourneys(upcoming, adapter.getSchedules())) {
             updateScheduleUI(upcoming, titleView, emptyView, recycler, adapter);
         }
+    }
+
+    /** Deux listes de trajets décrivent-elles les mêmes trains, dans le même ordre ? */
+    private static boolean sameJourneys(List<TrainSchedule> a, List<TrainSchedule> b) {
+        if (a.size() != b.size()) return false;
+        for (int i = 0; i < a.size(); i++) {
+            if (!a.get(i).getJourneyRef().equals(b.get(i).getJourneyRef())) return false;
+        }
+        return true;
     }
 
     /** Retire de {@code source} les trains qui ont quitté mon segment, met en forme les autres. */
@@ -1665,8 +1631,10 @@ public class TrainFragment extends Fragment {
                     : "🕑 Prochains départs · " + count);
         }
         if (schedules == null) {
+            scheduleAdapter.updateSchedules(Collections.<TrainSchedule>emptyList());
             showMessage(emptyView, recycler, "Erreur de chargement des horaires.");
         } else if (schedules.isEmpty()) {
+            scheduleAdapter.updateSchedules(schedules);
             showMessage(emptyView, recycler, "Aucun train prévu\ndans les 2 prochaines heures.");
         } else {
             emptyView.setVisibility(View.GONE);
@@ -1967,6 +1935,11 @@ public class TrainFragment extends Fragment {
 
             JourneyRoutes.purge(journeyStopsCache, System.currentTimeMillis(),
                     JourneyRoutes.MAX_AGE_MS);
+            // Les numéros et missions suivent le sort des parcours : indexés par
+            // journeyRef comme eux, ils grossissaient sans fin tant que le fragment
+            // vivait (un journeyRef par train et par jour).
+            journeyTrainNumberCache.keySet().retainAll(journeyStopsCache.keySet());
+            journeyMissionNameCache.keySet().retainAll(journeyStopsCache.keySet());
 
             Log.i(TAG, "parseEstimatedTimetable: " + totalJourneys + " trajets, "
                     + totalStops + " arrêts au total, "

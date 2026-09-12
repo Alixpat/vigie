@@ -32,6 +32,23 @@
             android:textColor="@color/on_primary"
             android:layout_marginEnd="12dp" />
 
+        <!-- Bascule « tout le trafic » / « seulement les trains qui desservent
+             mes deux gares » : sur un téléphone, une cinquantaine de triangles
+             finit par cacher les deux ou trois qui comptent. -->
+        <TextView
+            android:id="@+id/lineMapFilter"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:textColor="@color/on_primary"
+            android:background="?android:attr/selectableItemBackground"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:layout_marginEnd="8dp" />
+
         <TextView
             android:id="@+id/lineMapClose"
             android:layout_width="wrap_content"
