@@ -959,9 +959,15 @@ public class TrainFragment extends Fragment {
         } else {
             body.append("✅ À l'heure\n");
         }
-        body.append(train.onMyRoute
-                ? "🎯 Dessert Clamart et Villepreux\n"
-                : "➖ Ne dessert pas mes deux gares\n");
+        if (!train.onMyRoute) {
+            body.append("➖ Ne dessert pas mes deux gares\n");
+        } else if (train.routeConfirmed) {
+            body.append("🎯 Dessert Clamart et Villepreux\n");
+        } else {
+            // Une de mes gares est déjà derrière lui : l'API ne la décrit plus,
+            // donc « dessert » serait affirmer ce qu'on ne sait pas.
+            body.append("🎯 Sur mon trajet (desserte non confirmée)\n");
+        }
         body.append("\nPosition : ");
         if (train.currentStopName != null && !train.currentStopName.isEmpty()) {
             body.append(train.currentStopName);
@@ -985,7 +991,9 @@ public class TrainFragment extends Fragment {
      *
      * <p>Deux populations, distinguées par {@link MyTrains} : ceux qui desservent
      * mes deux gares — les seuls que je puisse prendre — et tout le reste du
-     * trafic de la ligne, dessiné en retrait. La position vient de
+     * trafic de la ligne, dessiné en retrait. Un train dont une de mes gares est
+     * déjà derrière lui reste dans la première : le parcours ne la décrit plus,
+     * ce qui ne prouve rien contre lui. La position vient de
      * {@link TrainPosition}, la même que celle des cartes « en circulation » :
      * deux calculs concurrents finissaient par se contredire à l'écran.</p>
      */
@@ -1031,13 +1039,14 @@ public class TrainFragment extends Fragment {
                     : named.get(named.size() - 1).getStopName();
             int delayMinutes = schedule != null ? schedule.getDelayMinutes() : 0;
 
-            boolean onMyRoute = MyTrains.servesMyStations(journeyRef, named,
+            MyTrains.Verdict verdict = MyTrains.verdict(journeyRef, named,
                     LineNDirection.ALLER, seenAtClamart, seenAtVillepreux);
 
             result.add(new LineMapView.TrainOnMap(
                     journeyRef, destination,
                     position.getCurrentStopName(), position.getNextStopName(),
-                    position.getSegmentProgress(), delayMinutes, onMyRoute,
+                    position.getSegmentProgress(), delayMinutes,
+                    verdict.isMine(), verdict == MyTrains.Verdict.SERVES,
                     valueOrEmpty(journeyTrainNumberCache.get(journeyRef)),
                     valueOrEmpty(journeyMissionNameCache.get(journeyRef))));
         }
