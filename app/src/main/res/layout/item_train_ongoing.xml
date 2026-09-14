@@ -53,6 +53,21 @@
                     android:layout_height="wrap_content"
                     android:textSize="12sp"
                     android:textStyle="bold" />
+
+                <!-- Epingle : suivre ce train -->
+                <TextView
+                    android:id="@+id/ongoingPin"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="📌"
+                    android:textSize="16sp"
+                    android:paddingStart="10dp"
+                    android:paddingEnd="2dp"
+                    android:paddingTop="4dp"
+                    android:paddingBottom="4dp"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:contentDescription="Épingler ce train" />
             </LinearLayout>
 
             <!-- Position a l'instant T -->

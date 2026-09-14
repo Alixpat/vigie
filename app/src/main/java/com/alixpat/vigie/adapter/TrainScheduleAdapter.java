@@ -27,9 +27,15 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
 
     private final List<TrainSchedule> schedules = new ArrayList<>();
     private OnTrainClickListener clickListener;
+    private TrainPinListener pinListener;
 
     public void setOnTrainClickListener(OnTrainClickListener listener) {
         this.clickListener = listener;
+    }
+
+    /** Sans listener, l'épingle reste invisible : la liste ne sait rien des suivis. */
+    public void setPinListener(TrainPinListener listener) {
+        this.pinListener = listener;
     }
 
     public void updateSchedules(List<TrainSchedule> newData) {
@@ -63,6 +69,8 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         int textPrimary = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary);
         int textHint = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_hint);
         int warning = ContextCompat.getColor(holder.itemView.getContext(), R.color.status_warning);
+
+        PinIcons.bind(holder.pin, schedule, pinListener);
 
         holder.destination.setText(schedule.getDestination());
         holder.status.setText(schedule.getStatusLabel());
@@ -169,6 +177,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
         final TextView trainInfo;
         final TextView platform;
         final TextView status;
+        final TextView pin;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -181,6 +190,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             trainInfo = itemView.findViewById(R.id.scheduleTrainInfo);
             platform = itemView.findViewById(R.id.schedulePlatform);
             status = itemView.findViewById(R.id.scheduleStatus);
+            pin = itemView.findViewById(R.id.schedulePin);
         }
     }
 }

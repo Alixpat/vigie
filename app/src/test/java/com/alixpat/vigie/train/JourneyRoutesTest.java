@@ -51,6 +51,43 @@ public class JourneyRoutesTest {
     }
 
     @Test
+    public void keepsTheObservedTimeWhenTheNewResponseOnlyCarriesTheTimetable() {
+        // Une fois la gare franchie, IDFM peut ne plus publier que le théorique.
+        // Perdre l'heure estimée déjà vue, c'est perdre l'heure de passage réelle
+        // — celle que l'historique des passages affiche.
+        long aimed = T0 + 10 * MIN;
+        long observed = T0 + 13 * MIN;
+        List<TrainStop> known = Arrays.asList(
+                new TrainStop("Versailles Chantiers", "STIF:StopPoint:Q:43219:",
+                        aimed, observed, aimed, observed, "B", false, false));
+        List<TrainStop> fresh = Arrays.asList(
+                new TrainStop("Versailles Chantiers", "STIF:StopPoint:Q:43219:",
+                        aimed, 0, aimed, 0, "", false, false));
+
+        List<TrainStop> merged = JourneyRoutes.merge(known, fresh);
+
+        assertEquals(1, merged.size());
+        assertEquals(observed, merged.get(0).getExpectedArrivalMillis());
+        assertEquals(observed, merged.get(0).getExpectedDepartureMillis());
+        assertEquals("B", merged.get(0).getPlatformName());
+    }
+
+    @Test
+    public void stillPrefersTheFreshEstimateWhenThereIsOne() {
+        long aimed = T0 + 10 * MIN;
+        List<TrainStop> known = Arrays.asList(
+                new TrainStop("Versailles Chantiers", "STIF:StopPoint:Q:43219:",
+                        aimed, T0 + 11 * MIN, aimed, T0 + 11 * MIN, "", false, false));
+        List<TrainStop> fresh = Arrays.asList(
+                new TrainStop("Versailles Chantiers", "STIF:StopPoint:Q:43219:",
+                        aimed, T0 + 16 * MIN, aimed, T0 + 16 * MIN, "", false, false));
+
+        List<TrainStop> merged = JourneyRoutes.merge(known, fresh);
+
+        assertEquals(T0 + 16 * MIN, merged.get(0).getExpectedArrivalMillis());
+    }
+
+    @Test
     public void matchesStopsOnTheirRefEvenWhenTheNameIsResolvedLater() {
         List<TrainStop> known = Arrays.asList(
                 stop("Arrêt 43111", "STIF:StopPoint:Q:43111:", -10),

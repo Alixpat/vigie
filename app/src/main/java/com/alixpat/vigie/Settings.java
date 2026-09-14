@@ -3,6 +3,10 @@ package com.alixpat.vigie;
 import android.content.Context;
 import android.content.SharedPreferences;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Set;
+
 /**
  * Single SharedPreferences-backed settings store for the whole app.
  * Holds broker (IP/port/credentials) plus integration tokens (IDFM, TomTom).
@@ -19,6 +23,7 @@ public class Settings {
     private static final String KEY_IDFM_TOKEN = "idfm_token";
     private static final String KEY_TOMTOM_API_KEY = "tomtom_api_key";
     private static final String KEY_ALARM_ENABLED = "alarm_enabled";
+    private static final String KEY_PINNED_TRAINS = "pinned_trains";
 
     private static final String DEFAULT_IP = "192.168.1.100";
     private static final int DEFAULT_PORT = 1883;
@@ -90,6 +95,24 @@ public class Settings {
     public void saveTomTomApiKey(String apiKey) {
         prefs.edit()
                 .putString(KEY_TOMTOM_API_KEY, apiKey)
+                .apply();
+    }
+
+    /**
+     * Les trains épinglés, encodés par
+     * {@link com.alixpat.vigie.train.PinnedTrains#encode()}. Un Set de
+     * SharedPreferences ne garde pas l'ordre : c'est l'instant d'épinglage porté
+     * par chaque entrée qui le rétablit à la relecture.
+     */
+    public Set<String> getPinnedTrains() {
+        return prefs.getStringSet(KEY_PINNED_TRAINS, Collections.<String>emptySet());
+    }
+
+    public void savePinnedTrains(Set<String> entries) {
+        prefs.edit()
+                // Copie défensive : SharedPreferences conserve la référence du Set
+                // qu'on lui passe et le relit tel quel dans la même session.
+                .putStringSet(KEY_PINNED_TRAINS, new HashSet<>(entries))
                 .apply();
     }
 
