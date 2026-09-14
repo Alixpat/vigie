@@ -19,6 +19,7 @@ import com.alixpat.vigie.Settings;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainOngoingAdapter;
+import com.alixpat.vigie.adapter.TrainPinListener;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
 import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.OngoingTrain;
@@ -31,6 +32,8 @@ import com.alixpat.vigie.train.JourneyRoutes;
 import com.alixpat.vigie.train.LineNDirection;
 import com.alixpat.vigie.train.MyTrains;
 import com.alixpat.vigie.train.OngoingTrains;
+import com.alixpat.vigie.train.PassageHistory;
+import com.alixpat.vigie.train.PinnedTrains;
 import com.alixpat.vigie.train.StopVisit;
 import com.alixpat.vigie.train.TrainPosition;
 import com.alixpat.vigie.util.DateFormats;
@@ -54,9 +57,11 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -103,6 +108,34 @@ public class TrainFragment extends Fragment {
     private final List<TrainIncident> lastPerturbations = new ArrayList<>();
     private final List<TrainIncident> lastTravaux = new ArrayList<>();
     private boolean incidentsListVisible = false;
+
+    /**
+     * Les trains que je suis. Épingler un train le remonte dans une carte à part,
+     * en haut de l'onglet : plus besoin de le rechercher dans sa carte de sens à
+     * chaque rafraîchissement. Persisté par {@link Settings}, purgé tout seul
+     * (un journeyRef IDFM est daté, il ne survit pas à la journée).
+     */
+    private PinnedTrains pinnedTrains = new PinnedTrains();
+
+    private MaterialCardView pinnedCard;
+    private TextView pinnedTitle;
+    private TextView pinnedLastUpdate;
+    private TextView pinnedEmpty;
+    private RecyclerView pinnedRecyclerView;
+    private TrainOngoingAdapter pinnedAdapter;
+
+    /** Branche les épingles des listes sur {@link #pinnedTrains}. */
+    private final TrainPinListener pinListener = new TrainPinListener() {
+        @Override
+        public boolean isPinned(TrainSchedule schedule) {
+            return schedule != null && pinnedTrains.isPinned(schedule.getJourneyRef());
+        }
+
+        @Override
+        public void onPinToggled(TrainSchedule schedule) {
+            togglePin(schedule);
+        }
+    };
 
     // Une carte par sens, et dans chaque carte deux divisions : les prochains
     // départs puis les trains en circulation dans ce sens. Les deux sens ne
@@ -228,6 +261,18 @@ public class TrainFragment extends Fragment {
         travauxRecyclerView.setLayoutManager(new LinearLayoutManager(requireContext()));
         travauxRecyclerView.setAdapter(travauxAdapter);
 
+        pinnedTrains = PinnedTrains.decode(new Settings(requireContext()).getPinnedTrains(),
+                System.currentTimeMillis());
+        pinnedCard = view.findViewById(R.id.pinnedCard);
+        pinnedTitle = view.findViewById(R.id.pinnedTitle);
+        pinnedLastUpdate = view.findViewById(R.id.pinnedLastUpdate);
+        pinnedEmpty = view.findViewById(R.id.pinnedEmpty);
+        pinnedRecyclerView = view.findViewById(R.id.pinnedRecyclerView);
+        // Les suivis mélangent les deux sens : contrairement aux cartes de sens,
+        // l'item doit dire dans quel sens roule le train.
+        pinnedAdapter = createOngoingAdapter(pinnedRecyclerView);
+        pinnedAdapter.setShowDirection(true);
+
         ongoingRecyclerViewAller = view.findViewById(R.id.ongoingRecyclerViewAller);
         ongoingTitleAller = view.findViewById(R.id.ongoingTitleAller);
         ongoingLastUpdateAller = view.findViewById(R.id.ongoingLastUpdateAller);
@@ -260,6 +305,8 @@ public class TrainFragment extends Fragment {
 
         scheduleAdapterAller.setOnTrainClickListener(this::showTrainDetailDialog);
         scheduleAdapterRetour.setOnTrainClickListener(this::showTrainDetailDialog);
+        scheduleAdapterAller.setPinListener(pinListener);
+        scheduleAdapterRetour.setPinListener(pinListener);
 
         View lineMapButton = view.findViewById(R.id.lineMapButton);
         if (lineMapButton != null) {
@@ -278,6 +325,7 @@ public class TrainFragment extends Fragment {
         recycler.setLayoutManager(new LinearLayoutManager(requireContext()));
         recycler.setAdapter(adapter);
         adapter.setOnOngoingTrainClickListener(train -> showTrainDetailDialog(train.getSchedule()));
+        adapter.setPinListener(pinListener);
         return adapter;
     }
 
@@ -443,6 +491,16 @@ public class TrainFragment extends Fragment {
             container.addView(positionView);
         }
 
+        addPassageHistory(container, schedule, stops, now);
+
+        TextView routeHeader = new TextView(requireContext());
+        routeHeader.setText("\uD83D\uDE89 Parcours complet");
+        routeHeader.setTextSize(14);
+        routeHeader.setTypeface(null, Typeface.BOLD);
+        routeHeader.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
+        routeHeader.setPadding(0, dpToPx(4), 0, dpToPx(6));
+        container.addView(routeHeader);
+
         for (int i = 0; i < stops.size(); i++) {
             TrainStop stop = stops.get(i);
             TrainStop.StopStatus status = stop.getStatus();
@@ -551,11 +609,121 @@ public class TrainFragment extends Fragment {
             title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
         }
 
+        showTrainDialog(title, scrollView, schedule);
+    }
+
+    /** Le dialogue d'un train, avec la bascule de suivi en bouton neutre. */
+    private void showTrainDialog(String title, View content, TrainSchedule schedule) {
+        boolean pinned = pinnedTrains.isPinned(schedule.getJourneyRef());
         new AlertDialog.Builder(requireContext())
                 .setTitle(title)
-                .setView(scrollView)
+                .setView(content)
+                .setNeutralButton(pinned ? "\uD83D\uDCCC Ne plus suivre" : "\uD83D\uDCCC Suivre",
+                        (dialog, which) -> togglePin(schedule))
                 .setPositiveButton("Fermer", null)
                 .show();
+    }
+
+    /**
+     * Historique des passages du train sur mon tronçon : une ligne par gare,
+     * l'heure théorique et l'heure réalisée côte à côte.
+     *
+     * <p>« Réalisée » n'a de sens qu'une fois la gare franchie ; avant, c'est une
+     * prévision. Les deux viennent du même champ IDFM, donc l'affichage doit les
+     * distinguer lui-même — ici par la couleur et un libellé de colonne qui
+     * change de ton (gris estompé tant que le passage est à venir).</p>
+     */
+    private void addPassageHistory(LinearLayout container, TrainSchedule schedule,
+                                   List<TrainStop> stops, long now) {
+        LineNDirection direction = directionOf(schedule);
+        List<PassageHistory.Passage> passages =
+                PassageHistory.build(resolveStopNames(stops), direction, now);
+        if (passages.isEmpty()) return;
+
+        TextView header = new TextView(requireContext());
+        header.setText("\uD83D\uDCCB Passages sur mon trajet \u00B7 "
+                + direction.getOriginName() + " \u2192 " + direction.getDestinationName());
+        header.setTextSize(14);
+        header.setTypeface(null, Typeface.BOLD);
+        header.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
+        header.setPadding(0, dpToPx(4), 0, dpToPx(4));
+        container.addView(header);
+
+        container.addView(passageRow("Gare", "Théorique", "Réel", 0xFF9E9E9E, true));
+
+        for (PassageHistory.Passage passage : passages) {
+            String aimed = passage.getAimedMillis() > 0
+                    ? DateFormats.formatHhmm(new Date(passage.getAimedMillis())) : "--:--";
+
+            String actual;
+            if (passage.hasActual()) {
+                actual = DateFormats.formatHhmm(new Date(passage.getActualMillis()));
+                int delay = passage.getDelayMinutes();
+                if (delay != 0) actual += (delay > 0 ? " +" : " ") + delay;
+            } else {
+                // Rien d'annoncé : le théorique fait foi, on ne l'invente pas en réel.
+                actual = passage.isPassed() ? "\u2713" : "\u2014";
+            }
+
+            int color;
+            if (!passage.isPassed()) {
+                color = 0xFF9E9E9E;                       // encore à venir : prévision
+            } else if (passage.getDelayMinutes() > 0) {
+                color = 0xFFFF9800;                       // passé en retard
+            } else {
+                color = 0xFF4CAF50;                       // passé à l'heure
+            }
+            container.addView(passageRow(passage.getStationName(), aimed, actual, color, false));
+        }
+
+        View divider = new View(requireContext());
+        divider.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.divider));
+        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
+        dividerParams.topMargin = dpToPx(10);
+        dividerParams.bottomMargin = dpToPx(10);
+        divider.setLayoutParams(dividerParams);
+        container.addView(divider);
+    }
+
+    /** Une ligne du tableau des passages : gare, heure théorique, heure réelle. */
+    private LinearLayout passageRow(String station, String aimed, String actual,
+                                    int actualColor, boolean isHeader) {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dpToPx(2), 0, dpToPx(2));
+
+        int textPrimary = ContextCompat.getColor(requireContext(), R.color.text_primary);
+        int textHint = ContextCompat.getColor(requireContext(), R.color.text_hint);
+
+        TextView nameView = new TextView(requireContext());
+        nameView.setText(station);
+        nameView.setTextSize(isHeader ? 11 : 13);
+        nameView.setSingleLine(true);
+        nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        nameView.setTextColor(isHeader ? textHint : textPrimary);
+        nameView.setLayoutParams(new LinearLayout.LayoutParams(
+                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+        row.addView(nameView);
+
+        TextView aimedView = new TextView(requireContext());
+        aimedView.setText(aimed);
+        aimedView.setTextSize(isHeader ? 11 : 13);
+        aimedView.setGravity(android.view.Gravity.END);
+        aimedView.setMinWidth(dpToPx(52));
+        aimedView.setTextColor(isHeader ? textHint : textPrimary);
+        row.addView(aimedView);
+
+        TextView actualView = new TextView(requireContext());
+        actualView.setText(actual);
+        actualView.setTextSize(isHeader ? 11 : 13);
+        actualView.setGravity(android.view.Gravity.END);
+        actualView.setMinWidth(dpToPx(64));
+        actualView.setTextColor(isHeader ? textHint : actualColor);
+        if (!isHeader) actualView.setTypeface(null, Typeface.BOLD);
+        row.addView(actualView);
+
+        return row;
     }
 
     private void showFallbackDialog(TrainSchedule schedule) {
@@ -683,11 +851,7 @@ public class TrainFragment extends Fragment {
             title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
         }
 
-        new AlertDialog.Builder(requireContext())
-                .setTitle(title)
-                .setView(scrollView)
-                .setPositiveButton("Fermer", null)
-                .show();
+        showTrainDialog(title, scrollView, schedule);
     }
 
     // ==================== PLAN DE LA LIGNE ====================
@@ -1523,9 +1687,101 @@ public class TrainFragment extends Fragment {
                 ongoingTitleRetour, ongoingLastUpdateRetour, ongoingRecyclerViewRetour,
                 ongoingEmptyRetour, now);
 
+        // Les trains suivis se lisent dans les mêmes listes, une fois celles-ci
+        // rafraîchies : la carte des suivis vient donc après, pas avant.
+        updatePinnedSection(now);
+
         // Le plan de la ligne ouvert suit le même tick : sinon il fige les trains
         // à l'instant où on l'a ouvert.
         refreshOpenLineMap();
+    }
+
+    /**
+     * Redessine la carte des trains suivis.
+     *
+     * <p>Un train épinglé peut être encore à quai ou déjà en route : les deux se
+     * décrivent avec la même carte que la section « En circulation » (position à
+     * l'instant T, prochain arrêt, arrivée estimée), donc on n'en fait pas deux
+     * présentations. {@link OngoingTrains#describe} sait dire « pas encore parti »
+     * aussi bien que « entre Meudon et Chaville ».</p>
+     *
+     * <p>Un train suivi est cherché d'abord parmi les trains en circulation, puis
+     * parmi les prochains départs : la première liste porte la position réelle, la
+     * seconde n'a que les horaires. Trouvé dans l'une, il n'est pas repris dans
+     * l'autre.</p>
+     */
+    private void updatePinnedSection(long now) {
+        if (pinnedCard == null) return;
+
+        pinnedTrains.purge(now);
+        if (pinnedTrains.isEmpty()) {
+            pinnedCard.setVisibility(View.GONE);
+            pinnedAdapter.updateTrains(Collections.<OngoingTrain>emptyList());
+            return;
+        }
+
+        List<OngoingTrain> display = new ArrayList<>();
+        Set<String> already = new HashSet<>();
+        collectPinned(display, already, ongoingAller, LineNDirection.ALLER, now);
+        collectPinned(display, already, ongoingRetour, LineNDirection.RETOUR, now);
+        collectPinned(display, already, lastAllerSchedules, LineNDirection.ALLER, now);
+        collectPinned(display, already, lastRetourSchedules, LineNDirection.RETOUR, now);
+
+        // Même ordre qu'ailleurs : le prochain à arriver chez moi en tête.
+        Collections.sort(display, (a, b) -> Long.compare(
+                OngoingTrains.effectiveArrivalMillis(a.getSchedule()),
+                OngoingTrains.effectiveArrivalMillis(b.getSchedule())));
+
+        pinnedCard.setVisibility(View.VISIBLE);
+        pinnedTitle.setText(display.isEmpty()
+                ? "📌 Trains suivis"
+                : "📌 Trains suivis · " + display.size());
+        pinnedLastUpdate.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
+        pinnedRecyclerView.setVisibility(display.isEmpty() ? View.GONE : View.VISIBLE);
+        // La carte reste visible même sans train à montrer : un suivi qui
+        // s'évapore en silence ferait croire à un oubli de l'app.
+        pinnedEmpty.setVisibility(display.isEmpty() ? View.VISIBLE : View.GONE);
+        pinnedAdapter.updateTrains(display);
+    }
+
+    /** Ajoute les trains suivis de {@code source} qui ne sont pas déjà affichés. */
+    private void collectPinned(List<OngoingTrain> target, Set<String> already,
+                               List<TrainSchedule> source, LineNDirection direction, long now) {
+        if (source == null) return;
+        for (TrainSchedule schedule : source) {
+            String journeyRef = schedule.getJourneyRef();
+            if (!pinnedTrains.isPinned(journeyRef) || !already.add(journeyRef)) continue;
+            List<TrainStop> stops = resolveStopNames(journeyStopsCache.get(journeyRef));
+            target.add(OngoingTrains.describe(schedule, direction, stops, now));
+        }
+    }
+
+    /**
+     * Épingle / désépingle un train, persiste le choix et redessine.
+     *
+     * <p>Les listes de départs sont redessinées à la main : elles ne se
+     * rafraîchissent d'elles-mêmes que lorsque leur contenu change, or ici seule
+     * l'épingle a changé.</p>
+     */
+    private void togglePin(TrainSchedule schedule) {
+        if (schedule == null || !isAdded()) return;
+        pinnedTrains.toggle(schedule.getJourneyRef(), System.currentTimeMillis());
+        new Settings(requireContext()).savePinnedTrains(pinnedTrains.encode());
+        scheduleAdapterAller.notifyDataSetChanged();
+        scheduleAdapterRetour.notifyDataSetChanged();
+        updateOngoingSection();
+    }
+
+    /**
+     * Sens de circulation d'un trajet, lu sur sa gare de départ — celle-ci vient
+     * toujours de {@link LineNDirection#getOriginName()}, quelle que soit la
+     * source du trajet.
+     */
+    private static LineNDirection directionOf(TrainSchedule schedule) {
+        String origin = schedule != null ? schedule.getOriginStation() : null;
+        String normalized = LineNStation.normalize(origin != null ? origin : "");
+        String retourOrigin = LineNStation.normalize(LineNDirection.RETOUR.getOriginName());
+        return normalized.equals(retourOrigin) ? LineNDirection.RETOUR : LineNDirection.ALLER;
     }
 
     /**

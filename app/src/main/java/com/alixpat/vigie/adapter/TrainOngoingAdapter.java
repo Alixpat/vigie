@@ -28,10 +28,16 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
 
     private final List<OngoingTrain> trains = new ArrayList<>();
     private OnOngoingTrainClickListener clickListener;
+    private TrainPinListener pinListener;
     private boolean showDirection = true;
 
     public void setOnOngoingTrainClickListener(OnOngoingTrainClickListener listener) {
         this.clickListener = listener;
+    }
+
+    /** Sans listener, l'épingle reste invisible : la liste ne sait rien des suivis. */
+    public void setPinListener(TrainPinListener listener) {
+        this.pinListener = listener;
     }
 
     /**
@@ -72,6 +78,8 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
             holder.direction.setText(terminus == null || terminus.isEmpty()
                     ? "" : "→ " + terminus);
         }
+        PinIcons.bind(holder.pin, train.getSchedule(), pinListener);
+
         holder.status.setText(train.getSchedule().getStatusLabel());
         holder.status.setTextColor(train.getSchedule().getStatusColor());
         holder.stripe.setBackgroundColor(train.getSchedule().getStatusColor());
@@ -130,6 +138,7 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
         final View stripe;
         final TextView direction;
         final TextView status;
+        final TextView pin;
         final TextView position;
         final ProgressBar progress;
         final TextView nextStop;
@@ -142,6 +151,7 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
             stripe = itemView.findViewById(R.id.ongoingStripe);
             direction = itemView.findViewById(R.id.ongoingDirection);
             status = itemView.findViewById(R.id.ongoingStatus);
+            pin = itemView.findViewById(R.id.ongoingPin);
             position = itemView.findViewById(R.id.ongoingPosition);
             progress = itemView.findViewById(R.id.ongoingProgress);
             nextStop = itemView.findViewById(R.id.ongoingNextStop);

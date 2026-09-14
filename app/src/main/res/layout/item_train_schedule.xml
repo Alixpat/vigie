@@ -116,6 +116,21 @@
             android:textSize="12sp"
             android:textStyle="bold" />
 
+        <!-- Epingle : suivre ce train -->
+        <TextView
+            android:id="@+id/schedulePin"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📌"
+            android:textSize="16sp"
+            android:paddingStart="10dp"
+            android:paddingEnd="2dp"
+            android:paddingTop="6dp"
+            android:paddingBottom="6dp"
+            android:clickable="true"
+            android:focusable="true"
+            android:contentDescription="Épingler ce train" />
+
     </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

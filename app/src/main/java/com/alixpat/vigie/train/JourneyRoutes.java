@@ -84,8 +84,54 @@ public final class JourneyRoutes {
             if (stop == null) continue;
             String key = keyOf(stop);
             if (key.isEmpty()) continue;
-            byStop.put(key, stop);
+            byStop.put(key, mergeStop(byStop.get(key), stop));
         }
+    }
+
+    /**
+     * Reprend la version fraîche d'un arrêt sans perdre ce que l'ancienne savait.
+     *
+     * <p>Écraser purement et simplement ferait disparaître l'heure réelle de
+     * passage : une fois l'arrêt franchi, IDFM cesse souvent de publier son heure
+     * estimée et ne renvoie plus que le théorique. Or c'est cette heure estimée,
+     * figée au dernier rafraîchissement avant le passage, qui dit à quelle heure
+     * le train est réellement passé (cf. {@link PassageHistory}).</p>
+     */
+    private static TrainStop mergeStop(TrainStop known, TrainStop fresh) {
+        if (known == null) return fresh;
+
+        long aimedArrival = firstPositive(fresh.getAimedArrivalMillis(), known.getAimedArrivalMillis());
+        long expectedArrival = firstPositive(fresh.getExpectedArrivalMillis(),
+                known.getExpectedArrivalMillis());
+        long aimedDeparture = firstPositive(fresh.getAimedDepartureMillis(),
+                known.getAimedDepartureMillis());
+        long expectedDeparture = firstPositive(fresh.getExpectedDepartureMillis(),
+                known.getExpectedDepartureMillis());
+        String stopRef = firstNonEmpty(fresh.getStopRef(), known.getStopRef());
+        String stopName = firstNonEmpty(fresh.getStopName(), known.getStopName());
+        String platform = firstNonEmpty(fresh.getPlatformName(), known.getPlatformName());
+
+        boolean sameAsFresh = aimedArrival == fresh.getAimedArrivalMillis()
+                && expectedArrival == fresh.getExpectedArrivalMillis()
+                && aimedDeparture == fresh.getAimedDepartureMillis()
+                && expectedDeparture == fresh.getExpectedDepartureMillis()
+                && stopRef.equals(fresh.getStopRef())
+                && stopName.equals(fresh.getStopName())
+                && platform.equals(fresh.getPlatformName() != null ? fresh.getPlatformName() : "");
+        if (sameAsFresh) return fresh;
+
+        return new TrainStop(stopName, stopRef, aimedArrival, expectedArrival,
+                aimedDeparture, expectedDeparture, platform,
+                fresh.isDeparture(), fresh.isArrival());
+    }
+
+    private static long firstPositive(long preferred, long fallback) {
+        return preferred > 0 ? preferred : fallback;
+    }
+
+    private static String firstNonEmpty(String preferred, String fallback) {
+        if (preferred != null && !preferred.isEmpty()) return preferred;
+        return fallback != null ? fallback : "";
     }
 
     /**
