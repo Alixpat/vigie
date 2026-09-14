@@ -31,13 +31,32 @@ public final class LineSegment {
     }
 
     /**
+     * L'axe Paris → Mantes en entier, dans l'ordre géographique.
+     *
+     * <p>Sert à situer une gare par rapport au parcours d'un train : savoir si
+     * elle est <b>avant</b> le début du parcours connu (donc effacée par la
+     * troncature de l'{@code estimated-timetable}) ou <b>dedans</b> (donc
+     * volontairement sautée). Les deux cas n'ont pas la même conclusion, et les
+     * confondre revient à déclarer « ne dessert pas mes gares » un train dont on
+     * a simplement raté le début.</p>
+     */
+    public static LineSegment axis() {
+        return new LineSegment(Collections.unmodifiableList(axisStations()));
+    }
+
+    private static List<String> axisStations() {
+        List<String> axis = new ArrayList<>();
+        for (LineNStation station : LineNStation.getTrunk()) axis.add(station.getName());
+        for (LineNStation station : LineNStation.getBranchMantes()) axis.add(station.getName());
+        return axis;
+    }
+
+    /**
      * @return le corridor de {@code originName} à {@code destinationName}, dans
      *         cet ordre ; vide si l'un des deux n'est pas sur l'axe Paris → Mantes
      */
     public static LineSegment between(String originName, String destinationName) {
-        List<String> axis = new ArrayList<>();
-        for (LineNStation station : LineNStation.getTrunk()) axis.add(station.getName());
-        for (LineNStation station : LineNStation.getBranchMantes()) axis.add(station.getName());
+        List<String> axis = axisStations();
 
         int from = indexIn(axis, originName);
         int to = indexIn(axis, destinationName);

@@ -143,13 +143,21 @@ public class LineMapView extends View {
         public final int delayMinutes;
         /** Ce train dessert-il mes deux gares ? (cf. {@code MyTrains}) */
         public final boolean onMyRoute;
+        /**
+         * La desserte est-elle prouvée, ou seulement déduite ? L'
+         * {@code estimated-timetable} ne décrivant que les arrêts restants, un
+         * train qui a déjà franchi une de mes gares ne permet plus de le dire —
+         * il est compté comme mien, mais le détail doit l'annoncer comme une
+         * déduction et non comme un fait.
+         */
+        public final boolean routeConfirmed;
         public final String trainNumber;
         public final String missionName;
 
         public TrainOnMap(String journeyRef, String destination,
                           String currentStopName, String nextStopName,
                           float progressBetweenStops, int delayMinutes,
-                          boolean onMyRoute,
+                          boolean onMyRoute, boolean routeConfirmed,
                           String trainNumber, String missionName) {
             this.journeyRef = journeyRef;
             this.destination = destination;
@@ -158,6 +166,7 @@ public class LineMapView extends View {
             this.progressBetweenStops = progressBetweenStops;
             this.delayMinutes = delayMinutes;
             this.onMyRoute = onMyRoute;
+            this.routeConfirmed = routeConfirmed;
             this.trainNumber = trainNumber;
             this.missionName = missionName;
         }
