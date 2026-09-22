@@ -44,8 +44,8 @@ public class MyTrainsTest {
 
     @Test
     public void trainServingBothStationsIsMine() {
-        assertTrue(MyTrains.servesMyStations(myTrain(), LineNDirection.ALLER, false, false));
-        assertTrue(MyTrains.servesMyStations(myTrain(), LineNDirection.RETOUR, false, false));
+        assertTrue(MyTrains.verdict(myTrain(), LineNDirection.ALLER, false, false).isMine());
+        assertTrue(MyTrains.verdict(myTrain(), LineNDirection.RETOUR, false, false).isMine());
     }
 
     @Test
@@ -57,7 +57,7 @@ public class MyTrainsTest {
                 stop("Trappes", "STIF:StopPoint:Q:43300:", 25),
                 stop("Rambouillet", "STIF:StopPoint:Q:43400:", 45));
 
-        assertFalse(MyTrains.servesMyStations(rambouillet, LineNDirection.ALLER, false, false));
+        assertFalse(MyTrains.verdict(rambouillet, LineNDirection.ALLER, false, false).isMine());
     }
 
     @Test
@@ -68,7 +68,7 @@ public class MyTrainsTest {
                 stop("Versailles Chantiers", "STIF:StopPoint:Q:43150:", 15),
                 stop("Mantes-la-Jolie", "STIF:StopPoint:Q:43500:", 50));
 
-        assertFalse(MyTrains.servesMyStations(direct, LineNDirection.ALLER, false, false));
+        assertFalse(MyTrains.verdict(direct, LineNDirection.ALLER, false, false).isMine());
     }
 
     @Test
@@ -81,7 +81,7 @@ public class MyTrainsTest {
                 stop("Versailles Chantiers", "STIF:StopPoint:Q:43150:", 15),
                 stop("Villepreux - Les Clayes", "STIF:StopPoint:Q:43221:", 30));
 
-        assertTrue(MyTrains.servesMyStations(remaining, LineNDirection.ALLER, false, false));
+        assertTrue(MyTrains.verdict(remaining, LineNDirection.ALLER, false, false).isMine());
         assertEquals(MyTrains.Verdict.PROBABLY,
                 MyTrains.verdict(remaining, LineNDirection.ALLER, false, false));
     }
@@ -105,7 +105,7 @@ public class MyTrainsTest {
                 stop("Clamart", "STIF:StopPoint:Q:43111:", 25),
                 stop("Paris Montparnasse", "STIF:StopPoint:Q:43000:", 35));
 
-        assertTrue(MyTrains.servesMyStations(remaining, LineNDirection.RETOUR, false, false));
+        assertTrue(MyTrains.verdict(remaining, LineNDirection.RETOUR, false, false).isMine());
     }
 
     @Test
@@ -117,7 +117,7 @@ public class MyTrainsTest {
                 stop("Versailles Chantiers", "STIF:StopPoint:Q:43150:", 15),
                 stop("Villepreux - Les Clayes", "STIF:StopPoint:Q:43221:", 30));
 
-        assertFalse(MyTrains.servesMyStations(skipping, LineNDirection.ALLER, false, false));
+        assertFalse(MyTrains.verdict(skipping, LineNDirection.ALLER, false, false).isMine());
         assertEquals(MyTrains.Service.SKIPPED,
                 MyTrains.serviceAt(skipping, "Clamart", "43111"));
     }
@@ -132,7 +132,7 @@ public class MyTrainsTest {
                 stop("Trappes", "STIF:StopPoint:Q:43300:", 15),
                 stop("Rambouillet", "STIF:StopPoint:Q:43400:", 35));
 
-        assertFalse(MyTrains.servesMyStations(rambouillet, LineNDirection.ALLER, false, false));
+        assertFalse(MyTrains.verdict(rambouillet, LineNDirection.ALLER, false, false).isMine());
     }
 
     @Test
@@ -145,7 +145,7 @@ public class MyTrainsTest {
 
         assertEquals(MyTrains.Service.UNKNOWN, MyTrains.serviceAt(vague, "Clamart", "43111"));
         assertEquals(MyTrains.Service.UNKNOWN, MyTrains.serviceAt(null, "Clamart", "43111"));
-        assertFalse(MyTrains.servesMyStations(vague, LineNDirection.ALLER, false, false));
+        assertFalse(MyTrains.verdict(vague, LineNDirection.ALLER, false, false).isMine());
     }
 
     @Test
@@ -156,22 +156,22 @@ public class MyTrainsTest {
                 stop("Arrêt 43111", "STIF:StopPoint:Q:43111:", 0),
                 stop("Arrêt 43221", "STIF:StopPoint:Q:43221:", 30));
 
-        assertTrue(MyTrains.servesMyStations(anonymous, LineNDirection.ALLER, false, false));
+        assertTrue(MyTrains.verdict(anonymous, LineNDirection.ALLER, false, false).isMine());
     }
 
     @Test
     public void unknownRouteWithoutMemoryIsNotMine() {
-        assertFalse(MyTrains.servesMyStations(null, LineNDirection.ALLER, false, false));
-        assertFalse(MyTrains.servesMyStations("J1", null, LineNDirection.ALLER,
-                new HashMap<String, StopVisit>(), new HashMap<String, StopVisit>()));
+        assertFalse(MyTrains.verdict(null, LineNDirection.ALLER, false, false).isMine());
+        assertFalse(MyTrains.verdict("J1", null, LineNDirection.ALLER,
+                new HashMap<String, StopVisit>(), new HashMap<String, StopVisit>()).isMine());
     }
 
     @Test
     public void bothMemoriesTogetherAreEnough() {
-        assertTrue(MyTrains.servesMyStations("J1", null, LineNDirection.ALLER,
-                seen("J1"), seen("J1")));
+        assertTrue(MyTrains.verdict("J1", null, LineNDirection.ALLER,
+                seen("J1"), seen("J1")).isMine());
         // Une seule des deux gares ne suffit pas : je ne peux pas prendre ce train.
-        assertFalse(MyTrains.servesMyStations("J1", null, LineNDirection.ALLER,
-                seen("J1"), new HashMap<String, StopVisit>()));
+        assertFalse(MyTrains.verdict("J1", null, LineNDirection.ALLER,
+                seen("J1"), new HashMap<String, StopVisit>()).isMine());
     }
 }

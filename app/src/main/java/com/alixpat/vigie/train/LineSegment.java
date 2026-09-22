@@ -24,10 +24,19 @@ import java.util.List;
  */
 public final class LineSegment {
 
+    /** L'axe Paris → Mantes : tronc commun puis branche Mantes. */
+    private static final List<String> AXIS_STATIONS = buildAxis();
+    private static final LineSegment AXIS = new LineSegment(AXIS_STATIONS);
+
     private final List<String> stations;
+    /** Les mêmes noms, normalisés une fois pour toutes : {@link #indexOf} tourne à chaque tick. */
+    private final List<String> normalized;
 
     private LineSegment(List<String> stations) {
         this.stations = stations;
+        List<String> names = new ArrayList<>(stations.size());
+        for (String station : stations) names.add(LineNStation.normalize(station));
+        this.normalized = names;
     }
 
     /**
@@ -41,14 +50,14 @@ public final class LineSegment {
      * a simplement raté le début.</p>
      */
     public static LineSegment axis() {
-        return new LineSegment(Collections.unmodifiableList(axisStations()));
+        return AXIS;
     }
 
-    private static List<String> axisStations() {
+    private static List<String> buildAxis() {
         List<String> axis = new ArrayList<>();
         for (LineNStation station : LineNStation.getTrunk()) axis.add(station.getName());
         for (LineNStation station : LineNStation.getBranchMantes()) axis.add(station.getName());
-        return axis;
+        return Collections.unmodifiableList(axis);
     }
 
     /**
@@ -56,24 +65,23 @@ public final class LineSegment {
      *         cet ordre ; vide si l'un des deux n'est pas sur l'axe Paris → Mantes
      */
     public static LineSegment between(String originName, String destinationName) {
-        List<String> axis = axisStations();
-
-        int from = indexIn(axis, originName);
-        int to = indexIn(axis, destinationName);
+        int from = AXIS.indexOf(originName);
+        int to = AXIS.indexOf(destinationName);
         if (from < 0 || to < 0 || from == to) return new LineSegment(Collections.<String>emptyList());
 
         List<String> segment = new ArrayList<>(
-                axis.subList(Math.min(from, to), Math.max(from, to) + 1));
+                AXIS_STATIONS.subList(Math.min(from, to), Math.max(from, to) + 1));
         if (from > to) Collections.reverse(segment);
         return new LineSegment(Collections.unmodifiableList(segment));
     }
 
     /**
      * @return la position de la gare dans le corridor (0 = ma gare de départ,
-     *         {@code size() - 1} = ma gare d'arrivée), ou -1 si elle n'y est pas
+     *         {@code size() - 1} = ma gare d'arrivée ; pour {@link #axis()},
+     *         0 = Paris), ou -1 si elle n'y est pas
      */
     public int indexOf(String stopName) {
-        return indexIn(stations, stopName);
+        return indexIn(normalized, stopName);
     }
 
     public int size() {
@@ -89,13 +97,17 @@ public final class LineSegment {
         return stations.isEmpty();
     }
 
-    /** Comparaison normalisée, en mode {@code contains} dans les deux sens. */
-    private static int indexIn(List<String> names, String target) {
-        if (names == null || target == null) return -1;
+    /**
+     * Comparaison normalisée, en mode {@code contains} dans les deux sens.
+     *
+     * @param normalizedNames noms déjà passés par {@link LineNStation#normalize}
+     */
+    private static int indexIn(List<String> normalizedNames, String target) {
+        if (target == null) return -1;
         String normalizedTarget = LineNStation.normalize(target);
         if (normalizedTarget.isEmpty()) return -1;
-        for (int i = 0; i < names.size(); i++) {
-            String candidate = LineNStation.normalize(names.get(i));
+        for (int i = 0; i < normalizedNames.size(); i++) {
+            String candidate = normalizedNames.get(i);
             if (candidate.isEmpty()) continue;
             if (candidate.equals(normalizedTarget)
                     || candidate.contains(normalizedTarget)

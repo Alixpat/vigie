@@ -959,14 +959,18 @@ public class TrainFragment extends Fragment {
         } else {
             body.append("✅ À l'heure\n");
         }
-        if (!train.onMyRoute) {
-            body.append("➖ Ne dessert pas mes deux gares\n");
-        } else if (train.routeConfirmed) {
-            body.append("🎯 Dessert Clamart et Villepreux\n");
-        } else {
-            // Une de mes gares est déjà derrière lui : l'API ne la décrit plus,
-            // donc « dessert » serait affirmer ce qu'on ne sait pas.
-            body.append("🎯 Sur mon trajet (desserte non confirmée)\n");
+        switch (train.verdict) {
+            case SERVES:
+                body.append("🎯 Dessert Clamart et Villepreux\n");
+                break;
+            case PROBABLY:
+                // Une de mes gares est déjà derrière lui : l'API ne la décrit plus,
+                // donc « dessert » serait affirmer ce qu'on ne sait pas.
+                body.append("🎯 Sur mon trajet (desserte non confirmée)\n");
+                break;
+            default:
+                body.append("➖ Ne dessert pas mes deux gares\n");
+                break;
         }
         body.append("\nPosition : ");
         if (train.currentStopName != null && !train.currentStopName.isEmpty()) {
@@ -1039,14 +1043,12 @@ public class TrainFragment extends Fragment {
                     : named.get(named.size() - 1).getStopName();
             int delayMinutes = schedule != null ? schedule.getDelayMinutes() : 0;
 
-            MyTrains.Verdict verdict = MyTrains.verdict(journeyRef, named,
-                    LineNDirection.ALLER, seenAtClamart, seenAtVillepreux);
-
             result.add(new LineMapView.TrainOnMap(
                     journeyRef, destination,
                     position.getCurrentStopName(), position.getNextStopName(),
                     position.getSegmentProgress(), delayMinutes,
-                    verdict.isMine(), verdict == MyTrains.Verdict.SERVES,
+                    MyTrains.verdict(journeyRef, named,
+                            LineNDirection.ALLER, seenAtClamart, seenAtVillepreux),
                     valueOrEmpty(journeyTrainNumberCache.get(journeyRef)),
                     valueOrEmpty(journeyMissionNameCache.get(journeyRef))));
         }

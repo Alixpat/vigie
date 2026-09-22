@@ -120,21 +120,13 @@ public final class MyTrains {
     }
 
     /**
+     * Le classement détaillé, pour afficher « dessert mes gares » et « sans
+     * doute » différemment — une déduction ne se présente pas comme un fait.
+     *
      * @param stops             parcours connu du train (peut être null)
      * @param direction         un sens de mon trajet : ses deux bouts sont mes gares
      * @param seenAtOrigin      le train a été observé au stop-monitoring de la première
      * @param seenAtDestination idem pour la seconde
-     * @return true si le train dessert mes deux gares, ou s'il peut les desservir
-     *         sans que le parcours connu permette de l'exclure
-     */
-    public static boolean servesMyStations(List<TrainStop> stops, LineNDirection direction,
-                                           boolean seenAtOrigin, boolean seenAtDestination) {
-        return verdict(stops, direction, seenAtOrigin, seenAtDestination).isMine();
-    }
-
-    /**
-     * Le classement détaillé, pour afficher « dessert mes gares » et « sans
-     * doute » différemment — une déduction ne se présente pas comme un fait.
      */
     public static Verdict verdict(List<TrainStop> stops, LineNDirection direction,
                                   boolean seenAtOrigin, boolean seenAtDestination) {
@@ -150,9 +142,9 @@ public final class MyTrains {
         // Une gare prouvée et l'autre seulement en amont du parcours décrit :
         // c'est un de mes trains, sauf preuve du contraire. Un parcours muet, en
         // revanche, ne prouve rien du tout — une seule de mes gares ne suffit pas.
-        if (origin == Service.SERVED && destination == Service.UPSTREAM) return Verdict.PROBABLY;
-        if (destination == Service.SERVED && origin == Service.UPSTREAM) return Verdict.PROBABLY;
-        return Verdict.NO;
+        boolean oneServed = origin == Service.SERVED || destination == Service.SERVED;
+        boolean oneUpstream = origin == Service.UPSTREAM || destination == Service.UPSTREAM;
+        return oneServed && oneUpstream ? Verdict.PROBABLY : Verdict.NO;
     }
 
     /**
@@ -162,14 +154,6 @@ public final class MyTrains {
      * @param seenAtOrigin passages mémorisés à la première de mes gares (peut être null)
      * @param seenAtDest   passages mémorisés à la seconde (peut être null)
      */
-    public static boolean servesMyStations(String journeyRef, List<TrainStop> stops,
-                                           LineNDirection direction,
-                                           Map<String, StopVisit> seenAtOrigin,
-                                           Map<String, StopVisit> seenAtDest) {
-        return verdict(journeyRef, stops, direction, seenAtOrigin, seenAtDest).isMine();
-    }
-
-    /** Même chose que {@link #verdict(List, LineNDirection, boolean, boolean)}, avec les mémoires. */
     public static Verdict verdict(String journeyRef, List<TrainStop> stops,
                                   LineNDirection direction,
                                   Map<String, StopVisit> seenAtOrigin,
