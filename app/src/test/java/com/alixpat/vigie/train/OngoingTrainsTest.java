@@ -539,7 +539,7 @@ public class OngoingTrainsTest {
         assertTrue(display.getNextStopLabel().startsWith("Prochain arrêt : Versailles Chantiers"));
         assertTrue(display.getEtaLabel().startsWith("Arrivée Villepreux"));
         assertTrue(display.getEtaLabel().contains("dans 20 min"));
-        assertEquals("Train 135642 • MOPI", display.getTrainInfoLabel());
+        assertEquals("Train 135642 · MOPI", display.getTrainInfoLabel());
         assertEquals(33, display.getProgressPercent());
     }
 

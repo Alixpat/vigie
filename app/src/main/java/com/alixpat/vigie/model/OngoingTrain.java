@@ -12,11 +12,11 @@ public class OngoingTrain {
 
     private final TrainSchedule schedule;
     private final String directionLabel;   // "Clamart → Villepreux"
-    private final String positionLabel;    // "🚆 Entre Clamart et Meudon"
+    private final String positionLabel;    // "Entre Clamart et Meudon"
     private final int progressPercent;     // 0..100, -1 si inconnu
     private final String nextStopLabel;    // "Prochain arrêt : Meudon · 18:12" ou ""
     private final String etaLabel;         // "Arrivée Villepreux · 18:37 (dans 12 min)" ou ""
-    private final String trainInfoLabel;   // "Train 135642 • MOPI" ou ""
+    private final String trainInfoLabel;   // "Train 135642 · MOPI" ou ""
 
     public OngoingTrain(TrainSchedule schedule, String directionLabel, String positionLabel,
                         int progressPercent, String nextStopLabel, String etaLabel,

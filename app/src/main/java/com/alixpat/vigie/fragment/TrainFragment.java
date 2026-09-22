@@ -21,6 +21,7 @@ import com.alixpat.vigie.adapter.TrainIncidentAdapter;
 import com.alixpat.vigie.adapter.TrainOngoingAdapter;
 import com.alixpat.vigie.adapter.TrainPinListener;
 import com.alixpat.vigie.adapter.TrainScheduleAdapter;
+import com.alixpat.vigie.adapter.TrainStyle;
 import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.model.OngoingTrain;
 import com.alixpat.vigie.model.TrainIncident;
@@ -39,9 +40,15 @@ import com.alixpat.vigie.train.TrainPosition;
 import com.alixpat.vigie.util.DateFormats;
 import com.alixpat.vigie.view.LineMapView;
 import com.google.android.material.card.MaterialCardView;
+import com.google.android.material.dialog.MaterialAlertDialogBuilder;
+import com.google.android.material.progressindicator.LinearProgressIndicator;
 
 import android.app.AlertDialog;
 import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.text.TextUtils;
+import android.view.Gravity;
+import android.widget.FrameLayout;
 import android.text.SpannableString;
 import android.text.Spanned;
 import android.text.style.RelativeSizeSpan;
@@ -88,13 +95,10 @@ public class TrainFragment extends Fragment {
             "line:IDFM:C01736"       // Ligne N (Navitia line ID)
     );
 
-    private MaterialCardView lineStatusCard;
-    private View lineStatusStripe;
-    private TextView lineStatusEmoji;
-    private TextView lineStatusTitle;
+    private TextView lineStatusBadge;
     private TextView lineStatusUpdate;
     private TextView lineStatusSummary;
-    private TextView lineStatusChevron;
+    private View lineStatusChevron;
 
     private View perturbationsSection;
     private RecyclerView perturbationsRecyclerView;
@@ -119,7 +123,6 @@ public class TrainFragment extends Fragment {
 
     private MaterialCardView pinnedCard;
     private TextView pinnedTitle;
-    private TextView pinnedLastUpdate;
     private TextView pinnedEmpty;
     private RecyclerView pinnedRecyclerView;
     private TrainOngoingAdapter pinnedAdapter;
@@ -142,13 +145,11 @@ public class TrainFragment extends Fragment {
     // partagent plus aucune liste à l'écran.
     private RecyclerView ongoingRecyclerViewAller;
     private TextView ongoingTitleAller;
-    private TextView ongoingLastUpdateAller;
     private TextView ongoingEmptyAller;
     private TrainOngoingAdapter ongoingAdapterAller;
 
     private RecyclerView ongoingRecyclerViewRetour;
     private TextView ongoingTitleRetour;
-    private TextView ongoingLastUpdateRetour;
     private TextView ongoingEmptyRetour;
     private TrainOngoingAdapter ongoingAdapterRetour;
 
@@ -234,16 +235,14 @@ public class TrainFragment extends Fragment {
     public void onViewCreated(@NonNull View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
 
-        lineStatusCard = view.findViewById(R.id.lineStatusCard);
-        lineStatusStripe = view.findViewById(R.id.lineStatusStripe);
-        lineStatusEmoji = view.findViewById(R.id.lineStatusEmoji);
-        lineStatusTitle = view.findViewById(R.id.lineStatusTitle);
+        lineStatusBadge = view.findViewById(R.id.lineStatusBadge);
         lineStatusUpdate = view.findViewById(R.id.lineStatusUpdate);
         lineStatusSummary = view.findViewById(R.id.lineStatusSummary);
         lineStatusChevron = view.findViewById(R.id.lineStatusChevron);
 
-        // Tap sur le bandeau de statut → toggle l'affichage des listes d'incidents
-        lineStatusCard.setOnClickListener(v -> {
+        // Tap sur l'en-tête de la carte « Ligne N » → déplie les incidents, rangés
+        // dans la même carte (l'en-tête seul : un tap sur un incident le déplie lui).
+        view.findViewById(R.id.lineStatusHeader).setOnClickListener(v -> {
             if (lastPerturbations.isEmpty() && lastTravaux.isEmpty()) return;
             incidentsListVisible = !incidentsListVisible;
             updateIncidentsVisibility();
@@ -265,7 +264,6 @@ public class TrainFragment extends Fragment {
                 System.currentTimeMillis());
         pinnedCard = view.findViewById(R.id.pinnedCard);
         pinnedTitle = view.findViewById(R.id.pinnedTitle);
-        pinnedLastUpdate = view.findViewById(R.id.pinnedLastUpdate);
         pinnedEmpty = view.findViewById(R.id.pinnedEmpty);
         pinnedRecyclerView = view.findViewById(R.id.pinnedRecyclerView);
         // Les suivis mélangent les deux sens : contrairement aux cartes de sens,
@@ -275,13 +273,11 @@ public class TrainFragment extends Fragment {
 
         ongoingRecyclerViewAller = view.findViewById(R.id.ongoingRecyclerViewAller);
         ongoingTitleAller = view.findViewById(R.id.ongoingTitleAller);
-        ongoingLastUpdateAller = view.findViewById(R.id.ongoingLastUpdateAller);
         ongoingEmptyAller = view.findViewById(R.id.ongoingEmptyAller);
         ongoingAdapterAller = createOngoingAdapter(ongoingRecyclerViewAller);
 
         ongoingRecyclerViewRetour = view.findViewById(R.id.ongoingRecyclerViewRetour);
         ongoingTitleRetour = view.findViewById(R.id.ongoingTitleRetour);
-        ongoingLastUpdateRetour = view.findViewById(R.id.ongoingLastUpdateRetour);
         ongoingEmptyRetour = view.findViewById(R.id.ongoingEmptyRetour);
         ongoingAdapterRetour = createOngoingAdapter(ongoingRecyclerViewRetour);
 
@@ -398,40 +394,7 @@ public class TrainFragment extends Fragment {
         // Trier les arrêts chronologiquement
         stops = new ArrayList<>(stops);
         Collections.sort(stops, (a, b) -> Long.compare(a.getBestTimeMillis(), b.getBestTimeMillis()));
-        ScrollView scrollView = new ScrollView(requireContext());
-        LinearLayout container = new LinearLayout(requireContext());
-        container.setOrientation(LinearLayout.VERTICAL);
-        int pad = dpToPx(16);
-        container.setPadding(pad, pad, pad, pad);
-        scrollView.addView(container);
-
-        // Info train (numéro + mission)
-        StringBuilder trainInfoStr = new StringBuilder();
-        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
-            trainInfoStr.append("Train ").append(schedule.getTrainNumber());
-        }
-        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
-            if (trainInfoStr.length() > 0) trainInfoStr.append(" \u2022 ");
-            trainInfoStr.append(schedule.getMissionName());
-        }
-        if (trainInfoStr.length() > 0) {
-            TextView trainInfoHeader = new TextView(requireContext());
-            trainInfoHeader.setText(trainInfoStr.toString());
-            trainInfoHeader.setTextColor(0xFF00A86B);
-            trainInfoHeader.setTextSize(15);
-            trainInfoHeader.setTypeface(null, Typeface.BOLD);
-            trainInfoHeader.setPadding(0, 0, 0, dpToPx(4));
-            container.addView(trainInfoHeader);
-        }
-
-        // Statut global du train
-        TextView statusHeader = new TextView(requireContext());
-        statusHeader.setText(schedule.getStatusEmoji() + " " + schedule.getStatusLabel());
-        statusHeader.setTextColor(schedule.getStatusColor());
-        statusHeader.setTextSize(14);
-        statusHeader.setTypeface(null, Typeface.BOLD);
-        statusHeader.setPadding(0, 0, 0, dpToPx(4));
-        container.addView(statusHeader);
+        LinearLayout container = newDialogContainer();
 
         long now = System.currentTimeMillis();
 
@@ -459,9 +422,9 @@ public class TrainFragment extends Fragment {
         // Résumé de la position actuelle du train
         String positionText = null;
         if (currentStopIndex >= 0) {
-            positionText = "\uD83D\uDCCD En gare de " + stops.get(currentStopIndex).getStopName();
+            positionText = "En gare de " + stops.get(currentStopIndex).getStopName();
         } else if (betweenAfterIndex >= 0 && betweenAfterIndex + 1 < stops.size()) {
-            positionText = "\uD83D\uDE86 Entre " + stops.get(betweenAfterIndex).getStopName()
+            positionText = "Entre " + stops.get(betweenAfterIndex).getStopName()
                     + " et " + stops.get(betweenAfterIndex + 1).getStopName();
         } else {
             // Tous UPCOMING = pas encore parti
@@ -470,7 +433,7 @@ public class TrainFragment extends Fragment {
                 if (s.getStatus() != TrainStop.StopStatus.UPCOMING) { allUpcoming = false; break; }
             }
             if (allUpcoming && !stops.isEmpty()) {
-                positionText = "\u23F3 Pas encore parti de " + stops.get(0).getStopName();
+                positionText = "Pas encore parti de " + stops.get(0).getStopName();
             }
             // Tous PASSED = arrivé
             boolean allPassed = true;
@@ -478,150 +441,234 @@ public class TrainFragment extends Fragment {
                 if (s.getStatus() != TrainStop.StopStatus.PASSED) { allPassed = false; break; }
             }
             if (allPassed && !stops.isEmpty()) {
-                positionText = "\u2705 Arrivé à " + stops.get(stops.size() - 1).getStopName();
+                positionText = "Arrivé à " + stops.get(stops.size() - 1).getStopName();
             }
         }
-        if (positionText != null) {
-            TextView positionView = new TextView(requireContext());
-            positionView.setText(positionText);
-            positionView.setTextColor(0xFF1976D2);
-            positionView.setTextSize(14);
-            positionView.setTypeface(null, Typeface.BOLD);
-            positionView.setPadding(0, dpToPx(4), 0, dpToPx(12));
-            container.addView(positionView);
-        }
 
+        addTrainSummary(container, schedule, positionText);
         addPassageHistory(container, schedule, stops, now);
 
-        TextView routeHeader = new TextView(requireContext());
-        routeHeader.setText("\uD83D\uDE89 Parcours complet");
-        routeHeader.setTextSize(14);
-        routeHeader.setTypeface(null, Typeface.BOLD);
-        routeHeader.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
-        routeHeader.setPadding(0, dpToPx(4), 0, dpToPx(6));
-        container.addView(routeHeader);
-
+        container.addView(sectionTitle("Parcours"));
         for (int i = 0; i < stops.size(); i++) {
             TrainStop stop = stops.get(i);
-            TrainStop.StopStatus status = stop.getStatus();
+            boolean current = i == currentStopIndex;
+            boolean passed = !current && stop.getStatus() == TrainStop.StopStatus.PASSED;
+            boolean last = i == stops.size() - 1;
+            // Le tracé est « parcouru » jusqu'au train : plein avant lui, gris après.
+            boolean lineBefore = current || passed;
+            boolean lineAfter = !last && (i == betweenAfterIndex || isReached(stops.get(i + 1)));
+            container.addView(timelineStopRow(stop, i == 0, last, lineBefore, lineAfter,
+                    current, passed));
 
-            LinearLayout row = new LinearLayout(requireContext());
-            row.setOrientation(LinearLayout.HORIZONTAL);
-            row.setPadding(0, dpToPx(2), 0, dpToPx(2));
-            row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-            // Indicateur visuel (cercle/trait)
-            TextView indicator = new TextView(requireContext());
-            indicator.setTextSize(16);
-            if (i == currentStopIndex) {
-                indicator.setText("\uD83D\uDD35"); // Cercle bleu = arrêt actuel
-            } else if (i == betweenAfterIndex) {
-                indicator.setText("\u25CF"); // Cercle plein = dernier arrêt passé avant "entre deux"
-                indicator.setTextColor(0xFF9E9E9E);
-            } else if (status == TrainStop.StopStatus.PASSED) {
-                indicator.setText("\u2713"); // Check = passé
-                indicator.setTextColor(0xFF4CAF50);
-            } else {
-                indicator.setText("\u25CB"); // Cercle vide = à venir
-                indicator.setTextColor(0xFFBDBDBD);
-            }
-            indicator.setPadding(0, 0, dpToPx(10), 0);
-            row.addView(indicator);
-
-            // Horaire
-            TextView timeView = new TextView(requireContext());
-            long bestTime = stop.getBestArrivalMillis();
-            if (bestTime > 0) {
-                Date bestDate = new Date(bestTime);
-                String main = DateFormats.formatHhmm(bestDate);
-                String sec = DateFormats.formatColonSeconds(bestDate);
-                SpannableString span = new SpannableString(main + sec);
-                span.setSpan(new RelativeSizeSpan(0.7f), main.length(), main.length() + sec.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                timeView.setText(span);
-            } else {
-                timeView.setText("--:--");
-            }
-            timeView.setTextSize(13);
-            timeView.setMinWidth(dpToPx(45));
-            if (i == currentStopIndex) {
-                timeView.setTypeface(null, Typeface.BOLD);
-                timeView.setTextColor(0xFF1976D2);
-            } else if (status == TrainStop.StopStatus.PASSED) {
-                timeView.setTextColor(0xFF9E9E9E);
-            } else {
-                timeView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-            }
-            timeView.setPadding(0, 0, dpToPx(10), 0);
-            row.addView(timeView);
-
-            // Nom de l'arrêt
-            TextView nameView = new TextView(requireContext());
-            nameView.setText(stop.getStopName());
-            nameView.setTextSize(13);
-            if (i == currentStopIndex) {
-                nameView.setTypeface(null, Typeface.BOLD);
-                nameView.setTextColor(0xFF1976D2);
-            } else if (status == TrainStop.StopStatus.PASSED) {
-                nameView.setTextColor(0xFF9E9E9E);
-            } else {
-                nameView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-            }
-            row.addView(nameView);
-
-            // Voie (si disponible et arrêt actuel)
-            if (stop.getPlatformName() != null && !stop.getPlatformName().isEmpty()
-                    && (i == currentStopIndex || status == TrainStop.StopStatus.UPCOMING)) {
-                TextView platformView = new TextView(requireContext());
-                platformView.setText("  Voie " + stop.getPlatformName());
-                platformView.setTextSize(11);
-                platformView.setTextColor(0xFF9E9E9E);
-                row.addView(platformView);
-            }
-
-            container.addView(row);
-
-            // Indicateur "entre deux arrêts"
             if (i == betweenAfterIndex) {
-                LinearLayout betweenRow = new LinearLayout(requireContext());
-                betweenRow.setOrientation(LinearLayout.HORIZONTAL);
-                betweenRow.setPadding(0, dpToPx(1), 0, dpToPx(1));
-                betweenRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
-
-                TextView betweenIndicator = new TextView(requireContext());
-                betweenIndicator.setText("\uD83D\uDE86"); // Train emoji
-                betweenIndicator.setTextSize(14);
-                betweenIndicator.setPadding(0, 0, dpToPx(10), 0);
-                betweenRow.addView(betweenIndicator);
-
-                TextView betweenText = new TextView(requireContext());
-                betweenText.setText("En route...");
-                betweenText.setTextSize(12);
-                betweenText.setTypeface(null, Typeface.BOLD_ITALIC);
-                betweenText.setTextColor(0xFF1976D2);
-                betweenRow.addView(betweenText);
-
-                container.addView(betweenRow);
+                container.addView(timelineBetweenRow(stops.get(i + 1).getStopName()));
             }
         }
 
-        String title = schedule.getDestination();
-        if (!schedule.getOriginStation().isEmpty()) {
-            title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
-        }
+        showTrainDialog(dialogTitle(schedule), wrapInScroll(container), schedule);
+    }
 
-        showTrainDialog(title, scrollView, schedule);
+    private static boolean isReached(TrainStop stop) {
+        TrainStop.StopStatus status = stop.getStatus();
+        return status == TrainStop.StopStatus.PASSED || status == TrainStop.StopStatus.CURRENT;
+    }
+
+    /** "Clamart → Mantes-la-Jolie", ou le seul terminus si la gare de départ est inconnue. */
+    private static String dialogTitle(TrainSchedule schedule) {
+        if (schedule.getOriginStation().isEmpty()) return schedule.getDestination();
+        return schedule.getOriginStation() + " → " + schedule.getDestination();
     }
 
     /** Le dialogue d'un train, avec la bascule de suivi en bouton neutre. */
     private void showTrainDialog(String title, View content, TrainSchedule schedule) {
         boolean pinned = pinnedTrains.isPinned(schedule.getJourneyRef());
-        new AlertDialog.Builder(requireContext())
+        new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(title)
                 .setView(content)
-                .setNeutralButton(pinned ? "\uD83D\uDCCC Ne plus suivre" : "\uD83D\uDCCC Suivre",
+                .setNeutralButton(pinned ? "Ne plus suivre" : "Suivre",
                         (dialog, which) -> togglePin(schedule))
                 .setPositiveButton("Fermer", null)
                 .show();
+    }
+
+    // ---- Briques des dialogues : mêmes styles que les cartes de l'onglet ----
+
+    private LinearLayout newDialogContainer() {
+        LinearLayout container = new LinearLayout(requireContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dpToPx(24), dpToPx(4), dpToPx(24), dpToPx(8));
+        return container;
+    }
+
+    private ScrollView wrapInScroll(View content) {
+        ScrollView scrollView = new ScrollView(requireContext());
+        scrollView.addView(content);
+        return scrollView;
+    }
+
+    /** Un TextView habillé d'un style Vigie.Text.* (taille, couleur, graisse, casse). */
+    private TextView styledText(int styleRes, CharSequence text) {
+        TextView view = new TextView(requireContext(), null, 0, styleRes);
+        view.setText(text);
+        return view;
+    }
+
+    private TextView sectionTitle(String text) {
+        TextView title = styledText(R.style.Vigie_Text_Overline, text);
+        title.setPadding(0, dpToPx(20), 0, dpToPx(8));
+        return title;
+    }
+
+    private int color(int colorRes) {
+        return ContextCompat.getColor(requireContext(), colorRes);
+    }
+
+    /**
+     * En-tête commun des dialogues de train : numéro et mission, statut en
+     * pastille, puis la position du train mise en avant.
+     */
+    private void addTrainSummary(LinearLayout container, TrainSchedule schedule,
+                                 @Nullable String positionText) {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView info = styledText(R.style.Vigie_Text_Secondary, TrainStyle.trainInfo(schedule));
+        row.addView(info, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView status = styledText(R.style.Vigie_Text_Pill, "");
+        TrainStyle.statusPill(status, schedule);
+        row.addView(status);
+        container.addView(row);
+
+        if (positionText != null && !positionText.isEmpty()) {
+            TextView position = styledText(R.style.Vigie_Text_Body_Strong, positionText);
+            position.setTextSize(16);
+            position.setTextColor(color(R.color.line_n));
+            position.setPadding(0, dpToPx(10), 0, 0);
+            container.addView(position);
+        }
+    }
+
+    /**
+     * Un arrêt de la frise du parcours : le tracé, l'heure, la gare. Le tracé
+     * est plein jusqu'au train et gris au-delà ; le point dit l'état de l'arrêt
+     * (franchi, à quai, à venir).
+     */
+    private View timelineStopRow(TrainStop stop, boolean first, boolean last,
+                                 boolean lineBefore, boolean lineAfter,
+                                 boolean current, boolean passed) {
+        LinearLayout row = timelineRowShell();
+
+        int dotSize;
+        GradientDrawable dot = new GradientDrawable();
+        dot.setShape(GradientDrawable.OVAL);
+        if (current) {
+            dotSize = 14;
+            dot.setColor(color(R.color.line_n));
+        } else if (passed) {
+            dotSize = 8;
+            dot.setColor(color(R.color.line_n));
+        } else {
+            dotSize = 10;
+            dot.setColor(color(R.color.background_card));
+            dot.setStroke(dpToPx(2), color(R.color.text_hint));
+        }
+        row.addView(timelineTrack(first ? 0 : trackColor(lineBefore),
+                last ? 0 : trackColor(lineAfter), dot, dotSize));
+
+        int textColor = current ? color(R.color.line_n)
+                : passed ? color(R.color.text_hint)
+                : color(R.color.text_primary);
+
+        TextView time = styledText(R.style.Vigie_Text_Body, formatStopTime(stop));
+        time.setFontFeatureSettings("tnum");
+        time.setMinWidth(dpToPx(56));
+        time.setTextColor(textColor);
+        LinearLayout.LayoutParams timeParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        timeParams.setMarginStart(dpToPx(8));
+        row.addView(time, timeParams);
+
+        TextView name = styledText(current ? R.style.Vigie_Text_Body_Strong : R.style.Vigie_Text_Body,
+                stop.getStopName());
+        name.setTextColor(textColor);
+        row.addView(name, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        // La voie n'a d'intérêt que pour un arrêt à venir ou celui où le train est à quai.
+        String platform = stop.getPlatformName();
+        if (platform != null && !platform.isEmpty() && !passed) {
+            row.addView(styledText(R.style.Vigie_Text_Caption, "Voie " + platform));
+        }
+        return row;
+    }
+
+    /** Ligne intercalaire : le train roule entre deux arrêts. */
+    private View timelineBetweenRow(String nextStopName) {
+        LinearLayout row = timelineRowShell();
+        GradientDrawable marker = new GradientDrawable();
+        marker.setShape(GradientDrawable.OVAL);
+        marker.setColor(color(R.color.background_card));
+        marker.setStroke(dpToPx(3), color(R.color.line_n));
+        row.addView(timelineTrack(trackColor(true), trackColor(false), marker, 12));
+
+        TextView label = styledText(R.style.Vigie_Text_Caption, "En route vers " + nextStopName);
+        label.setTextColor(color(R.color.line_n));
+        label.setTypeface(label.getTypeface(), Typeface.ITALIC);
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMarginStart(dpToPx(8));
+        row.addView(label, params);
+        return row;
+    }
+
+    private int trackColor(boolean travelled) {
+        return color(travelled ? R.color.line_n : R.color.divider);
+    }
+
+    private LinearLayout timelineRowShell() {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setMinimumHeight(dpToPx(34));
+        return row;
+    }
+
+    /**
+     * Colonne du tracé : un trait vertical en deux moitiés (avant / après
+     * l'arrêt) et le point par-dessus. Une couleur à 0 efface la moitié — c'est
+     * le cas au-dessus du premier arrêt et sous le dernier. Toute la hauteur de
+     * la ligne est occupée, donc les traits se raccordent d'une ligne à l'autre.
+     */
+    private View timelineTrack(int colorBefore, int colorAfter, GradientDrawable dot, int dotSizeDp) {
+        FrameLayout track = new FrameLayout(requireContext());
+        track.setLayoutParams(new LinearLayout.LayoutParams(
+                dpToPx(20), ViewGroup.LayoutParams.MATCH_PARENT));
+
+        LinearLayout line = new LinearLayout(requireContext());
+        line.setOrientation(LinearLayout.VERTICAL);
+        View before = new View(requireContext());
+        before.setBackgroundColor(colorBefore);
+        line.addView(before, new LinearLayout.LayoutParams(dpToPx(2), 0, 1f));
+        View after = new View(requireContext());
+        after.setBackgroundColor(colorAfter);
+        line.addView(after, new LinearLayout.LayoutParams(dpToPx(2), 0, 1f));
+        track.addView(line, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER_HORIZONTAL));
+
+        View point = new View(requireContext());
+        point.setBackground(dot);
+        int size = dpToPx(dotSizeDp);
+        track.addView(point, new FrameLayout.LayoutParams(size, size, Gravity.CENTER));
+        return track;
+    }
+
+    /** "08:12" suivi des secondes en petit, ou "--:--" si l'heure est inconnue. */
+    private static CharSequence formatStopTime(TrainStop stop) {
+        long bestTime = stop.getBestArrivalMillis();
+        if (bestTime <= 0) return "--:--";
+        return formatTimeWithSmallSeconds("", new Date(bestTime));
     }
 
     /**
@@ -630,8 +677,8 @@ public class TrainFragment extends Fragment {
      *
      * <p>« Réalisée » n'a de sens qu'une fois la gare franchie ; avant, c'est une
      * prévision. Les deux viennent du même champ IDFM, donc l'affichage doit les
-     * distinguer lui-même — ici par la couleur et un libellé de colonne qui
-     * change de ton (gris estompé tant que le passage est à venir).</p>
+     * distinguer lui-même — ici par la couleur : estompée tant que le passage est
+     * à venir, verte ou orange une fois la gare franchie.</p>
      */
     private void addPassageHistory(LinearLayout container, TrainSchedule schedule,
                                    List<TrainStop> stops, long now) {
@@ -640,16 +687,17 @@ public class TrainFragment extends Fragment {
                 PassageHistory.build(resolveStopNames(stops), direction, now);
         if (passages.isEmpty()) return;
 
-        TextView header = new TextView(requireContext());
-        header.setText("\uD83D\uDCCB Passages sur mon trajet \u00B7 "
-                + direction.getOriginName() + " \u2192 " + direction.getDestinationName());
-        header.setTextSize(14);
-        header.setTypeface(null, Typeface.BOLD);
-        header.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_secondary));
-        header.setPadding(0, dpToPx(4), 0, dpToPx(4));
-        container.addView(header);
+        container.addView(sectionTitle("Mon trajet · "
+                + direction.getOriginName() + " → " + direction.getDestinationName()));
 
-        container.addView(passageRow("Gare", "Théorique", "Réel", 0xFF9E9E9E, true));
+        LinearLayout table = new LinearLayout(requireContext());
+        table.setOrientation(LinearLayout.VERTICAL);
+        table.setBackgroundResource(R.drawable.bg_tile);
+        int pad = dpToPx(12);
+        table.setPadding(pad, dpToPx(8), pad, dpToPx(8));
+
+        int hint = color(R.color.text_hint);
+        table.addView(passageRow("Gare", "Prévu", "Réel", hint, true));
 
         for (PassageHistory.Passage passage : passages) {
             String aimed = passage.getAimedMillis() > 0
@@ -662,28 +710,20 @@ public class TrainFragment extends Fragment {
                 if (delay != 0) actual += (delay > 0 ? " +" : " ") + delay;
             } else {
                 // Rien d'annoncé : le théorique fait foi, on ne l'invente pas en réel.
-                actual = passage.isPassed() ? "\u2713" : "\u2014";
+                actual = passage.isPassed() ? "✓" : "—";
             }
 
-            int color;
+            int actualColor;
             if (!passage.isPassed()) {
-                color = 0xFF9E9E9E;                       // encore à venir : prévision
+                actualColor = hint;                              // encore à venir : prévision
             } else if (passage.getDelayMinutes() > 0) {
-                color = 0xFFFF9800;                       // passé en retard
+                actualColor = color(R.color.status_warning);     // passé en retard
             } else {
-                color = 0xFF4CAF50;                       // passé à l'heure
+                actualColor = color(R.color.status_ok);          // passé à l'heure
             }
-            container.addView(passageRow(passage.getStationName(), aimed, actual, color, false));
+            table.addView(passageRow(passage.getStationName(), aimed, actual, actualColor, false));
         }
-
-        View divider = new View(requireContext());
-        divider.setBackgroundColor(ContextCompat.getColor(requireContext(), R.color.divider));
-        LinearLayout.LayoutParams dividerParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(1));
-        dividerParams.topMargin = dpToPx(10);
-        dividerParams.bottomMargin = dpToPx(10);
-        divider.setLayoutParams(dividerParams);
-        container.addView(divider);
+        container.addView(table);
     }
 
     /** Une ligne du tableau des passages : gare, heure théorique, heure réelle. */
@@ -691,87 +731,38 @@ public class TrainFragment extends Fragment {
                                     int actualColor, boolean isHeader) {
         LinearLayout row = new LinearLayout(requireContext());
         row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(0, dpToPx(2), 0, dpToPx(2));
+        row.setPadding(0, dpToPx(3), 0, dpToPx(3));
 
-        int textPrimary = ContextCompat.getColor(requireContext(), R.color.text_primary);
-        int textHint = ContextCompat.getColor(requireContext(), R.color.text_hint);
+        int cellStyle = isHeader ? R.style.Vigie_Text_Overline : R.style.Vigie_Text_Body;
 
-        TextView nameView = new TextView(requireContext());
-        nameView.setText(station);
-        nameView.setTextSize(isHeader ? 11 : 13);
+        TextView nameView = styledText(cellStyle, station);
         nameView.setSingleLine(true);
-        nameView.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        nameView.setTextColor(isHeader ? textHint : textPrimary);
-        nameView.setLayoutParams(new LinearLayout.LayoutParams(
-                0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        row.addView(nameView);
+        nameView.setEllipsize(TextUtils.TruncateAt.END);
+        row.addView(nameView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
-        TextView aimedView = new TextView(requireContext());
-        aimedView.setText(aimed);
-        aimedView.setTextSize(isHeader ? 11 : 13);
-        aimedView.setGravity(android.view.Gravity.END);
+        TextView aimedView = styledText(cellStyle, aimed);
+        aimedView.setGravity(Gravity.END);
         aimedView.setMinWidth(dpToPx(52));
-        aimedView.setTextColor(isHeader ? textHint : textPrimary);
+        aimedView.setFontFeatureSettings("tnum");
         row.addView(aimedView);
 
-        TextView actualView = new TextView(requireContext());
-        actualView.setText(actual);
-        actualView.setTextSize(isHeader ? 11 : 13);
-        actualView.setGravity(android.view.Gravity.END);
+        TextView actualView = styledText(isHeader ? cellStyle : R.style.Vigie_Text_Body_Strong, actual);
+        actualView.setGravity(Gravity.END);
         actualView.setMinWidth(dpToPx(64));
-        actualView.setTextColor(isHeader ? textHint : actualColor);
-        if (!isHeader) actualView.setTypeface(null, Typeface.BOLD);
+        actualView.setFontFeatureSettings("tnum");
+        actualView.setTextColor(actualColor);
         row.addView(actualView);
 
         return row;
     }
 
+    /** Détail d'un train dont on ne connaît que les horaires, pas le parcours. */
     private void showFallbackDialog(TrainSchedule schedule) {
-        ScrollView scrollView = new ScrollView(requireContext());
-        LinearLayout container = new LinearLayout(requireContext());
-        container.setOrientation(LinearLayout.VERTICAL);
-        int pad = dpToPx(16);
-        container.setPadding(pad, pad, pad, pad);
-        scrollView.addView(container);
+        LinearLayout container = newDialogContainer();
 
-        // Info train (numéro + mission)
-        StringBuilder trainInfoStr = new StringBuilder();
-        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
-            trainInfoStr.append("Train ").append(schedule.getTrainNumber());
-        }
-        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
-            if (trainInfoStr.length() > 0) trainInfoStr.append(" \u2022 ");
-            trainInfoStr.append(schedule.getMissionName());
-        }
-        if (trainInfoStr.length() > 0) {
-            TextView trainInfoHeader = new TextView(requireContext());
-            trainInfoHeader.setText(trainInfoStr.toString());
-            trainInfoHeader.setTextColor(0xFF00A86B);
-            trainInfoHeader.setTextSize(15);
-            trainInfoHeader.setTypeface(null, Typeface.BOLD);
-            trainInfoHeader.setPadding(0, 0, 0, dpToPx(4));
-            container.addView(trainInfoHeader);
-        }
+        addTrainSummary(container, schedule, schedule.estimatePosition());
 
-        // Statut
-        TextView statusView = new TextView(requireContext());
-        statusView.setText(schedule.getStatusEmoji() + " " + schedule.getStatusLabel());
-        statusView.setTextColor(schedule.getStatusColor());
-        statusView.setTextSize(14);
-        statusView.setTypeface(null, Typeface.BOLD);
-        statusView.setPadding(0, 0, 0, dpToPx(12));
-        container.addView(statusView);
-
-        // Position actuelle (mise en avant)
-        TextView positionView = new TextView(requireContext());
-        positionView.setText(schedule.estimatePosition());
-        positionView.setTextColor(0xFF1976D2);
-        positionView.setTextSize(15);
-        positionView.setTypeface(null, Typeface.BOLD);
-        positionView.setPadding(0, 0, 0, dpToPx(4));
-        container.addView(positionView);
-
-        // Barre de progression visuelle
+        // Avancement estimé sur les seuls horaires
         long now = System.currentTimeMillis();
         long effectiveDeparture = schedule.getAimedDepartureMillis();
         if (schedule.getDelayMinutes() > 0) {
@@ -783,75 +774,68 @@ public class TrainFragment extends Fragment {
             int progress = (int) ((elapsed * 100) / totalTravel);
             progress = Math.max(0, Math.min(100, progress));
 
-            android.widget.ProgressBar progressBar = new android.widget.ProgressBar(
-                    requireContext(), null, android.R.attr.progressBarStyleHorizontal);
+            LinearProgressIndicator progressBar = new LinearProgressIndicator(requireContext());
             progressBar.setMax(100);
             progressBar.setProgress(progress);
-            progressBar.setPadding(0, dpToPx(4), 0, dpToPx(12));
-            container.addView(progressBar);
-        } else {
-            // Espacement
-            TextView spacer = new TextView(requireContext());
-            spacer.setPadding(0, 0, 0, dpToPx(8));
-            container.addView(spacer);
+            progressBar.setIndicatorColor(color(R.color.line_n));
+            progressBar.setTrackColor(color(R.color.card_stroke));
+            progressBar.setTrackThickness(dpToPx(4));
+            progressBar.setTrackCornerRadius(dpToPx(2));
+            LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            params.topMargin = dpToPx(10);
+            container.addView(progressBar, params);
         }
 
-        // Trajet : origine → destination
+        container.addView(sectionTitle("Horaires"));
+        LinearLayout details = detailTile();
         if (!schedule.getOriginStation().isEmpty()) {
-            TextView trajetView = new TextView(requireContext());
-            trajetView.setText(schedule.getOriginStation() + "  \u2192  " + schedule.getDestination());
-            trajetView.setTextSize(13);
-            trajetView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-            trajetView.setPadding(0, 0, 0, dpToPx(8));
-            container.addView(trajetView);
+            details.addView(detailRow("Trajet",
+                    schedule.getOriginStation() + " → " + schedule.getDestination()));
         }
-
-        // Départ
-        StringBuilder depStr = new StringBuilder("Départ : " + schedule.getAimedDepartureTime());
+        String departure = schedule.getAimedDepartureTime();
         if (schedule.isDelayed() && !schedule.getExpectedDepartureTime().isEmpty()) {
-            depStr.append("  \u2192  ").append(schedule.getExpectedDepartureTime());
+            departure += " → " + schedule.getExpectedDepartureTime();
         }
-        TextView depView = new TextView(requireContext());
-        depView.setText(depStr.toString());
-        depView.setTextSize(13);
-        depView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-        container.addView(depView);
-
-        // Arrivée
+        details.addView(detailRow("Départ", departure));
         if (schedule.getArrivalTime() != null && !schedule.getArrivalTime().isEmpty()) {
-            TextView arrView = new TextView(requireContext());
-            arrView.setText("Arrivée : " + schedule.getArrivalTime());
-            arrView.setTextSize(13);
-            arrView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_primary));
-            container.addView(arrView);
+            details.addView(detailRow("Arrivée", schedule.getArrivalTime()));
         }
-
-        // Temps de trajet
         String travelTime = schedule.getTravelTime();
         if (travelTime != null) {
-            TextView travelView = new TextView(requireContext());
-            travelView.setText("Trajet : " + travelTime);
-            travelView.setTextSize(13);
-            travelView.setTextColor(0xFF757575);
-            container.addView(travelView);
+            details.addView(detailRow("Durée", travelTime));
         }
-
-        // Voie
         if (schedule.getPlatformName() != null && !schedule.getPlatformName().isEmpty()) {
-            TextView platformView = new TextView(requireContext());
-            platformView.setText("Voie " + schedule.getPlatformName());
-            platformView.setTextSize(13);
-            platformView.setTextColor(0xFF757575);
-            platformView.setPadding(0, dpToPx(4), 0, 0);
-            container.addView(platformView);
+            details.addView(detailRow("Voie", schedule.getPlatformName()));
         }
+        container.addView(details);
 
-        String title = schedule.getDestination();
-        if (!schedule.getOriginStation().isEmpty()) {
-            title = schedule.getOriginStation() + " \u2192 " + schedule.getDestination();
-        }
+        showTrainDialog(dialogTitle(schedule), wrapInScroll(container), schedule);
+    }
 
-        showTrainDialog(title, scrollView, schedule);
+    private LinearLayout detailTile() {
+        LinearLayout tile = new LinearLayout(requireContext());
+        tile.setOrientation(LinearLayout.VERTICAL);
+        tile.setBackgroundResource(R.drawable.bg_tile);
+        int pad = dpToPx(12);
+        tile.setPadding(pad, dpToPx(8), pad, dpToPx(8));
+        return tile;
+    }
+
+    /** Une ligne libellé / valeur, libellés alignés en colonne. */
+    private View detailRow(String label, CharSequence value) {
+        LinearLayout row = new LinearLayout(requireContext());
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dpToPx(3), 0, dpToPx(3));
+
+        TextView labelView = styledText(R.style.Vigie_Text_Secondary, label);
+        labelView.setMinWidth(dpToPx(80));
+        row.addView(labelView);
+
+        TextView valueView = styledText(R.style.Vigie_Text_Body, value);
+        valueView.setFontFeatureSettings("tnum");
+        row.addView(valueView, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        return row;
     }
 
     // ==================== PLAN DE LA LIGNE ====================
@@ -876,7 +860,7 @@ public class TrainFragment extends Fragment {
         LineMapView lineMapView = dialogView.findViewById(R.id.lineMapView);
         TextView trainCountView = dialogView.findViewById(R.id.lineMapTrainCount);
         TextView filterButton = dialogView.findViewById(R.id.lineMapFilter);
-        TextView closeButton = dialogView.findViewById(R.id.lineMapClose);
+        View closeButton = dialogView.findViewById(R.id.lineMapClose);
 
         closeButton.setOnClickListener(v -> dialog.dismiss());
         filterButton.setOnClickListener(v -> {
@@ -934,6 +918,7 @@ public class TrainFragment extends Fragment {
         if (openLineMapFilter != null) {
             openLineMapFilter.setText(openLineMapView.isShowingOtherTrains()
                     ? "Mes gares" : "Tous");
+            TrainStyle.pill(openLineMapFilter, color(R.color.line_n));
         }
     }
 
@@ -945,48 +930,58 @@ public class TrainFragment extends Fragment {
             titleSb.append(train.missionName);
         }
         if (train.trainNumber != null && !train.trainNumber.isEmpty()) {
-            if (titleSb.length() > 0) titleSb.append(" • ");
+            if (titleSb.length() > 0) titleSb.append(" · ");
             titleSb.append(train.trainNumber);
         }
         if (titleSb.length() == 0) titleSb.append("Train");
 
-        StringBuilder body = new StringBuilder();
+        LinearLayout container = newDialogContainer();
+
+        TextView status = styledText(R.style.Vigie_Text_Pill,
+                train.isDelayed() ? "+" + train.delayMinutes + " min" : "À l'heure");
+        TrainStyle.pill(status, color(train.isDelayed() ? R.color.status_warning : R.color.status_ok));
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusParams.bottomMargin = dpToPx(12);
+        container.addView(status, statusParams);
+
+        LinearLayout details = detailTile();
         if (train.destination != null && !train.destination.isEmpty()) {
-            body.append("Direction : ").append(train.destination).append("\n\n");
+            details.addView(detailRow("Direction", train.destination));
         }
-        if (train.isDelayed()) {
-            body.append("⏰ Retard +").append(train.delayMinutes).append(" min\n");
-        } else {
-            body.append("✅ À l'heure\n");
-        }
+        String service;
         switch (train.verdict) {
             case SERVES:
-                body.append("🎯 Dessert Clamart et Villepreux\n");
+                service = "Dessert Clamart et Villepreux";
                 break;
             case PROBABLY:
                 // Une de mes gares est déjà derrière lui : l'API ne la décrit plus,
                 // donc « dessert » serait affirmer ce qu'on ne sait pas.
-                body.append("🎯 Sur mon trajet (desserte non confirmée)\n");
+                service = "Sur mon trajet (desserte non confirmée)";
                 break;
             default:
-                body.append("➖ Ne dessert pas mes deux gares\n");
+                service = "Ne dessert pas mes deux gares";
                 break;
         }
-        body.append("\nPosition : ");
+        details.addView(detailRow("Desserte", service));
+
+        StringBuilder position = new StringBuilder();
         if (train.currentStopName != null && !train.currentStopName.isEmpty()) {
-            body.append(train.currentStopName);
+            position.append(train.currentStopName);
         } else {
-            body.append("?");
+            position.append("Inconnue");
         }
         if (train.nextStopName != null && !train.nextStopName.isEmpty()
                 && !train.nextStopName.equals(train.currentStopName)) {
-            body.append(" → ").append(train.nextStopName);
+            position.append(" → ").append(train.nextStopName);
         }
+        details.addView(detailRow("Position", position));
+        container.addView(details);
 
-        new AlertDialog.Builder(requireContext())
+        new MaterialAlertDialogBuilder(requireContext())
                 .setTitle(titleSb.toString())
-                .setMessage(body.toString())
-                .setPositiveButton("OK", null)
+                .setView(container)
+                .setPositiveButton("Fermer", null)
                 .show();
     }
 
@@ -1102,7 +1097,7 @@ public class TrainFragment extends Fragment {
                                         List<TrainIncident> travaux) {
         if (!isAdded() || getActivity() == null) return;
 
-        int stripeColorRes;
+        int badgeColorRes;
         String statusLabel;
         String summary;
 
@@ -1118,13 +1113,13 @@ public class TrainFragment extends Fragment {
                 }
             }
             if (hasBlocking) {
-                stripeColorRes = R.color.status_error;
-                statusLabel = "INTERROMPU";
+                badgeColorRes = R.color.status_error;
+                statusLabel = "Interrompu";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             } else {
-                stripeColorRes = R.color.status_warning;
-                statusLabel = "PERTURBÉ";
+                badgeColorRes = R.color.status_warning;
+                statusLabel = "Perturbé";
                 summary = perturbations.size() + " perturbation"
                         + (perturbations.size() > 1 ? "s" : "") + " en cours";
             }
@@ -1134,23 +1129,18 @@ public class TrainFragment extends Fragment {
                         + (travaux.size() > 1 ? "s" : "");
             }
         } else if (hasTravaux) {
-            stripeColorRes = R.color.status_info;
-            statusLabel = "TRAVAUX";
+            badgeColorRes = R.color.status_info;
+            statusLabel = "Travaux";
             summary = travaux.size() + " info"
                     + (travaux.size() > 1 ? "s" : "") + " planifi\u00e9e"
                     + (travaux.size() > 1 ? "s" : "");
         } else {
-            stripeColorRes = R.color.status_ok;
-            statusLabel = "NORMAL";
+            badgeColorRes = R.color.status_ok;
+            statusLabel = "Normal";
             summary = "Trafic normal";
         }
 
-        int stripeColor = ContextCompat.getColor(requireContext(), stripeColorRes);
-        lineStatusStripe.setBackgroundColor(stripeColor);
-
-        lineStatusEmoji.setText(statusLabel);
-        lineStatusEmoji.setTextColor(stripeColor);
-        lineStatusTitle.setText("Ligne N");
+        showLineStatusBadge(statusLabel, badgeColorRes);
         lineStatusSummary.setText(summary);
 
         // Stocke les listes courantes ; l'affichage réel est conditionné par
@@ -1168,6 +1158,12 @@ public class TrainFragment extends Fragment {
         updateIncidentsVisibility();
     }
 
+    private void showLineStatusBadge(String label, int colorRes) {
+        lineStatusBadge.setText(label);
+        TrainStyle.pill(lineStatusBadge, color(colorRes));
+        lineStatusBadge.setVisibility(View.VISIBLE);
+    }
+
     /** Applique la visibilité des sections perturbations/travaux + chevron en
      *  fonction du flag {@code incidentsListVisible} et de la disponibilité de
      *  données. */
@@ -1177,7 +1173,7 @@ public class TrainFragment extends Fragment {
         // Chevron : visible uniquement si on a quelque chose à montrer
         if (lineStatusChevron != null) {
             lineStatusChevron.setVisibility(hasAny ? View.VISIBLE : View.GONE);
-            lineStatusChevron.setText(incidentsListVisible ? "▲" : "▼");
+            lineStatusChevron.setRotation(incidentsListVisible ? 180f : 0f);
         }
 
         boolean show = hasAny && incidentsListVisible;
@@ -1692,10 +1688,10 @@ public class TrainFragment extends Fragment {
                 departuresTitleRetour, scheduleEmptyRetour, scheduleRecyclerViewRetour, now);
 
         renderOngoing(ongoingAller, LineNDirection.ALLER, ongoingAdapterAller,
-                ongoingTitleAller, ongoingLastUpdateAller, ongoingRecyclerViewAller,
+                ongoingTitleAller, ongoingRecyclerViewAller,
                 ongoingEmptyAller, now);
         renderOngoing(ongoingRetour, LineNDirection.RETOUR, ongoingAdapterRetour,
-                ongoingTitleRetour, ongoingLastUpdateRetour, ongoingRecyclerViewRetour,
+                ongoingTitleRetour, ongoingRecyclerViewRetour,
                 ongoingEmptyRetour, now);
 
         // Les trains suivis se lisent dans les mêmes listes, une fois celles-ci
@@ -1745,9 +1741,8 @@ public class TrainFragment extends Fragment {
 
         pinnedCard.setVisibility(View.VISIBLE);
         pinnedTitle.setText(display.isEmpty()
-                ? "📌 Trains suivis"
-                : "📌 Trains suivis · " + display.size());
-        pinnedLastUpdate.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
+                ? "Trains suivis"
+                : "Trains suivis · " + display.size());
         pinnedRecyclerView.setVisibility(display.isEmpty() ? View.GONE : View.VISIBLE);
         // La carte reste visible même sans train à montrer : un suivi qui
         // s'évapore en silence ferait croire à un oubli de l'app.
@@ -1802,7 +1797,7 @@ public class TrainFragment extends Fragment {
      */
     private void renderOngoing(List<TrainSchedule> source, LineNDirection direction,
                                TrainOngoingAdapter adapter, TextView titleView,
-                               TextView lastUpdateView, RecyclerView recycler,
+                               RecyclerView recycler,
                                TextView emptyView, long now) {
         List<OngoingTrain> display = new ArrayList<>();
         collectOngoing(display, source, direction, now);
@@ -1814,9 +1809,8 @@ public class TrainFragment extends Fragment {
                 OngoingTrains.effectiveArrivalMillis(b.getSchedule())));
 
         titleView.setText(display.isEmpty()
-                ? "🚆 En circulation"
-                : "🚆 En circulation · " + display.size());
-        lastUpdateView.setText(formatTimeWithSmallSeconds("à ", new Date(now)));
+                ? "En circulation"
+                : "En circulation · " + display.size());
         recycler.setVisibility(display.isEmpty() ? View.GONE : View.VISIBLE);
         emptyView.setVisibility(display.isEmpty() ? View.VISIBLE : View.GONE);
         adapter.updateTrains(display);
@@ -1894,15 +1888,15 @@ public class TrainFragment extends Fragment {
         int count = schedules != null ? schedules.size() : 0;
         if (titleView != null) {
             titleView.setText(count == 0
-                    ? "🕑 Prochains départs"
-                    : "🕑 Prochains départs · " + count);
+                    ? "Prochains départs"
+                    : "Prochains départs · " + count);
         }
         if (schedules == null) {
             scheduleAdapter.updateSchedules(Collections.<TrainSchedule>emptyList());
             showMessage(emptyView, recycler, "Erreur de chargement des horaires.");
         } else if (schedules.isEmpty()) {
             scheduleAdapter.updateSchedules(schedules);
-            showMessage(emptyView, recycler, "Aucun train prévu\ndans les 2 prochaines heures.");
+            showMessage(emptyView, recycler, "Aucun train prévu dans les 2 prochaines heures.");
         } else {
             emptyView.setVisibility(View.GONE);
             recycler.setVisibility(View.VISIBLE);
@@ -2357,10 +2351,7 @@ public class TrainFragment extends Fragment {
                         lineStatusSummary.setText("Erreur de chargement");
                         perturbationsSection.setVisibility(View.GONE);
                         travauxSection.setVisibility(View.GONE);
-                        int warningColor = ContextCompat.getColor(requireContext(), R.color.status_warning);
-                        lineStatusStripe.setBackgroundColor(warningColor);
-                        lineStatusEmoji.setText("ERREUR");
-                        lineStatusEmoji.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_warning));
+                        showLineStatusBadge("Erreur", R.color.status_warning);
                     } else {
                         List<TrainIncident> perturbations = new ArrayList<>();
                         List<TrainIncident> travaux = new ArrayList<>();

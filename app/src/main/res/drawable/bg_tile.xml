@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Tuile en retrait à l'intérieur d'une carte (incident, bloc de détail) -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/surface_subtle" />
+    <corners android:radius="@dimen/radius_tile" />
+</shape>

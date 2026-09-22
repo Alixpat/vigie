@@ -510,7 +510,7 @@ public final class OngoingTrains {
             trainInfo.append("Train ").append(schedule.getTrainNumber());
         }
         if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
-            if (trainInfo.length() > 0) trainInfo.append(" • ");
+            if (trainInfo.length() > 0) trainInfo.append(" · ");
             trainInfo.append(schedule.getMissionName());
         }
 

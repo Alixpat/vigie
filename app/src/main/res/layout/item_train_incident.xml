@@ -1,27 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<!-- Un incident : tuile en retrait dans la carte « Ligne N », dépliable. -->
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/incidentCard"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="4dp"
-    android:layout_marginEnd="4dp"
-    android:layout_marginTop="4dp"
-    android:layout_marginBottom="4dp"
-    app:cardElevation="1dp"
-    app:cardCornerRadius="6dp">
+    android:layout_marginTop="@dimen/space_xs"
+    android:layout_marginBottom="@dimen/space_xs"
+    android:orientation="vertical"
+    android:background="@drawable/bg_tile">
 
     <LinearLayout
+        android:id="@+id/incidentContent"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="12dp"
+        android:padding="@dimen/space_m"
         android:clickable="true"
         android:focusable="true"
         android:background="?attr/selectableItemBackground">
 
-        <!-- Ligne 1 : badge sévérité (gauche) + cause (droite) -->
+        <!-- Sévérité + cause + chevron -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -31,72 +31,58 @@
 
             <TextView
                 android:id="@+id/incidentSeverity"
+                style="@style/Vigie.Text.Pill"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:background="@drawable/bg_severity_badge"
-                android:paddingStart="8dp"
-                android:paddingEnd="8dp"
-                android:paddingTop="3dp"
-                android:paddingBottom="3dp"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                android:layout_height="wrap_content" />
 
             <TextView
                 android:id="@+id/incidentCause"
+                style="@style/Vigie.Text.Caption"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="@dimen/space_s"
                 android:gravity="end"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_hint"
                 android:maxLines="1"
                 android:ellipsize="end" />
 
-            <TextView
+            <ImageView
                 android:id="@+id/incidentChevron"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginStart="6dp"
-                android:text="▼"
-                android:textSize="11sp"
-                android:textColor="@color/text_hint" />
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="@dimen/space_xs"
+                android:src="@drawable/ic_expand_more"
+                app:tint="@color/text_hint"
+                android:importantForAccessibility="no" />
         </LinearLayout>
 
         <!-- Titre (caché si générique ou identique au badge) -->
         <TextView
             android:id="@+id/incidentTitle"
+            style="@style/Vigie.Text.Body.Strong"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_primary"
+            android:layout_marginTop="@dimen/space_s"
             android:visibility="gone" />
 
-        <!-- Message : caché par défaut, visible uniquement quand expandé -->
+        <!-- Message : visible uniquement une fois déplié -->
         <TextView
             android:id="@+id/incidentMessage"
+            style="@style/Vigie.Text.Body"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textSize="14sp"
-            android:textColor="@color/text_primary"
-            android:lineSpacingExtra="2dp"
+            android:layout_marginTop="@dimen/space_s"
+            android:lineSpacingExtra="3dp"
             android:visibility="gone" />
 
-        <!-- Période discrète en bas -->
         <TextView
             android:id="@+id/incidentPeriod"
+            style="@style/Vigie.Text.Caption"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:textSize="12sp"
-            android:textColor="@color/text_hint"
+            android:layout_marginTop="@dimen/space_s"
             android:visibility="gone" />
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</LinearLayout>
