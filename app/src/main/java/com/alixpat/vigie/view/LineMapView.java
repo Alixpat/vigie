@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.LineNStation;
 import com.alixpat.vigie.train.LineSegment;
+import com.alixpat.vigie.train.MyTrains;
 import com.alixpat.vigie.train.StationMatch;
 
 import java.util.ArrayList;
@@ -141,23 +142,22 @@ public class LineMapView extends View {
         public final String nextStopName;
         public final float progressBetweenStops; // 0.0 à 1.0
         public final int delayMinutes;
-        /** Ce train dessert-il mes deux gares ? (cf. {@code MyTrains}) */
-        public final boolean onMyRoute;
         /**
-         * La desserte est-elle prouvée, ou seulement déduite ? L'
-         * {@code estimated-timetable} ne décrivant que les arrêts restants, un
-         * train qui a déjà franchi une de mes gares ne permet plus de le dire —
-         * il est compté comme mien, mais le détail doit l'annoncer comme une
-         * déduction et non comme un fait.
+         * Ce train dessert-il mes deux gares ? {@code PROBABLY} quand une de mes
+         * gares est déjà derrière lui : l'{@code estimated-timetable} ne décrivant
+         * que les arrêts restants, il est compté comme mien, mais le détail doit
+         * l'annoncer comme une déduction et non comme un fait.
          */
-        public final boolean routeConfirmed;
+        public final MyTrains.Verdict verdict;
+        /** Raccourci de {@code verdict.isMine()} : dessiné comme un de mes trains. */
+        public final boolean onMyRoute;
         public final String trainNumber;
         public final String missionName;
 
         public TrainOnMap(String journeyRef, String destination,
                           String currentStopName, String nextStopName,
                           float progressBetweenStops, int delayMinutes,
-                          boolean onMyRoute, boolean routeConfirmed,
+                          MyTrains.Verdict verdict,
                           String trainNumber, String missionName) {
             this.journeyRef = journeyRef;
             this.destination = destination;
@@ -165,8 +165,8 @@ public class LineMapView extends View {
             this.nextStopName = nextStopName;
             this.progressBetweenStops = progressBetweenStops;
             this.delayMinutes = delayMinutes;
-            this.onMyRoute = onMyRoute;
-            this.routeConfirmed = routeConfirmed;
+            this.verdict = verdict;
+            this.onMyRoute = verdict.isMine();
             this.trainNumber = trainNumber;
             this.missionName = missionName;
         }
