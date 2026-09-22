@@ -6,6 +6,7 @@ import android.text.Spanned;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -135,10 +136,12 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
     }
 
     private void bindHeader(HeaderViewHolder holder, Row row) {
-        holder.label.setText(row.headerLabel.toUpperCase() + " (" + row.headerCount + ")");
-        GradientDrawable dot = (GradientDrawable) holder.colorDot.getBackground();
+        holder.label.setText(row.headerLabel + " · " + row.headerCount);
+        // mutate() : sans lui, la couleur serait partagée par toutes les pastilles
+        // issues du même drawable.
+        GradientDrawable dot = (GradientDrawable) holder.colorDot.getBackground().mutate();
         dot.setColor(row.headerColor);
-        holder.chevron.setText(row.headerOpen ? "▲" : "▼");
+        holder.chevron.setRotation(row.headerOpen ? 180f : 0f);
 
         holder.itemView.setOnClickListener(v -> {
             if (expandedSections.contains(row.headerLabel)) {
@@ -156,8 +159,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
         boolean isExpanded = expandedItems.contains(position);
 
         holder.severity.setText(incident.getSeverityLabel());
-        GradientDrawable badge = (GradientDrawable) holder.severity.getBackground();
-        badge.setColor(incident.getSeverityColor());
+        TrainStyle.pill(holder.severity, incident.getSeverityColor());
 
         if (incident.getCause() != null && !incident.getCause().isEmpty()) {
             holder.cause.setText(incident.getCause());
@@ -166,7 +168,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
             holder.cause.setVisibility(View.GONE);
         }
 
-        holder.chevron.setText(isExpanded ? "▲" : "▼");
+        holder.chevron.setRotation(isExpanded ? 180f : 0f);
 
         String title = incident.getTitle();
         if (title != null && !title.isEmpty()
@@ -260,7 +262,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
     static class HeaderViewHolder extends RecyclerView.ViewHolder {
         final View colorDot;
         final TextView label;
-        final TextView chevron;
+        final ImageView chevron;
 
         HeaderViewHolder(@NonNull View itemView) {
             super(itemView);
@@ -274,14 +276,14 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
         final View container;
         final TextView severity;
         final TextView cause;
-        final TextView chevron;
+        final ImageView chevron;
         final TextView title;
         final TextView message;
         final TextView period;
 
         IncidentViewHolder(@NonNull View itemView) {
             super(itemView);
-            container = ((ViewGroup) itemView).getChildAt(0);
+            container = itemView.findViewById(R.id.incidentContent);
             severity = itemView.findViewById(R.id.incidentSeverity);
             cause = itemView.findViewById(R.id.incidentCause);
             chevron = itemView.findViewById(R.id.incidentChevron);

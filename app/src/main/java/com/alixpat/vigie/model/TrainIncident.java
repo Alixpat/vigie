@@ -50,19 +50,6 @@ public class TrainIncident {
         return TYPE_INFORMATION.equals(type);
     }
 
-    public String getSeverityEmoji() {
-        if (isTravaux()) return "\uD83D\uDEA7"; // construction sign
-        if (isInformation()) return "\u2139\uFE0F"; // info
-        if (severity == null) return "\u26A0\uFE0F";
-        switch (severity.toLowerCase()) {
-            case "blocking": return "\uD83D\uDED1";
-            case "delays": return "\u23F0";
-            case "reduced_service": return "\u26A0\uFE0F";
-            case "information": return "\u2139\uFE0F";
-            default: return "\u26A0\uFE0F";
-        }
-    }
-
     public String getSeverityLabel() {
         // "ascenseur" prime sur le type pour qu'on sache distinguer une panne
         // d'ascenseur (info pratique) d'une vraie perturbation/travaux.
@@ -81,15 +68,15 @@ public class TrainIncident {
 
     public int getSeverityColor() {
         if ("ascenseur".equalsIgnoreCase(severity)) return 0xFF607D8B; // BlueGrey
-        if (isTravaux()) return 0xFF9C27B0;
-        if (isInformation()) return 0xFF2196F3;
-        if (severity == null) return 0xFFFF9800;
+        if (isTravaux()) return 0xFF8E24AA;
+        if (isInformation()) return 0xFF1976D2;
+        if (severity == null) return 0xFFEF6C00;
         switch (severity.toLowerCase()) {
-            case "blocking": return 0xFFF44336;
-            case "delays": return 0xFFFF9800;
-            case "reduced_service": return 0xFFFF9800;
-            case "information": return 0xFF2196F3;
-            default: return 0xFFFF9800;
+            case "blocking": return 0xFFD32F2F;
+            case "delays": return 0xFFEF6C00;
+            case "reduced_service": return 0xFFEF6C00;
+            case "information": return 0xFF1976D2;
+            default: return 0xFFEF6C00;
         }
     }
 }

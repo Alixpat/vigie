@@ -85,12 +85,6 @@ public class TrainSchedule {
         return "À l'heure";
     }
 
-    public int getStatusColor() {
-        if (isCancelled()) return 0xFFF44336;
-        if (isDelayed()) return 0xFFFF9800;
-        return 0xFF4CAF50;
-    }
-
     /**
      * Calcule le temps de trajet entre le départ et l'arrivée.
      * @return durée formatée (ex: "32min 15s", "1h12min 05s") ou null si indisponible
@@ -111,12 +105,6 @@ public class TrainSchedule {
             return hours + "h" + String.format("%02d", minutes) + "min " + String.format("%02d", seconds) + "s";
         }
         return minutes + "min " + String.format("%02d", seconds) + "s";
-    }
-
-    public String getStatusEmoji() {
-        if (isCancelled()) return "\u274C";
-        if (isDelayed()) return "\u23F0";
-        return "\u2705";
     }
 
     /**

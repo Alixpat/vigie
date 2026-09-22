@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Espacements : une seule échelle (4 / 8 / 12 / 16) pour tout l'écran -->
+    <dimen name="space_xs">4dp</dimen>
+    <dimen name="space_s">8dp</dimen>
+    <dimen name="space_m">12dp</dimen>
+    <dimen name="space_l">16dp</dimen>
+
+    <dimen name="radius_card">12dp</dimen>
+    <dimen name="radius_tile">8dp</dimen>
+
+    <!-- Zone de toucher des petites icônes (épingle, plan, fermer) -->
+    <dimen name="icon_touch">40dp</dimen>
+</resources>

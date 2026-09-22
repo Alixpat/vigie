@@ -1,136 +1,98 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<!-- Un départ : une ligne de la carte de sens, pas une carte dans la carte. -->
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_marginStart="4dp"
-    android:layout_marginEnd="4dp"
-    android:layout_marginTop="3dp"
-    android:layout_marginBottom="3dp"
-    app:cardElevation="1dp"
-    app:cardCornerRadius="6dp">
+    android:orientation="vertical">
+
+    <!-- Filet de séparation, masqué sur la première ligne -->
+    <View
+        android:id="@+id/scheduleDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginStart="@dimen/space_l"
+        android:background="@color/divider" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:gravity="center_vertical"
+        android:paddingStart="@dimen/space_l"
+        android:paddingEnd="@dimen/space_xs"
+        android:paddingTop="@dimen/space_m"
+        android:paddingBottom="@dimen/space_m"
+        android:background="?attr/selectableItemBackground">
 
-        <!-- Horaires depart + arrivee -->
+        <!-- Heure de départ (barrée si retard ou suppression) + heure réelle -->
         <LinearLayout
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:minWidth="110dp">
-
-            <LinearLayout
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:gravity="center_vertical">
-
-                <TextView
-                    android:id="@+id/scheduleAimedTime"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary" />
-
-                <TextView
-                    android:id="@+id/scheduleArrivalArrow"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text=" \u2192 "
-                    android:textSize="14sp"
-                    android:textColor="@color/text_hint"
-                    android:visibility="gone" />
-
-                <TextView
-                    android:id="@+id/scheduleArrivalTime"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:textSize="18sp"
-                    android:textStyle="bold"
-                    android:textColor="@color/text_primary"
-                    android:visibility="gone" />
-            </LinearLayout>
+            android:minWidth="60dp"
+            android:orientation="vertical">
 
             <TextView
-                android:id="@+id/scheduleTravelTime"
+                android:id="@+id/scheduleAimedTime"
+                style="@style/Vigie.Text.Time"
                 android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint"
-                android:visibility="gone" />
+                android:layout_height="wrap_content" />
 
             <TextView
                 android:id="@+id/scheduleExpectedTime"
+                style="@style/Vigie.Text.Body.Strong"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:textStyle="bold"
+                android:fontFeatureSettings="tnum"
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Destination + Voie -->
+        <!-- Terminus, arrivée chez moi, train -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:orientation="vertical"
-            android:layout_marginStart="12dp">
+            android:layout_marginStart="@dimen/space_m"
+            android:orientation="vertical">
 
             <TextView
                 android:id="@+id/scheduleDestination"
-                android:layout_width="wrap_content"
+                style="@style/Vigie.Text.Body.Strong"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="14sp"
-                android:textColor="@color/text_primary" />
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <TextView
+                android:id="@+id/scheduleDetails"
+                style="@style/Vigie.Text.Secondary"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:fontFeatureSettings="tnum"
+                android:visibility="gone" />
 
             <TextView
                 android:id="@+id/scheduleTrainInfo"
-                android:layout_width="wrap_content"
+                style="@style/Vigie.Text.Caption"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_secondary"
-                android:visibility="gone" />
-
-            <TextView
-                android:id="@+id/schedulePlatform"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint"
+                android:layout_marginTop="2dp"
                 android:visibility="gone" />
         </LinearLayout>
 
-        <!-- Statut -->
         <TextView
             android:id="@+id/scheduleStatus"
+            style="@style/Vigie.Text.Pill"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="@dimen/space_s" />
 
-        <!-- Epingle : suivre ce train -->
-        <TextView
+        <ImageView
             android:id="@+id/schedulePin"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="📌"
-            android:textSize="16sp"
-            android:paddingStart="10dp"
-            android:paddingEnd="2dp"
-            android:paddingTop="6dp"
-            android:paddingBottom="6dp"
-            android:clickable="true"
-            android:focusable="true"
-            android:contentDescription="Épingler ce train" />
-
+            style="@style/Vigie.IconButton"
+            android:src="@drawable/ic_pin"
+            android:contentDescription="Suivre ce train" />
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</LinearLayout>

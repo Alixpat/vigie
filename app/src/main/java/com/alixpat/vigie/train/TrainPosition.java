@@ -167,17 +167,17 @@ public final class TrainPosition {
         return phase != Phase.UNKNOWN;
     }
 
-    /** Libellé lisible, en français, avec un pictogramme de statut. */
+    /** Libellé lisible, en français. */
     public String describe() {
         switch (phase) {
             case AT_STOP:
-                return "\uD83D\uDCCD En gare de " + currentStopName;
+                return "En gare de " + currentStopName;
             case BETWEEN:
-                return "\uD83D\uDE86 Entre " + currentStopName + " et " + nextStopName;
+                return "Entre " + currentStopName + " et " + nextStopName;
             case NOT_STARTED:
-                return "\u23F3 Pas encore parti de " + currentStopName;
+                return "Pas encore parti de " + currentStopName;
             case ARRIVED:
-                return "\u2705 Arrivé à " + currentStopName;
+                return "Arrivé à " + currentStopName;
             default:
                 return "";
         }

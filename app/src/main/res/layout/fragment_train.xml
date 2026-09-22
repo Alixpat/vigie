@@ -10,526 +10,387 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/space_l">
 
-        <!-- Ligne N - Bandeau d'etat sobre (cliquable pour expand la liste des incidents) -->
+        <!-- ============ ÉTAT DE LA LIGNE ============ -->
+        <!-- Un tap sur l'en-tête déplie les perturbations et les travaux,
+             rangés dans la même carte. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/lineStatusCard"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            android:clickable="true"
-            android:focusable="true"
-            app:cardElevation="1dp"
-            app:cardCornerRadius="8dp">
+            android:layout_marginBottom="@dimen/space_m">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <!-- Accent stripe -->
-                <View
-                    android:id="@+id/lineStatusStripe"
-                    android:layout_width="4dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/status_ok" />
+                android:orientation="vertical">
 
                 <LinearLayout
+                    android:id="@+id/lineStatusHeader"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="12dp">
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_s"
+                    android:paddingTop="@dimen/space_m"
+                    android:paddingBottom="@dimen/space_m"
+                    android:background="?attr/selectableItemBackground">
+
+                    <!-- Pictogramme de la ligne -->
+                    <TextView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:background="@drawable/bg_line_badge"
+                        android:gravity="center"
+                        android:text="N"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:textColor="@color/on_line_n"
+                        android:importantForAccessibility="no" />
 
                     <LinearLayout
-                        android:layout_width="match_parent"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical">
+                        android:layout_weight="1"
+                        android:layout_marginStart="@dimen/space_m"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal"
+                            android:gravity="center_vertical">
+
+                            <TextView
+                                android:id="@+id/lineStatusTitle"
+                                style="@style/Vigie.Text.CardTitle"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Ligne N" />
+
+                            <TextView
+                                android:id="@+id/lineStatusBadge"
+                                style="@style/Vigie.Text.Pill"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="@dimen/space_s"
+                                android:visibility="gone" />
+                        </LinearLayout>
 
                         <TextView
-                            android:id="@+id/lineStatusEmoji"
-                            android:layout_width="wrap_content"
+                            android:id="@+id/lineStatusSummary"
+                            style="@style/Vigie.Text.Secondary"
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textStyle="bold" />
-
-                        <TextView
-                            android:id="@+id/lineStatusTitle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:layout_marginStart="8dp"
-                            android:text="Ligne N"
-                            android:textSize="15sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
+                            android:layout_marginTop="2dp"
+                            android:text="Chargement…" />
 
                         <TextView
                             android:id="@+id/lineStatusUpdate"
+                            style="@style/Vigie.Text.Caption"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:textSize="10sp"
-                            android:textColor="@color/text_hint" />
-
-                        <TextView
-                            android:id="@+id/lineStatusChevron"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="▼"
-                            android:textSize="12sp"
-                            android:textColor="@color/text_hint"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="4dp"
-                            android:visibility="gone" />
-
-                        <TextView
-                            android:id="@+id/lineMapButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="🗺"
-                            android:textSize="18sp"
-                            android:paddingStart="8dp"
-                            android:paddingEnd="4dp"
-                            android:clickable="true"
-                            android:focusable="true"
-                            android:contentDescription="Voir le plan de la ligne" />
+                            android:layout_marginTop="2dp" />
                     </LinearLayout>
 
-                    <TextView
-                        android:id="@+id/lineStatusSummary"
+                    <ImageView
+                        android:id="@+id/lineStatusChevron"
+                        android:layout_width="24dp"
+                        android:layout_height="24dp"
+                        android:layout_marginStart="@dimen/space_xs"
+                        android:src="@drawable/ic_expand_more"
+                        app:tint="@color/text_hint"
+                        android:importantForAccessibility="no"
+                        android:visibility="gone" />
+
+                    <ImageView
+                        android:id="@+id/lineMapButton"
+                        style="@style/Vigie.IconButton"
+                        android:layout_marginStart="@dimen/space_xs"
+                        android:src="@drawable/ic_map"
+                        app:tint="@color/text_secondary"
+                        android:contentDescription="Voir le plan de la ligne" />
+                </LinearLayout>
+
+                <!-- Perturbations (visibles uniquement si dépliées et présentes) -->
+                <LinearLayout
+                    android:id="@+id/perturbationsSection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_m"
+                    android:paddingEnd="@dimen/space_m"
+                    android:paddingBottom="@dimen/space_s"
+                    android:visibility="gone">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/trainRecyclerView"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_secondary"
-                        android:text="Chargement..." />
+                        android:nestedScrollingEnabled="false" />
+                </LinearLayout>
+
+                <!-- Infos planifiées / travaux -->
+                <LinearLayout
+                    android:id="@+id/travauxSection"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/space_m"
+                    android:paddingEnd="@dimen/space_m"
+                    android:paddingBottom="@dimen/space_s"
+                    android:visibility="gone">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/travauxRecyclerView"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:nestedScrollingEnabled="false" />
                 </LinearLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
-
-        <!-- Perturbations (visibles uniquement si perturbations en cours) -->
-        <LinearLayout
-            android:id="@+id/perturbationsSection"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginBottom="8dp">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/trainRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" />
-        </LinearLayout>
-
-        <!-- Infos planifiees / Travaux (visibles uniquement si presents) -->
-        <LinearLayout
-            android:id="@+id/travauxSection"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone"
-            android:layout_marginBottom="8dp">
-
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/travauxRecyclerView"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" />
-        </LinearLayout>
 
         <!-- ============ TRAINS SUIVIS ============ -->
-        <!-- Les trains epingles, tous sens confondus : ils sont ici directement,
-             sans avoir a les retrouver dans leur carte de sens. Masquee tant
-             qu'aucun train n'est suivi. -->
+        <!-- Les trains épinglés, tous sens confondus. Masquée tant qu'aucun
+             train n'est suivi. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/pinnedCard"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
+            android:layout_marginBottom="@dimen/space_m"
             android:visibility="gone"
-            app:cardElevation="2dp"
-            app:cardCornerRadius="10dp">
+            app:strokeColor="@color/line_n">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <View
-                    android:layout_width="4dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/status_warning" />
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs">
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp">
-
-                        <TextView
-                            android:id="@+id/pinnedTitle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="📌 Trains suivis"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:id="@+id/pinnedLastUpdate"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textColor="@color/text_hint" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/divider"
-                        android:layout_marginTop="10dp"
-                        android:layout_marginBottom="4dp" />
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/pinnedRecyclerView"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:nestedScrollingEnabled="false" />
+                    <ImageView
+                        android:layout_width="18dp"
+                        android:layout_height="18dp"
+                        android:layout_marginEnd="@dimen/space_s"
+                        android:src="@drawable/ic_pin"
+                        app:tint="@color/line_n"
+                        android:importantForAccessibility="no" />
 
                     <TextView
-                        android:id="@+id/pinnedEmpty"
-                        android:layout_width="match_parent"
+                        android:id="@+id/pinnedTitle"
+                        style="@style/Vigie.Text.CardTitle"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:paddingTop="12dp"
-                        android:paddingBottom="12dp"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_hint"
-                        android:text="Train suivi hors de portée des horaires publiés."
-                        android:visibility="gone" />
+                        android:layout_weight="1"
+                        android:text="Trains suivis" />
                 </LinearLayout>
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/pinnedRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <TextView
+                    android:id="@+id/pinnedEmpty"
+                    style="@style/Vigie.Text.Empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Train suivi hors de portée des horaires publiés."
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ============ SENS ALLER : Clamart -> Villepreux ============ -->
-        <!-- Une carte par sens : elle contient les deux divisions du sens,
-             les prochains departs puis les trains en circulation. -->
+        <!-- ============ SENS ALLER : Clamart → Villepreux ============ -->
+        <!-- Une carte par sens : les prochains départs puis les trains en
+             circulation. -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/directionCardAller"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="12dp"
-            app:cardElevation="2dp"
-            app:cardCornerRadius="10dp">
+            android:layout_marginBottom="@dimen/space_m">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <View
-                    android:id="@+id/directionStripeAller"
-                    android:layout_width="4dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/primary" />
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_xs">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
-
-                    <!-- En-tete du sens -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp">
-
-                        <TextView
-                            android:id="@+id/scheduleTitleAller"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Clamart → Villepreux"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:id="@+id/scheduleLastUpdateAller"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textColor="@color/text_hint" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/divider"
-                        android:layout_marginTop="10dp" />
-
-                    <!-- Division 1 : prochains departs -->
-                    <TextView
-                        android:id="@+id/departuresTitleAller"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="10dp"
-                        android:paddingBottom="4dp"
-                        android:text="🕑 Prochains départs"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_secondary" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l">
 
                     <TextView
-                        android:id="@+id/scheduleEmptyAller"
-                        android:layout_width="match_parent"
+                        android:id="@+id/scheduleTitleAller"
+                        style="@style/Vigie.Text.CardTitle"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="Chargement des horaires..."
-                        android:textSize="14sp"
-                        android:textColor="@color/text_hint"
-                        android:paddingTop="12dp"
-                        android:paddingBottom="12dp" />
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/scheduleRecyclerViewAller"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:nestedScrollingEnabled="false"
-                        android:visibility="gone" />
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/divider"
-                        android:layout_marginTop="10dp" />
-
-                    <!-- Division 2 : trains en circulation dans ce sens -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="10dp"
-                        android:paddingBottom="4dp">
-
-                        <TextView
-                            android:id="@+id/ongoingTitleAller"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="🚆 En circulation"
-                            android:textSize="14sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_secondary" />
-
-                        <TextView
-                            android:id="@+id/ongoingLastUpdateAller"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textColor="@color/text_hint" />
-                    </LinearLayout>
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/ongoingRecyclerViewAller"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:nestedScrollingEnabled="false" />
+                        android:layout_weight="1"
+                        android:text="Clamart → Villepreux" />
 
                     <TextView
-                        android:id="@+id/ongoingEmptyAller"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:paddingTop="12dp"
-                        android:paddingBottom="12dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_hint"
-                        android:text="Aucun train entre Clamart et Villepreux."
-                        android:visibility="gone" />
+                        android:id="@+id/scheduleLastUpdateAller"
+                        style="@style/Vigie.Text.Caption"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/departuresTitleAller"
+                    style="@style/Vigie.Text.Overline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingTop="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Prochains départs" />
+
+                <TextView
+                    android:id="@+id/scheduleEmptyAller"
+                    style="@style/Vigie.Text.Empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Chargement des horaires…" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/scheduleRecyclerViewAller"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/ongoingTitleAller"
+                    style="@style/Vigie.Text.Overline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingTop="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="En circulation" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/ongoingRecyclerViewAller"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <TextView
+                    android:id="@+id/ongoingEmptyAller"
+                    style="@style/Vigie.Text.Empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Aucun train entre Clamart et Villepreux."
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- ============ SENS RETOUR : Villepreux -> Clamart ============ -->
+        <!-- ============ SENS RETOUR : Villepreux → Clamart ============ -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/directionCardRetour"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            app:cardElevation="2dp"
-            app:cardCornerRadius="10dp">
+            android:layout_height="wrap_content">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal">
-
-                <View
-                    android:id="@+id/directionStripeRetour"
-                    android:layout_width="4dp"
-                    android:layout_height="match_parent"
-                    android:background="@color/secondary" />
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_xs">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:paddingTop="12dp"
-                    android:paddingBottom="12dp">
-
-                    <!-- En-tete du sens -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp">
-
-                        <TextView
-                            android:id="@+id/scheduleTitleRetour"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="Villepreux → Clamart"
-                            android:textSize="16sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_primary" />
-
-                        <TextView
-                            android:id="@+id/scheduleLastUpdateRetour"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textColor="@color/text_hint" />
-                    </LinearLayout>
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/divider"
-                        android:layout_marginTop="10dp" />
-
-                    <!-- Division 1 : prochains departs -->
-                    <TextView
-                        android:id="@+id/departuresTitleRetour"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="10dp"
-                        android:paddingBottom="4dp"
-                        android:text="🕑 Prochains départs"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="@color/text_secondary" />
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l">
 
                     <TextView
-                        android:id="@+id/scheduleEmptyRetour"
-                        android:layout_width="match_parent"
+                        android:id="@+id/scheduleTitleRetour"
+                        style="@style/Vigie.Text.CardTitle"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:text="Chargement des horaires..."
-                        android:textSize="14sp"
-                        android:textColor="@color/text_hint"
-                        android:paddingTop="12dp"
-                        android:paddingBottom="12dp" />
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/scheduleRecyclerViewRetour"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:nestedScrollingEnabled="false"
-                        android:visibility="gone" />
-
-                    <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/divider"
-                        android:layout_marginTop="10dp" />
-
-                    <!-- Division 2 : trains en circulation dans ce sens -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:paddingStart="12dp"
-                        android:paddingEnd="12dp"
-                        android:paddingTop="10dp"
-                        android:paddingBottom="4dp">
-
-                        <TextView
-                            android:id="@+id/ongoingTitleRetour"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="🚆 En circulation"
-                            android:textSize="14sp"
-                            android:textStyle="bold"
-                            android:textColor="@color/text_secondary" />
-
-                        <TextView
-                            android:id="@+id/ongoingLastUpdateRetour"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:textSize="11sp"
-                            android:textColor="@color/text_hint" />
-                    </LinearLayout>
-
-                    <androidx.recyclerview.widget.RecyclerView
-                        android:id="@+id/ongoingRecyclerViewRetour"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:paddingStart="8dp"
-                        android:paddingEnd="8dp"
-                        android:nestedScrollingEnabled="false" />
+                        android:layout_weight="1"
+                        android:text="Villepreux → Clamart" />
 
                     <TextView
-                        android:id="@+id/ongoingEmptyRetour"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center"
-                        android:paddingTop="12dp"
-                        android:paddingBottom="12dp"
-                        android:textSize="13sp"
-                        android:textColor="@color/text_hint"
-                        android:text="Aucun train entre Villepreux et Clamart."
-                        android:visibility="gone" />
+                        android:id="@+id/scheduleLastUpdateRetour"
+                        style="@style/Vigie.Text.Caption"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
                 </LinearLayout>
+
+                <TextView
+                    android:id="@+id/departuresTitleRetour"
+                    style="@style/Vigie.Text.Overline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingTop="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Prochains départs" />
+
+                <TextView
+                    android:id="@+id/scheduleEmptyRetour"
+                    style="@style/Vigie.Text.Empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Chargement des horaires…" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/scheduleRecyclerViewRetour"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/ongoingTitleRetour"
+                    style="@style/Vigie.Text.Overline"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingTop="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="En circulation" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/ongoingRecyclerViewRetour"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:nestedScrollingEnabled="false" />
+
+                <TextView
+                    android:id="@+id/ongoingEmptyRetour"
+                    style="@style/Vigie.Text.Empty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Aucun train entre Villepreux et Clamart."
+                    android:visibility="gone" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

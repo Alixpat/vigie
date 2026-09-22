@@ -3,6 +3,7 @@ package com.alixpat.vigie.adapter;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.ProgressBar;
 import android.widget.TextView;
 
@@ -71,18 +72,17 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
             if (clickListener != null) clickListener.onOngoingTrainClick(train);
         });
 
+        holder.divider.setVisibility(position == 0 ? View.GONE : View.VISIBLE);
+
         if (showDirection) {
             holder.direction.setText(train.getDirectionLabel());
         } else {
             String terminus = train.getSchedule().getDestination();
             holder.direction.setText(terminus == null || terminus.isEmpty()
-                    ? "" : "→ " + terminus);
+                    ? "" : "Vers " + terminus);
         }
         PinIcons.bind(holder.pin, train.getSchedule(), pinListener);
-
-        holder.status.setText(train.getSchedule().getStatusLabel());
-        holder.status.setTextColor(train.getSchedule().getStatusColor());
-        holder.stripe.setBackgroundColor(train.getSchedule().getStatusColor());
+        TrainStyle.statusPill(holder.status, train.getSchedule());
 
         holder.position.setText(train.getPositionLabel());
         holder.position.setVisibility(train.getPositionLabel().isEmpty() ? View.GONE : View.VISIBLE);
@@ -100,7 +100,7 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
 
         StringBuilder departure = new StringBuilder();
         String aimed = train.getSchedule().getAimedDepartureTime();
-        departure.append("Départ ").append(train.getSchedule().getOriginStation()).append(" · ");
+        departure.append("Départ ").append(train.getSchedule().getOriginStation()).append(" ");
         if (aimed != null && !aimed.isEmpty()) {
             departure.append(aimed);
             String expected = train.getSchedule().getExpectedDepartureTime();
@@ -110,7 +110,7 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
         } else {
             // Train déjà au-delà de ma gare de départ : IDFM n'expose plus son
             // passage. On le dit plutôt que d'inventer une heure.
-            departure.append("non communiqué");
+            departure.append("· heure non communiquée");
         }
         String platform = train.getSchedule().getPlatformName();
         if (platform != null && !platform.isEmpty()) {
@@ -135,10 +135,10 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        final View stripe;
+        final View divider;
         final TextView direction;
         final TextView status;
-        final TextView pin;
+        final ImageView pin;
         final TextView position;
         final ProgressBar progress;
         final TextView nextStop;
@@ -148,7 +148,7 @@ public class TrainOngoingAdapter extends RecyclerView.Adapter<TrainOngoingAdapte
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
-            stripe = itemView.findViewById(R.id.ongoingStripe);
+            divider = itemView.findViewById(R.id.ongoingDivider);
             direction = itemView.findViewById(R.id.ongoingDirection);
             status = itemView.findViewById(R.id.ongoingStatus);
             pin = itemView.findViewById(R.id.ongoingPin);

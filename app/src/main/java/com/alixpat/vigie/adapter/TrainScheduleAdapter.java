@@ -1,12 +1,14 @@
 package com.alixpat.vigie.adapter;
 
+import android.content.Context;
 import android.graphics.Paint;
-import android.text.SpannableString;
+import android.text.SpannableStringBuilder;
 import android.text.Spanned;
 import android.text.style.RelativeSizeSpan;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
@@ -20,6 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdapter.ViewHolder> {
+
+    private static final String SEPARATOR = " · ";
 
     public interface OnTrainClickListener {
         void onTrainClick(TrainSchedule schedule);
@@ -59,6 +63,7 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TrainSchedule schedule = schedules.get(position);
+        Context context = holder.itemView.getContext();
 
         holder.itemView.setOnClickListener(v -> {
             if (clickListener != null) {
@@ -66,99 +71,75 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
             }
         });
 
-        int textPrimary = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_primary);
-        int textHint = ContextCompat.getColor(holder.itemView.getContext(), R.color.text_hint);
-        int warning = ContextCompat.getColor(holder.itemView.getContext(), R.color.status_warning);
-
+        holder.divider.setVisibility(position == 0 ? View.GONE : View.VISIBLE);
         PinIcons.bind(holder.pin, schedule, pinListener);
 
         holder.destination.setText(schedule.getDestination());
-        holder.status.setText(schedule.getStatusLabel());
-        holder.status.setTextColor(schedule.getStatusColor());
+        TrainStyle.statusPill(holder.status, schedule);
+        setOrHide(holder.trainInfo, TrainStyle.trainInfo(schedule));
 
-        // Afficher numéro de train et nom de mission
-        StringBuilder trainInfo = new StringBuilder();
-        if (schedule.getTrainNumber() != null && !schedule.getTrainNumber().isEmpty()) {
-            trainInfo.append("Train ").append(schedule.getTrainNumber());
-        }
-        if (schedule.getMissionName() != null && !schedule.getMissionName().isEmpty()) {
-            if (trainInfo.length() > 0) trainInfo.append(" \u2022 ");
-            trainInfo.append(schedule.getMissionName());
-        }
-        if (trainInfo.length() > 0) {
-            holder.trainInfo.setText(trainInfo.toString());
-            holder.trainInfo.setVisibility(View.VISIBLE);
+        int textPrimary = ContextCompat.getColor(context, R.color.text_primary);
+        int textHint = ContextCompat.getColor(context, R.color.text_hint);
+
+        // Heure au tableau : barrée dès qu'elle ne tient plus (retard ou suppression),
+        // l'heure réelle prenant sa place juste en dessous.
+        boolean struck = schedule.isCancelled() || schedule.isDelayed();
+        holder.aimedTime.setText(schedule.getAimedDepartureTime());
+        holder.aimedTime.setTextColor(struck ? textHint : textPrimary);
+        setStrikeThrough(holder.aimedTime, struck);
+
+        if (schedule.isDelayed()) {
+            holder.expectedTime.setText(schedule.getExpectedDepartureTime());
+            holder.expectedTime.setTextColor(TrainStyle.statusColor(context, schedule));
+            holder.expectedTime.setVisibility(View.VISIBLE);
         } else {
-            holder.trainInfo.setVisibility(View.GONE);
+            holder.expectedTime.setVisibility(View.GONE);
         }
 
-        if (schedule.getPlatformName() != null && !schedule.getPlatformName().isEmpty()) {
-            holder.platform.setText("Voie " + schedule.getPlatformName());
-            holder.platform.setVisibility(View.VISIBLE);
-        } else {
-            holder.platform.setVisibility(View.GONE);
-        }
+        CharSequence details = buildDetails(schedule);
+        setOrHide(holder.details, details);
+        setStrikeThrough(holder.details, schedule.isCancelled());
+    }
 
+    /** "Arrivée 08:45 · 32min 05s · Voie 2", les secondes en plus petit. */
+    private static CharSequence buildDetails(TrainSchedule schedule) {
+        SpannableStringBuilder details = new SpannableStringBuilder();
         String arrival = schedule.getArrivalTime();
         if (arrival != null && !arrival.isEmpty()) {
-            holder.arrivalArrow.setVisibility(View.VISIBLE);
-            holder.arrivalTime.setVisibility(View.VISIBLE);
-            holder.arrivalTime.setText(arrival);
-        } else {
-            holder.arrivalArrow.setVisibility(View.GONE);
-            holder.arrivalTime.setVisibility(View.GONE);
+            details.append("Arrivée ").append(arrival);
         }
-
         String travelTime = schedule.getTravelTime();
         if (travelTime != null) {
-            String full = "Trajet : " + travelTime;
-            // Rendre les secondes (ex: " 05s") plus petites
-            int sIdx = full.lastIndexOf("s");
-            if (sIdx > 0) {
-                // Trouver le début de la partie secondes (espace avant les chiffres des secondes)
-                int secStart = full.lastIndexOf(" ", sIdx - 1);
-                if (secStart >= 0) {
-                    SpannableString span = new SpannableString(full);
-                    span.setSpan(new RelativeSizeSpan(0.8f), secStart, sIdx + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                    holder.travelTime.setText(span);
-                } else {
-                    holder.travelTime.setText(full);
-                }
-            } else {
-                holder.travelTime.setText(full);
+            if (details.length() > 0) details.append(SEPARATOR);
+            int start = details.length();
+            details.append(travelTime);
+            // Les secondes (" 05s") en retrait : elles précisent, elles ne se lisent pas.
+            int secondsStart = travelTime.lastIndexOf(' ');
+            if (secondsStart > 0) {
+                details.setSpan(new RelativeSizeSpan(0.8f), start + secondsStart,
+                        details.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
             }
-            holder.travelTime.setVisibility(View.VISIBLE);
-        } else {
-            holder.travelTime.setVisibility(View.GONE);
         }
+        String platform = schedule.getPlatformName();
+        if (platform != null && !platform.isEmpty()) {
+            if (details.length() > 0) details.append(SEPARATOR);
+            details.append("Voie ").append(platform);
+        }
+        return details;
+    }
 
-        if (schedule.isCancelled()) {
-            holder.aimedTime.setText(schedule.getAimedDepartureTime());
-            holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(textHint);
-            holder.expectedTime.setVisibility(View.GONE);
-            if (arrival != null && !arrival.isEmpty()) {
-                holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-                holder.arrivalTime.setTextColor(textHint);
-            }
-        } else if (schedule.isDelayed()) {
-            holder.aimedTime.setText(schedule.getAimedDepartureTime());
-            holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() | Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(textHint);
-            holder.expectedTime.setText(schedule.getExpectedDepartureTime());
-            holder.expectedTime.setTextColor(warning);
-            holder.expectedTime.setVisibility(View.VISIBLE);
-            holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(textPrimary);
+    private static void setStrikeThrough(TextView view, boolean struck) {
+        int flags = view.getPaintFlags();
+        view.setPaintFlags(struck ? flags | Paint.STRIKE_THRU_TEXT_FLAG
+                : flags & ~Paint.STRIKE_THRU_TEXT_FLAG);
+    }
+
+    private static void setOrHide(TextView view, CharSequence text) {
+        if (text == null || text.length() == 0) {
+            view.setVisibility(View.GONE);
         } else {
-            holder.aimedTime.setText(schedule.getAimedDepartureTime());
-            holder.aimedTime.setPaintFlags(holder.aimedTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.aimedTime.setTextColor(textPrimary);
-            holder.expectedTime.setVisibility(View.GONE);
-            holder.arrivalTime.setPaintFlags(holder.arrivalTime.getPaintFlags() & ~Paint.STRIKE_THRU_TEXT_FLAG);
-            holder.arrivalTime.setTextColor(textPrimary);
-            holder.status.setText(schedule.getStatusLabel());
-            holder.status.setTextColor(schedule.getStatusColor());
+            view.setText(text);
+            view.setVisibility(View.VISIBLE);
         }
     }
 
@@ -168,27 +149,23 @@ public class TrainScheduleAdapter extends RecyclerView.Adapter<TrainScheduleAdap
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
+        final View divider;
         final TextView aimedTime;
         final TextView expectedTime;
-        final TextView arrivalArrow;
-        final TextView arrivalTime;
-        final TextView travelTime;
         final TextView destination;
+        final TextView details;
         final TextView trainInfo;
-        final TextView platform;
         final TextView status;
-        final TextView pin;
+        final ImageView pin;
 
         ViewHolder(@NonNull View itemView) {
             super(itemView);
+            divider = itemView.findViewById(R.id.scheduleDivider);
             aimedTime = itemView.findViewById(R.id.scheduleAimedTime);
             expectedTime = itemView.findViewById(R.id.scheduleExpectedTime);
-            arrivalArrow = itemView.findViewById(R.id.scheduleArrivalArrow);
-            arrivalTime = itemView.findViewById(R.id.scheduleArrivalTime);
-            travelTime = itemView.findViewById(R.id.scheduleTravelTime);
             destination = itemView.findViewById(R.id.scheduleDestination);
+            details = itemView.findViewById(R.id.scheduleDetails);
             trainInfo = itemView.findViewById(R.id.scheduleTrainInfo);
-            platform = itemView.findViewById(R.id.schedulePlatform);
             status = itemView.findViewById(R.id.scheduleStatus);
             pin = itemView.findViewById(R.id.schedulePin);
         }
