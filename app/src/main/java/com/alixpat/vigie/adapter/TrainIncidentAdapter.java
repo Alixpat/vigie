@@ -1,6 +1,5 @@
 package com.alixpat.vigie.adapter;
 
-import android.graphics.drawable.GradientDrawable;
 import android.text.Html;
 import android.text.Spanned;
 import android.view.LayoutInflater;
@@ -14,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.TrainIncident;
+import com.alixpat.vigie.util.UiStyle;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -137,10 +137,7 @@ public class TrainIncidentAdapter extends RecyclerView.Adapter<RecyclerView.View
 
     private void bindHeader(HeaderViewHolder holder, Row row) {
         holder.label.setText(row.headerLabel + " · " + row.headerCount);
-        // mutate() : sans lui, la couleur serait partagée par toutes les pastilles
-        // issues du même drawable.
-        GradientDrawable dot = (GradientDrawable) holder.colorDot.getBackground().mutate();
-        dot.setColor(row.headerColor);
+        UiStyle.dot(holder.colorDot, row.headerColor);
         holder.chevron.setRotation(row.headerOpen ? 180f : 0f);
 
         holder.itemView.setOnClickListener(v -> {

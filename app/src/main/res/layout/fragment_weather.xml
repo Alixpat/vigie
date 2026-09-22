@@ -1,24 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
+<FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
+    android:layout_height="match_parent">
 
     <TextView
         android:id="@+id/weatherEmptyText"
+        style="@style/Vigie.Text.Empty"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:gravity="center"
-        android:text="Chargement de la météo..."
-        android:textSize="16sp"
-        android:textColor="@color/text_hint" />
+        android:text="Chargement de la météo…" />
 
+    <!-- Une carte par ville ; le padding reste dans la zone de défilement -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/weatherRecyclerView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:paddingStart="@dimen/space_l"
+        android:paddingEnd="@dimen/space_l"
+        android:paddingTop="@dimen/space_l"
+        android:paddingBottom="@dimen/space_xs"
+        android:clipToPadding="false"
         android:visibility="gone" />
 
-</LinearLayout>
+</FrameLayout>

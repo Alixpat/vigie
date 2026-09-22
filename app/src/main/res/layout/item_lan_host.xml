@@ -1,57 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
-<com.google.android.material.card.MaterialCardView
+<!-- Une machine du réseau local : tuile en retrait dans la carte de sa section. -->
+<LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
-    android:layout_margin="4dp"
-    app:cardElevation="1dp"
-    app:cardCornerRadius="8dp">
+    android:layout_margin="@dimen/space_xs"
+    android:orientation="horizontal"
+    android:padding="@dimen/space_m"
+    android:background="@drawable/bg_tile">
+
+    <View
+        android:id="@+id/statusIndicator"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:layout_marginTop="5dp"
+        android:background="@drawable/circle_indicator" />
 
     <LinearLayout
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:padding="12dp"
-        android:gravity="center_vertical">
+        android:layout_weight="1"
+        android:layout_marginStart="@dimen/space_s"
+        android:orientation="vertical">
 
-        <View
-            android:id="@+id/statusIndicator"
-            android:layout_width="12dp"
-            android:layout_height="12dp"
-            android:background="@drawable/circle_indicator" />
-
-        <LinearLayout
-            android:layout_width="0dp"
+        <TextView
+            android:id="@+id/hostnameText"
+            style="@style/Vigie.Text.Body.Strong"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:layout_marginStart="12dp">
+            android:maxLines="1"
+            android:ellipsize="end" />
 
-            <TextView
-                android:id="@+id/hostnameText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="15sp"
-                android:textStyle="bold"
-                android:textColor="@color/text_primary" />
+        <TextView
+            android:id="@+id/ipText"
+            style="@style/Vigie.Text.Secondary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:fontFeatureSettings="tnum" />
 
-            <TextView
-                android:id="@+id/ipText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="13sp"
-                android:textColor="@color/text_secondary" />
-
-            <TextView
-                android:id="@+id/lastUpdateText"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:textSize="11sp"
-                android:textColor="@color/text_hint" />
-
-        </LinearLayout>
+        <TextView
+            android:id="@+id/lastUpdateText"
+            style="@style/Vigie.Text.Caption"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" />
 
     </LinearLayout>
 
-</com.google.android.material.card.MaterialCardView>
+</LinearLayout>

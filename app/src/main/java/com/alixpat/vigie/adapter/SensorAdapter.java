@@ -1,6 +1,5 @@
 package com.alixpat.vigie.adapter;
 
-import android.graphics.drawable.GradientDrawable;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.SensorStatus;
 import com.alixpat.vigie.util.DateFormats;
+import com.alixpat.vigie.util.UiStyle;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -49,14 +49,13 @@ public class SensorAdapter extends RecyclerView.Adapter<SensorAdapter.ViewHolder
 
         // Indicateur d'état (couleur dépend du kind)
         int color = ContextCompat.getColor(holder.itemView.getContext(), render.statusColorRes);
-        GradientDrawable indicator = (GradientDrawable) holder.statusIndicator.getBackground();
-        indicator.setColor(color);
+        UiStyle.dot(holder.statusIndicator, color);
 
         // Ligne primaire = résumé sémantique du kind (ex. "OUVERTE" / "FERMÉE")
         if (render.primary != null) {
             holder.primaryText.setVisibility(View.VISIBLE);
             holder.primaryText.setText(render.primary);
-            holder.primaryText.setTextColor(color);
+            UiStyle.pill(holder.primaryText, color);
         } else {
             holder.primaryText.setVisibility(View.GONE);
         }

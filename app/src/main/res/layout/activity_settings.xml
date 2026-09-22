@@ -27,7 +27,16 @@
             android:orientation="vertical"
             android:padding="24dp">
 
+            <TextView
+                style="@style/Vigie.Text.Overline"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="0dp"
+                android:layout_marginBottom="@dimen/space_s"
+                android:text="Broker MQTT" />
+
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Adresse IP du broker">
@@ -41,6 +50,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Port"
@@ -55,6 +65,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Nom d'utilisateur"
@@ -69,6 +80,7 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Mot de passe"
@@ -84,23 +96,22 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
+                style="@style/Vigie.Text.Overline"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
-                android:text="Île-de-France Mobilités (IDFM)"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="?attr/colorPrimary" />
+                android:layout_marginBottom="@dimen/space_s"
+                android:text="Île-de-France Mobilités (IDFM)" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                style="@style/Vigie.Text.Caption"
                 android:text="Token API pour les perturbations train.\nInscription sur prim.iledefrance-mobilites.fr"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint" />
+                android:lineSpacingExtra="2dp" />
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Token IDFM (apikey)"
@@ -115,23 +126,22 @@
             </com.google.android.material.textfield.TextInputLayout>
 
             <TextView
+                style="@style/Vigie.Text.Overline"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="32dp"
-                android:text="TomTom (temps de trajet)"
-                android:textSize="16sp"
-                android:textStyle="bold"
-                android:textColor="?attr/colorPrimary" />
+                android:layout_marginBottom="@dimen/space_s"
+                android:text="TomTom (temps de trajet)" />
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
+                style="@style/Vigie.Text.Caption"
                 android:text="Clé API pour le temps de trajet en voiture.\nInscription sur developer.tomtom.com"
-                android:textSize="12sp"
-                android:textColor="@color/text_hint" />
+                android:lineSpacingExtra="2dp" />
 
             <com.google.android.material.textfield.TextInputLayout
+                style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:hint="Clé API TomTom"
@@ -145,12 +155,13 @@
                     android:singleLine="true" />
             </com.google.android.material.textfield.TextInputLayout>
 
-            <Button
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/saveButton"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="56dp"
                 android:text="Sauvegarder"
-                android:layout_marginTop="32dp" />
+                android:layout_marginTop="32dp"
+                app:cornerRadius="@dimen/radius_tile" />
 
         </LinearLayout>
 

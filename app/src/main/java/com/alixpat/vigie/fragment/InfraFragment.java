@@ -41,9 +41,10 @@ public class InfraFragment extends Fragment {
     private static final long REFRESH_INTERVAL_MS = 15_000;
 
     private TextView emptyText;
-    private TextView sectionInternet;
-    private TextView sectionLan;
-    private TextView sectionBackup;
+    // Carte de chaque section, masquée tant qu'elle n'a rien à montrer
+    private View sectionInternet;
+    private View sectionLan;
+    private View sectionBackup;
     private RecyclerView internetRecyclerView;
     private RecyclerView lanRecyclerView;
     private RecyclerView backupRecyclerView;
@@ -134,9 +135,9 @@ public class InfraFragment extends Fragment {
         backupRecyclerView.setAdapter(backupAdapter);
     }
 
-    private void refreshSection(TextView header, RecyclerView recycler, boolean hasData) {
+    private void refreshSection(View card, RecyclerView recycler, boolean hasData) {
         int visibility = hasData ? View.VISIBLE : View.GONE;
-        header.setVisibility(visibility);
+        card.setVisibility(visibility);
         recycler.setVisibility(visibility);
     }
 

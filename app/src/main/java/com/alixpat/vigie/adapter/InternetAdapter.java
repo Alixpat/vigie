@@ -1,6 +1,5 @@
 package com.alixpat.vigie.adapter;
 
-import android.graphics.drawable.GradientDrawable;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.InternetStatus;
 import com.alixpat.vigie.util.DateFormats;
+import com.alixpat.vigie.util.UiStyle;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -55,8 +55,7 @@ public class InternetAdapter extends RecyclerView.Adapter<InternetAdapter.ViewHo
 
         int colorRes = item.isUp() ? R.color.status_ok : R.color.status_error;
         int color = ContextCompat.getColor(holder.itemView.getContext(), colorRes);
-        GradientDrawable indicator = (GradientDrawable) holder.statusIndicator.getBackground();
-        indicator.setColor(color);
+        UiStyle.dot(holder.statusIndicator, color);
 
         // Dernière coupure
         if (item.getLastDowntimeDurationMinutes() != null && item.getLastDowntimeDurationMinutes() > 0) {

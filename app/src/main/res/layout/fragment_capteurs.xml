@@ -8,24 +8,51 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/space_l">
 
         <TextView
             android:id="@+id/capteursEmptyText"
+            style="@style/Vigie.Text.Empty"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
             android:paddingTop="64dp"
             android:paddingBottom="64dp"
-            android:text="En attente des capteurs..."
-            android:textSize="16sp"
-            android:textColor="@color/text_hint" />
+            android:text="En attente des capteurs…" />
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/sensorsRecyclerView"
+        <com.google.android.material.card.MaterialCardView
+            android:id="@+id/sensorsCard"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false" />
+            android:layout_marginBottom="@dimen/space_m"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_s">
+
+                <TextView
+                    style="@style/Vigie.Text.CardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Capteurs" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/sensorsRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_s"
+                    android:paddingEnd="@dimen/space_s"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
 
