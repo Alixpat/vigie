@@ -1,6 +1,5 @@
 package com.alixpat.vigie.adapter;
 
-import android.graphics.drawable.GradientDrawable;
 import android.text.format.DateUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -14,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.model.BackupJob;
 import com.alixpat.vigie.util.DateFormats;
+import com.alixpat.vigie.util.UiStyle;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -52,8 +52,7 @@ public class BackupJobAdapter extends RecyclerView.Adapter<BackupJobAdapter.View
             colorRes = R.color.status_warning;
         }
         int color = ContextCompat.getColor(holder.itemView.getContext(), colorRes);
-        GradientDrawable indicator = (GradientDrawable) holder.statusIndicator.getBackground();
-        indicator.setColor(color);
+        UiStyle.dot(holder.statusIndicator, color);
 
         CharSequence timeAgo = DateUtils.getRelativeTimeSpanString(
                 job.getLastUpdate(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS);

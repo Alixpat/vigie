@@ -17,6 +17,7 @@ import androidx.fragment.app.Fragment;
 import com.alixpat.vigie.Settings;
 import com.alixpat.vigie.R;
 import com.alixpat.vigie.util.DateFormats;
+import com.alixpat.vigie.util.UiStyle;
 import androidx.core.content.ContextCompat;
 
 import com.google.android.material.card.MaterialCardView;
@@ -264,7 +265,7 @@ public class VoitureFragment extends Fragment {
         // Ignore minor variations (less than 1 minute)
         if (Math.abs(diffSeconds) < 60) {
             trendView.setText("\u2192"); // → stable
-            trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_info));
+            trendView.setTextColor(ContextCompat.getColor(requireContext(), R.color.text_hint));
         } else if (diffSeconds > 0) {
             int diffMin = diffSeconds / 60;
             trendView.setText("\u2197 +" + diffMin + " min"); // ↗ +X min
@@ -329,13 +330,13 @@ public class VoitureFragment extends Fragment {
 
         if (delayRatio < 0.10) {
             flowView.setText("Fluide");
-            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_ok));
+            UiStyle.pill(flowView, ContextCompat.getColor(requireContext(), R.color.status_ok));
         } else if (delayRatio < 0.25) {
             flowView.setText("Ralenti");
-            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_warning));
+            UiStyle.pill(flowView, ContextCompat.getColor(requireContext(), R.color.status_warning));
         } else {
             flowView.setText("Dense");
-            flowView.setTextColor(ContextCompat.getColor(requireContext(), R.color.status_error));
+            UiStyle.pill(flowView, ContextCompat.getColor(requireContext(), R.color.status_error));
         }
     }
 

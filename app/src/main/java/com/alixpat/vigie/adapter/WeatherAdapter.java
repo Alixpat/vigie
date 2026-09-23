@@ -43,7 +43,7 @@ public class WeatherAdapter extends RecyclerView.Adapter<WeatherAdapter.ViewHold
         holder.temperatureText.setText(String.format(Locale.FRANCE, "%.1f °C", data.getTemperature()));
         holder.weatherDescription.setText(data.getWeatherDescription());
 
-        holder.lastUpdateText.setText("Mis à jour à " + DateFormats.formatHhmmss(new Date(data.getLastUpdate())));
+        holder.lastUpdateText.setText("MAJ " + DateFormats.formatHhmmss(new Date(data.getLastUpdate())));
     }
 
     @Override

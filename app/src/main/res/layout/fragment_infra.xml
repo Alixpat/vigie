@@ -8,77 +8,122 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="@dimen/space_l">
 
         <TextView
             android:id="@+id/infraEmptyText"
+            style="@style/Vigie.Text.Empty"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:gravity="center"
             android:paddingTop="64dp"
             android:paddingBottom="64dp"
-            android:text="En attente des données..."
-            android:textSize="16sp"
-            android:textColor="@color/text_hint" />
+            android:text="En attente des données…" />
 
-        <!-- Section Internet -->
-        <TextView
+        <!-- Une carte par section, masquée tant qu'elle n'a rien à montrer -->
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/sectionInternet"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Internet"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:paddingBottom="8dp"
-            android:visibility="gone" />
+            android:layout_marginBottom="@dimen/space_m"
+            android:visibility="gone">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/internetRecyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:visibility="gone" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_s">
 
-        <!-- Section LAN -->
-        <TextView
+                <TextView
+                    style="@style/Vigie.Text.CardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Internet" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/internetRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_s"
+                    android:paddingEnd="@dimen/space_s"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/sectionLan"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Machines LAN"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:paddingTop="16dp"
-            android:paddingBottom="8dp"
-            android:visibility="gone" />
+            android:layout_marginBottom="@dimen/space_m"
+            android:visibility="gone">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/lanRecyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:visibility="gone" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_s">
 
-        <!-- Section Sauvegardes -->
-        <TextView
+                <TextView
+                    style="@style/Vigie.Text.CardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Machines LAN" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/lanRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_s"
+                    android:paddingEnd="@dimen/space_s"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
             android:id="@+id/sectionBackup"
+            style="@style/Vigie.Card"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Sauvegardes"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:textColor="@color/text_secondary"
-            android:paddingTop="16dp"
-            android:paddingBottom="8dp"
-            android:visibility="gone" />
+            android:layout_marginBottom="@dimen/space_m"
+            android:visibility="gone">
 
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/backupRecyclerView"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:nestedScrollingEnabled="false"
-            android:visibility="gone" />
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingTop="@dimen/space_m"
+                android:paddingBottom="@dimen/space_s">
+
+                <TextView
+                    style="@style/Vigie.Text.CardTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_l"
+                    android:paddingEnd="@dimen/space_l"
+                    android:paddingBottom="@dimen/space_xs"
+                    android:text="Sauvegardes" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/backupRecyclerView"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:paddingStart="@dimen/space_s"
+                    android:paddingEnd="@dimen/space_s"
+                    android:clipToPadding="false"
+                    android:nestedScrollingEnabled="false" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
 
     </LinearLayout>
 

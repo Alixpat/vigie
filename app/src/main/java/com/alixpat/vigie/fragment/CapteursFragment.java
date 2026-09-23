@@ -36,6 +36,7 @@ public class CapteursFragment extends Fragment {
 
     private TextView emptyText;
     private RecyclerView recyclerView;
+    private View sensorsCard;
     private SensorAdapter adapter;
 
     private final Map<String, SensorStatus> sensorsMap = new LinkedHashMap<>();
@@ -78,6 +79,7 @@ public class CapteursFragment extends Fragment {
         super.onViewCreated(view, savedInstanceState);
         emptyText = view.findViewById(R.id.capteursEmptyText);
         recyclerView = view.findViewById(R.id.sensorsRecyclerView);
+        sensorsCard = view.findViewById(R.id.sensorsCard);
 
         adapter = new SensorAdapter();
         recyclerView.setLayoutManager(new GridLayoutManager(requireContext(), 2));
@@ -87,7 +89,7 @@ public class CapteursFragment extends Fragment {
     private void updateEmptyState() {
         boolean has = !sensorsMap.isEmpty();
         emptyText.setVisibility(has ? View.GONE : View.VISIBLE);
-        recyclerView.setVisibility(has ? View.VISIBLE : View.GONE);
+        sensorsCard.setVisibility(has ? View.VISIBLE : View.GONE);
     }
 
     @Override
